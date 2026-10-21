@@ -97,25 +97,30 @@ internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, c
                             fontSize = detailSize, lineHeight = detailSize * 1.4f, color = UsageMuted,
                             textAlign = TextAlign.End, maxLines = 1, softWrap = false)
                     }
-                    if (tokens.agents.isEmpty()) Text("暂无明细", fontSize = (13f * scale).sp,
+                    val rows = snapshot.displayUsageRows
+                    if (rows.isEmpty()) Text("暂无明细", fontSize = (13f * scale).sp,
                         lineHeight = (18f * scale).sp, color = UsageMuted)
                     val agentValueWidth = (contentWidth * 0.55f).coerceAtLeast(1.dp)
-                    tokens.agents.forEach { agent ->
-                        val provider = quotas.firstOrNull { it.provider == providerQuotaKey(agent.agent) }
+                    rows.forEach { row ->
+                        val agent = row.tokenAgent
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp * scale)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                UsageAgentName(agent.displayName, scale, Modifier.weight(1f))
-                                UsageAgentTotal(agent.amount, (18f * scale).sp, Modifier.widthIn(max = agentValueWidth))
+                                UsageAgentName(row.displayName, scale, Modifier.weight(1f))
+                                agent?.let { UsageAgentTotal(it.amount, (18f * scale).sp, Modifier.widthIn(max = agentValueWidth)) }
                             }
-                            UsageAgentDetails(agent, provider, detailSize)
+                            if (agent != null) {
+                                UsageAgentDetails(agent, row.quota, detailSize)
+                            } else {
+                                row.quota?.let { provider ->
+                                    provider.plan?.let { Text(it, color = UsageMuted, style = MaterialTheme.typography.labelSmall) }
+                                    ProviderQuotaWindows(provider, detailed = true)
+                                }
+                            }
                         }
                     }
-                    snapshot?.providerQuota?.takeIf { it.providers.isNotEmpty() }?.let { quota ->
-                        val keys = tokens.agents.mapNotNull { providerQuotaKey(it.agent) }.toSet()
-                        val unmatched = quota.providers.filterNot { it.provider in keys }
-                        if (unmatched.isNotEmpty()) ProviderQuotaRows(quota.copy(providers = unmatched), detailed = true, showObservedAt = false)
-                        QuotaObservedAt(quota)
+                    snapshot.providerQuota?.takeIf { it.providers.isNotEmpty() }?.let {
+                        QuotaObservedAt(it)
                     }
                 }
             }

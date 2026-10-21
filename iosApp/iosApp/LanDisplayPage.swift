@@ -411,9 +411,8 @@ private struct UsagePanelCard: View {
         let spacing: CGFloat = dynamicType.isAccessibilitySize ? 8 : 6
         let columns = Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading),
                             count: size.width >= 600 && dynamicType < .xxxLarge ? 2 : 1)
-        let matchedKeys = Set(tokens.agents.compactMap { providerQuotaKey(for: $0.agent) })
-        let unmatched = quota.map { ProviderQuotaSnapshot(observedAtUnix: $0.observedAtUnix,
-            providers: $0.providers.filter { !matchedKeys.contains($0.provider) }) }
+        let rows = tokens.displayRows(quota: quota)
+        let rowWidth = (size.width - CGFloat(columns.count - 1) * 24) / CGFloat(columns.count)
         return VStack(alignment: .leading, spacing: spacing) {
             Divider().overlay(.white.opacity(0.12))
             HStack(alignment: .top, spacing: 8) {
@@ -425,33 +424,33 @@ private struct UsagePanelCard: View {
                     }.scrollIndicators(.visible)
                 }.frame(height: exactLineHeight)
             }.font(.caption2).foregroundStyle(.white.opacity(0.5))
-            if tokens.agents.isEmpty {
+            if rows.isEmpty {
                 Text("暂无明细").font(.caption).foregroundStyle(.white.opacity(0.6))
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
-                ForEach(tokens.agents, id: \.agent) { agent in
-                    let entry = providerQuotaKey(for: agent.agent).flatMap { key in
-                        quota?.providers.first { $0.provider == key }
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        GeometryReader { geometry in
-                            ViewThatFits(in: .horizontal) {
-                                agentHeadline(agent, quota: entry, size: size)
-                                ScrollView(.horizontal) {
+                ForEach(rows) { row in
+                    switch row {
+                    case .agent(let agent, let entry):
+                        VStack(alignment: .leading, spacing: 2) {
+                            GeometryReader { geometry in
+                                ViewThatFits(in: .horizontal) {
                                     agentHeadline(agent, quota: entry, size: size)
-                                        .frame(minWidth: geometry.size.width)
-                                }.scrollIndicators(.visible)
+                                    ScrollView(.horizontal) {
+                                        agentHeadline(agent, quota: entry, size: size)
+                                            .frame(minWidth: geometry.size.width)
+                                    }.scrollIndicators(.visible)
+                                }
+                            }.frame(height: agentNumberSize(size) * 1.3)
+                            if entry != nil || agent.amount.hasNumericValue {
+                                agentDetailLine(agent.amount, quota: entry)
                             }
-                        }.frame(height: agentNumberSize(size) * 1.3)
-                        if entry != nil || agent.amount.hasNumericValue {
-                            agentDetailLine(agent.amount, quota: entry)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    case .quota(let entry):
+                        ProviderQuotaEntryRow(provider: entry, detailed: true, contentWidth: rowWidth)
+                    }
                 }
             }
-            if let unmatched, !unmatched.providers.isEmpty {
-                ProviderQuotaRows(quota: unmatched, detailed: true, contentWidth: size.width)
-            } else if let quota, !quota.providers.isEmpty {
+            if let quota, !quota.providers.isEmpty {
                 quotaObservedTime(quota)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -562,29 +561,41 @@ private struct ProviderQuotaRows: View {
     let quota: ProviderQuotaSnapshot
     let detailed: Bool
     let contentWidth: CGFloat
-    @Environment(\.dynamicTypeSize) private var dynamicType
-    @ScaledMetric(relativeTo: .caption2) private var minimumWindowWidth = 140.0
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("账户剩余额度").font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.6))
             ForEach(quota.providers, id: \.provider) { provider in
-                let windows = provider.windows
-                let columnCount = windows.count > 1 && !dynamicType.isAccessibilitySize
-                    && contentWidth >= minimumWindowWidth * 2 + 14 ? 2 : 1
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(provider.displayName).font(.caption.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .topLeading),
-                                             count: columnCount), spacing: 8) {
-                        ForEach(windows, id: \.kind) { window in
-                            row(window, label: window.label)
-                        }
-                    }
-                }.accessibilityIdentifier("quota-\(provider.provider)")
+                ProviderQuotaEntryRow(provider: provider, detailed: detailed, contentWidth: contentWidth)
             }
             quotaObservedTime(quota)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+/// 同一额度行既可独立显示，也可加入按账户排序的 Token 明细网格。
+private struct ProviderQuotaEntryRow: View {
+    let provider: ProviderQuotaEntry
+    let detailed: Bool
+    let contentWidth: CGFloat
+    @Environment(\.dynamicTypeSize) private var dynamicType
+    @ScaledMetric(relativeTo: .caption2) private var minimumWindowWidth = 140.0
+
+    var body: some View {
+        let windows = provider.windows
+        let columnCount = windows.count > 1 && !dynamicType.isAccessibilitySize
+            && contentWidth >= minimumWindowWidth * 2 + 14 ? 2 : 1
+        VStack(alignment: .leading, spacing: 6) {
+            Text(provider.displayName).font(.caption.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .topLeading),
+                                     count: columnCount), spacing: 8) {
+                ForEach(windows, id: \.kind) { window in
+                    row(window, label: window.label)
+                }
+            }
+        }.accessibilityIdentifier("quota-\(provider.provider)")
+    }
+
     private func row(_ window: ProviderQuotaWindow, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {

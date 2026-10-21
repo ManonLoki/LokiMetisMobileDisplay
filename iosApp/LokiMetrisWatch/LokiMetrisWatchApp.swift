@@ -32,7 +32,6 @@ final class WatchLinkModel: ObservableObject {
 @MainActor
 private struct WatchRootView: View {
     private enum Page: String, Hashable { case hooks, tokens, quota }
-    private enum HookLayout: String { case single, four }
     private let panel = Color(red: 17 / 255, green: 29 / 255, blue: 45 / 255)
     private let accent = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
     private let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
@@ -49,12 +48,10 @@ private struct WatchRootView: View {
     @AppStorage("watch.panel.showUsage") private var showUsage = true
     @AppStorage("watch.panel.showHooks") private var showHooks = true
     @AppStorage("watch.panel.usageDetailed") private var usageDetailed = false
-    @AppStorage("watch.panel.hookLayout") private var hookLayout = HookLayout.single.rawValue
 
     private var allowsMotion: Bool {
         phase == .active && !reduceMotion && !reducedLuminance && !showingSettings
     }
-    private var fourHooks: Bool { hookLayout == HookLayout.four.rawValue }
     private var visiblePages: [Page] {
         (showHooks ? [.hooks] : []) + (showUsage ? [.tokens, .quota] : [])
     }
@@ -99,16 +96,6 @@ private struct WatchRootView: View {
             .scaleEffect(entered || !allowsMotion ? 1 : 0.98, anchor: .top)
             .background(Color.black)
             .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingSettings = true } label: {
-                        Image(systemName: "gearshape.fill").foregroundStyle(accent)
-                    }
-                    .tint(panel)
-                    .accessibilityLabel("设置")
-                    .accessibilityIdentifier("watch-menu")
-                }
-            }
             .navigationDestination(isPresented: $showingSettings) {
                 List { settings }
                     .navigationTitle("设置")
@@ -181,7 +168,7 @@ private struct WatchRootView: View {
                         }
                         if usageDetailed, let tokens = envelope.snapshot.tokens {
                             Divider().overlay(.white.opacity(0.08))
-                            ForEach(tokens.agents, id: \.agent) { amount($0.displayName, value: $0.amount) }
+                            ForEach(tokens.displayAgents, id: \.agent) { amount($0.displayName, value: $0.amount) }
                             Text(tokens.day.zone).font(.caption2).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -207,8 +194,6 @@ private struct WatchRootView: View {
                         .accessibilityIdentifier("watch-quota-card")
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("账户剩余额度", systemImage: "gauge.with.dots.needle.50percent")
-                            .font(.caption.weight(.medium)).foregroundStyle(accent)
                         Text("等待额度数据").font(.headline)
                         Text(model.state.envelope == nil
                             ? "先在 iPhone 中连接桌面，再同步账户额度。"
@@ -233,14 +218,9 @@ private struct WatchRootView: View {
         .accessibilityLabel("账户剩余额度页面")
     }
 
-    /// 额度单独成页，更新时间来自上游观测，不把本次手表接收时间当作额度新鲜度。
+    /// 额度页只保留账户类型及其各窗口的剩余额度。
     private func quotaContent(_ quota: ProviderQuotaSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("账户剩余额度").font(.caption.weight(.semibold)).foregroundStyle(accent)
-            Text("额度更新 \(quota.observedDate.formatted(.dateTime.month().day().hour().minute()))")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel("额度更新于 \(quota.observedDate.formatted(.dateTime.month().day().hour().minute()))")
             ForEach(quota.providers, id: \.provider) { provider in
                 VStack(alignment: .leading, spacing: 7) {
                     Text(provider.displayName).font(.caption.weight(.semibold))
@@ -271,62 +251,49 @@ private struct WatchRootView: View {
             }
             .frame(height: 4)
             .accessibilityHidden(true)
-            if usageDetailed, let reset = value.resetDate {
-                Text("重置 \(reset.formatted(.dateTime.month().day().hour().minute()))")
-                    .font(.system(size: 9)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label)额度剩余，\(value.percentText)")
-        .accessibilityValue(usageDetailed ? value.resetDate.map { "重置于 \($0.formatted(.dateTime.month().day().hour().minute()))" } ?? "" : "")
     }
 
-    /// 每个插槽按实际滚动视口分配高度，水平手势仅留给三张主卡片翻页。
+    /// 每屏固定一张活动卡，上下滚动吸附切换；左右手势留给主页面。
     private var hooksPage: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("Hooks").font(.caption.weight(.medium)).foregroundStyle(accent)
-                Spacer(minLength: 0)
-                if let snapshot = model.state.envelope?.snapshot, snapshot.hooksAvailable {
-                    Text("\(snapshot.hooks.count) 个槽位").font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-            }.padding(.horizontal, 4)
-            GeometryReader { viewport in
-                ScrollView {
-                    if let snapshot = model.state.envelope?.snapshot {
-                        if !snapshot.hooksAvailable {
-                            hookPlaceholder("暂不可用")
-                        } else if snapshot.hooks.isEmpty {
-                            hookPlaceholder("暂无活动槽位")
-                        } else {
-                            let tileHeight = fourHooks ? max(34, (viewport.size.height - 7) / 2) : max(70, viewport.size.height)
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: fourHooks ? 2 : 1), spacing: 7) {
-                                ForEach(snapshot.hooks.sorted(by: { $0.slot < $1.slot }), id: \.slot) { hook in
-                                    NavigationLink {
-                                        hookDetail(hook)
-                                    } label: {
-                                        hookTile(hook, compact: fourHooks, minimumHeight: tileHeight)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("槽位 \(hook.slot)，\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
-                                    .accessibilityHint("打开槽位详情")
-                                    .accessibilityIdentifier("watch-hook-\(hook.slot)")
-                                }
-                            }
-                        }
+        GeometryReader { viewport in
+            ScrollView(.vertical) {
+                if let snapshot = model.state.envelope?.snapshot {
+                    if !snapshot.hooksAvailable {
+                        hookPlaceholder("暂不可用")
+                    } else if snapshot.hooks.isEmpty {
+                        hookPlaceholder("暂无活动")
                     } else {
-                        waitingPanel
+                        LazyVStack(spacing: 0) {
+                            ForEach(snapshot.hooks.sorted(by: { $0.slot < $1.slot }), id: \.slot) { hook in
+                                NavigationLink {
+                                    hookDetail(hook)
+                                } label: {
+                                    hookTile(hook, height: viewport.size.height)
+                                }
+                                .buttonStyle(.plain)
+                                .frame(width: viewport.size.width, height: viewport.size.height)
+                                .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
+                                .accessibilityHint("打开活动详情")
+                                .accessibilityIdentifier("watch-hook-\(hook.slot)")
+                            }
+                        }.scrollTargetLayout()
                     }
+                } else {
+                    waitingPanel
                 }
-                .contentMargins(.vertical, 0, for: .scrollContent)
-                .frame(width: viewport.size.width, height: viewport.size.height)
             }
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .contentMargins(.vertical, 0, for: .scrollContent)
+            .frame(width: viewport.size.width, height: viewport.size.height)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityLabel("Hooks 插槽状态页面")
+        .accessibilityLabel("活动状态页面")
     }
 
     private var waitingPanel: some View {
@@ -361,35 +328,50 @@ private struct WatchRootView: View {
         .privacySensitive()
     }
 
-    private func hookTile(_ hook: LanDisplaySnapshot.Hook, compact: Bool, minimumHeight: CGFloat) -> some View {
-        let tight = compact && minimumHeight < 49
-        let inset: CGFloat = compact ? (tight ? 4 : 9) : 13
-        return VStack(alignment: .leading, spacing: compact ? (tight ? 2 : 4) : 9) {
-            if compact {
-                Text("\(hook.slot) · \(agentDisplayName(hook.agent))").font(.system(size: tight ? 9 : 10, weight: .medium))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            } else {
-                HStack(spacing: 3) {
-                    Text("槽位 \(hook.slot)").font(.caption2).foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                Text(agentDisplayName(hook.agent)).font(.headline).lineLimit(1).minimumScaleFactor(0.7)
-            }
+    private func hookTile(_ hook: LanDisplaySnapshot.Hook, height: CGFloat) -> some View {
+        let inset: CGFloat = 13
+        return VStack(alignment: .leading, spacing: 9) {
+            Text(agentDisplayName(hook.agent))
+                .font(.headline)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+            hookImage(hook)
             HStack(spacing: 4) {
-                Circle().fill(behaviorColor(hook.behavior)).frame(width: compact ? 4 : 6, height: compact ? 4 : 6)
-                Text(hook.behavior.label).font(compact ? .system(size: tight ? 11 : 12, weight: .semibold) : .title3.weight(.semibold))
+                Circle().fill(behaviorColor(hook.behavior)).frame(width: 6, height: 6)
+                Text(hook.behavior.label).font(.title3.weight(.semibold))
                     .lineLimit(1).minimumScaleFactor(0.75)
             }.foregroundStyle(behaviorColor(hook.behavior))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: max(0, minimumHeight - inset * 2), alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .frame(height: max(0, height - inset * 2))
         .watchPanel(panel, highlighted: updateGlow && allowsMotion, padding: inset)
         .privacySensitive()
         .animation(allowsMotion ? .easeOut(duration: 0.2) : nil, value: hook.behavior)
     }
 
-    /// 正文与图片移入详情，不挤占小屏上的插槽状态。
+    private func hookImage(_ hook: LanDisplaySnapshot.Hook) -> some View {
+        let image = hook.image.flatMap { model.state.images[$0] }
+        let placeholder = hook.image == nil ? "暂无图片" : "图片未缓存"
+        return GeometryReader { area in
+            Group {
+                if let image {
+                    Image(decorative: image, scale: 1).resizable().scaledToFit()
+                } else {
+                    VStack(spacing: 4) {
+                        Image(systemName: "photo").accessibilityHidden(true)
+                        Text(placeholder).font(.caption2)
+                    }.foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: area.size.width, height: area.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .frame(minHeight: 44)
+        .accessibilityLabel(image == nil ? placeholder : "活动图片")
+    }
+
+    /// 详情保留完整正文与图片，使用活动类型作为标题。
     private func hookDetail(_ hook: LanDisplaySnapshot.Hook) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -418,7 +400,7 @@ private struct WatchRootView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8).padding(.bottom, 12)
         }
-        .navigationTitle("槽位 \(hook.slot)")
+        .navigationTitle(agentDisplayName(hook.agent))
         .privacySensitive()
     }
 
@@ -482,17 +464,15 @@ private struct WatchRootView: View {
                     Text("详细").tag(true)
                 }.accessibilityIdentifier("watch-usage-detail")
             }
-            if showHooks {
-                Picker("Hooks 布局", selection: $hookLayout) {
-                    Text("1×1 · 每屏 1 张").tag(HookLayout.single.rawValue)
-                    Text("2×2 · 每屏 4 张").tag(HookLayout.four.rawValue)
-                }.accessibilityIdentifier("watch-hooks-layout")
-            }
             if showUsage && showHooks {
                 Text("首次显示 Token 总量，左滑看额度，右滑看 Hooks；自动记住上次查看的页面。")
                     .font(.caption2).foregroundStyle(.secondary)
             } else if visiblePages.count > 1 {
                 Text("左右滑动切换卡片，自动记住上次查看的页面。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if showHooks {
+                Text("Hooks 每屏显示一张活动卡，上下滚动切换。")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }

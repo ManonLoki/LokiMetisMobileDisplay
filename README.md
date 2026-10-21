@@ -23,7 +23,7 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **展示台**：导航入口统一命名为“展示台”，内容区不显示页面标题、连接／缓存状态栏或自定义按钮；面板配置统一从设置进入。用量与 Hooks 图文平分可用内容区，竖屏上下各半、横屏左右各半，不再显示槽位统计摘要或外层 Hooks 标题；断开、进入后台、切换桌面或重启后清空Token与Hooks，等待当前连接的新快照。连接与配对入口保留在设置中。
 - **设置**：使用低对比石墨分组、青色选中态和统一图标；Token 与 Hooks 的开关和显示选项各自归组，精简／详细和 1×1／2×2 带布局示意并即时保存。桌面连接集中展示发现、配对与连接状态，本机名称独立编辑、修改后显示保存按钮，设备信息折叠收纳。iOS 的 Watch 与小组件说明也收在此处，iOS 在无障碍字号下将选择项纵向排列。
 - 用量支持**精简**与**详细**。Token 与 Hooks 各占一半可用内容区，不再选择 1×1／2×2 卡片尺寸；只开启一个模块时占满内容区。两块内容独立滚动。Hooks 可独立选择 **1×1／2×2**：1×1 每页一张，图片使用标题和状态下方全部剩余空间；2×2 将 Hooks 区域等分成四张卡片，不足四张保留空位，超过四张按每页四张左右分页。卡片仅显示标题、状态与图片，点击可查看完整正文和图片；图片按比例完整显示。Token 主数字使用 K／M／B 近似值（最多两位小数），下方小字保留完整整数；精简款根据卡片可用宽高放大总量并居中展示，详细款自适应总量、间距与 Agent 明细排版，窄卡片或大字体下明细自动换行，内容较多仍可滚动。日期收在卡头，时区位于详细模式明细区首行；Agent 类型名称加粗放大，完整数字在对应简化数字下方右对齐。显示配置保存在本机，卡片可全部关闭。
-- 手机使用底部导航；Android 宽屏使用侧栏和双栏设置，iPad 使用侧栏与多列展示台。Hooks 图片随卡片剩余空间伸展，点击可查看详情。Watch 采用独立速览与设置页，小组件按系统尺寸组织最近一次同步的摘要与时间。采用深色赛博主题：冷青与紫色光边、细网格、局部扫光、分层入场和数值更新过渡。手机保留原生触控反馈，平板增加悬停反馈；Watch 仅使用短促入场与更新反馈，小组件保持静态光边。持续装饰动画受前台、页面及滚动可见性控制，响应系统减弱动态效果／禁用动画设置。
+- 手机使用底部导航；Android 宽屏使用侧栏和双栏设置，iPad 使用侧栏与多列展示台。Hooks 图片随卡片剩余空间伸展，点击可查看详情。Watch 使用独立速览，主界面不显示设置齿轮；小组件按系统尺寸组织最近一次同步的摘要与时间。采用深色赛博主题：冷青与紫色光边、细网格、局部扫光、分层入场和数值更新过渡。手机保留原生触控反馈，平板增加悬停反馈；Watch 仅使用短促入场与更新反馈，小组件保持静态光边。持续装饰动画受前台、页面及滚动可见性控制，响应系统减弱动态效果／禁用动画设置。
 - 发现随前台生命周期自动运行，无开启/停止开关。首次配对仍需用户选择桌面；已保存的配对可自动认证重连。后台暂停，回到前台恢复，切换菜单不会重新配对。
 
 ### 配对身份、备份与重装
@@ -84,7 +84,7 @@ Android在应用级owner创建时读取系统最小宽度配置（≥600dp为平
 
 ### Apple Watch配套接线
 
-同一Xcode工程包含现代单target `LokiMetrisWatch`，随iPhone宿主嵌入；Watch不链接Kotlin/Rust，也不创建独立TCP或Bonjour服务。Hooks、Token和额度使用原生水平分页，首次默认中间的Token总量页，向左滑看额度、向右滑看Hooks；保存最后所在页，重新打开时恢复。设置可选用量明细及Hooks **1×1／2×2（每屏四格）**，默认1×1，更多槽位沿竖向或表冠浏览。槽位卡片优先显示Agent与四态，点击进入正文／图片详情。稳定安装UUID与名称保存在Watch私有不备份目录，系统Watch配对与桌面四位码各自独立。
+同一Xcode工程包含现代单target `LokiMetrisWatch`，随iPhone宿主嵌入；Watch不链接Kotlin/Rust，也不创建独立TCP或Bonjour服务。Hooks、Token和额度使用原生水平分页，首次默认中间的Token总量页，向左滑看额度、向右滑看Hooks；保存最后所在页，重新打开时恢复。主界面不显示设置齿轮。Hooks 固定每屏一张卡片，上下滚动或转动表冠吸附切换；直接显示类型、图片与状态，不显示外层 Hooks 标题、槽位编号或数量。账户额度页只显示账户类型、各周期剩余额度及细进度条，不显示顶部标题、更新时间或重置时间。Hooks 卡片点击可进入正文／图片详情。稳定安装UUID与名称保存在Watch私有不备份目录，系统Watch配对与桌面四位码各自独立。
 
 手机实时连接可用时，`PhoneWatchBridge`通过`sendMessageData`按16KiB块逐块确认，单RPC最多32KiB；Watch完整验证后接纳到当前前台内存，相同图片摘要可复用，缩略图限制256像素，当前显示静态图片。手机通道不可达、后台或请求超时后，Watch自动用`URLSession`直接调用电脑已有的`POST /api/widget/v1/snapshot`；无需手机App保持前台，也不启动手机后台长连接。首次仍需在iPhone连接支持`widgetHttpV1`的桌面，由认证快照授予独立只读配置。手机通过最新`applicationContext`及请求回执下发配置，Watch将其保存在本机Keychain，不传主连接配对秘密；修订号防旧消息复活被撤销的目标，换桌面／忘记配对明确撤销旧配置。电脑地址变化后需由手机同步新配置。
 
@@ -92,7 +92,7 @@ HTTP复用现有ChaCha20-Poly1305、来源与请求nonce绑定、有界正文、
 
 当前已完成移动源码与桌面独立Watch状态投影接线；只有实时认证快照广告watchCompanionV1后，手机才上送无IP的Watch回执事实，并引用桌面心跳作保守时间锚。相同ACK序号不能续期，父连接撤销会立即撤销手表可达。两端完整图文互通仍待运行验证。运行Watch开发目标可使用Xcode同名scheme；独立构建命令为`xcodebuild -project iosApp/iosApp.xcodeproj -target LokiMetrisWatch -configuration Debug -sdk watchsimulator CODE_SIGNING_ALLOWED=NO build`。不要把独立Watch构建或空态交互当作桌面到手表的完整E2E通过。
 
-2026-10-21 本轮验证：92 项 Swift 测试通过，iPhone／Watch 模拟器构建通过；42mm 模拟器的 Token、Hooks 1×1 与 2×2 布局截图均无裁切。隔离副本在无 iPhone 时，使用真实 Watch owner 与加密 HTTP 客户端成功取测试服务摘要并显示；仅在测试副本绕过未签名模拟器不可用的 Keychain 加载，正式源码无测试配置。Keychain 持久化与真实手机／手表之间的配置下发、通道切换仍待实机验收。
+2026-10-21 历史验证（当时版本）：92 项 Swift 测试通过，iPhone／Watch 模拟器构建通过；42mm 模拟器的 Token、Hooks 1×1 与 2×2 布局截图均无裁切。隔离副本在无 iPhone 时，使用真实 Watch owner 与加密 HTTP 客户端成功取测试服务摘要并显示；仅在测试副本绕过未签名模拟器不可用的 Keychain 加载，正式源码无测试配置。Keychain 持久化与真实手机／手表之间的配置下发、通道切换仍待实机验收。
 
 ### iOS 桌面与锁屏小组件
 
@@ -130,9 +130,9 @@ Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
 
 ### 发布与真机安装
 
-首个 GitHub Release 为 `v1.0.0`，Android、iOS、Watch 与 Widget 的版本统一为 `1.0.0`，构建号为 `2`。Release 附件提供项目固定签名的 Android APK 及 SHA-256 校验文件；Apple 开发签名包用于本机设备安装，不作为公开附件或 App Store 发布。
+当前发布版本为 `v1.0.1`：Android、iOS、Watch 与 Widget 统一为 `1.0.1`，构建号为 `3`。首个 GitHub Release 为 `v1.0.0`（版本 `1.0.0`，构建号 `2`）。Release 附件提供项目固定签名的 Android APK 及 `SHA256SUMS`；Apple 开发签名包用于本机设备安装，不作为公开附件或 App Store 发布。
 
-构建依赖桌面仓库的共享 Rust bridge。本次发布使用桌面提交 `c705bb8f3d9720dfc9272e166812218631164bc6`；Android 可通过 `-PlokiDesktopRoot=/absolute/path/to/loki_metris` 指定源码位置，iOS 可通过 Xcode 构建设置 `LOKI_DESKTOP_ROOT=/absolute/path/to/loki_metris` 指定。Android 运行 `./gradlew :androidApp:assembleRelease`，签名配置见 [签名说明](signing/README.md)。iOS 使用 `iosApp` scheme 的 Release 配置，并显式提供原有 `TEAM_ID` 以保持应用标识和配对数据；同一包嵌入 Widget 和 Watch。实体 Watch 的安装与版本需单独核实，不能由 iPhone 安装成功推断。
+构建依赖桌面仓库的共享 Rust bridge。本次发布使用桌面提交 `403401d76bfd24a42129f1c5bcdff2962b29d0c9`；其 bridge 与 pairing 源码相对 `v1.0.0` 使用的桌面提交 `c705bb8f3d9720dfc9272e166812218631164bc6` 无变化，仅工作区 `Cargo.toml` 版本发生变化。Android 可通过 `-PlokiDesktopRoot=/absolute/path/to/loki_metris` 指定源码位置，iOS 可通过 Xcode 构建设置 `LOKI_DESKTOP_ROOT=/absolute/path/to/loki_metris` 指定。Android 运行 `./gradlew :androidApp:assembleRelease`，签名配置见 [签名说明](signing/README.md)。iOS 使用 `iosApp` scheme 的 Release 配置，并显式提供原有 `TEAM_ID` 以保持应用标识和配对数据；同一包嵌入 Widget 和 Watch。实体 Watch 的安装与版本需单独核实，不能由 iPhone 安装成功推断。
 
 ---
 
@@ -143,7 +143,7 @@ Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-mu
 
 手机、平板、手表、悬浮窗及各尺寸组件均不显示“部分、估算、范围未知、待核对、完整／精确”等统计质量标签；底层质量字段保留，可用状态、真实数值、额度和时间照常显示。
 
-桌面新版通过现有认证快照提供Codex、Claude、Cursor、Grok的额度：Cursor为每月，其它为每周及5h。Android手机／平板和iPhone／iPad继续在原Token卡片内整合额度：精简模式显示账户摘要；详细模式每个Agent使用两行，第一行名称与缩写总量左右排列，第二行在左侧按每月、每周、5h顺序放剩余百分比与细进度条，右侧保留完整Token整数。先给数字留足宽度再分配进度条长度，极窄或大字号时整条明细可横向查看。没有对应Token分项的账户仍单独保留，不重复铺设匹配额度分组。明细首行采用左“设备时区”、右来源时区结构。Watch与Android悬浮窗采用独立额度页以适应小屏，和Token、Hooks左右切换并记住最后页。各面板的窗口文字统一为每月、每周、5h，按此顺序显示剩余百分比及细条，缺失窗口单独隐藏，只有周或月额度也保留，零余额显示0%。所有模式标明额度自身的上游更新时间；内联条的读屏保留重置时间，独立额度页可显示当地时间的重置时刻；无Token时有效额度仍可查看。Agent展示名统一为Codex、Claude Code、Grok、WorkBuddy、Cursor等标准写法，原始身份与未知自定义名称不改动。手机展示台的“刷新”仅在当前桌面广告snapshotQueryV1后出现，沿同一加密连接读取最新已知快照；桌面上游读取仍按约五分钟节流，不把查询时刻当作新上游观测。
+桌面新版通过现有认证快照提供Codex、Claude、Cursor、Grok的额度：Cursor为每月，其它为每周及5h。Android手机／平板和iPhone／iPad继续在原Token卡片内整合额度：精简模式显示账户摘要；详细模式每个Agent使用两行，第一行名称与缩写总量左右排列，第二行在左侧按每月、每周、5h顺序放剩余百分比与细进度条，右侧保留完整Token整数。先给数字留足宽度再分配进度条长度，极窄或大字号时整条明细可横向查看。没有对应Token分项的账户仍单独保留，不重复铺设匹配额度分组。iOS 与 Android 详细面板按 Codex、Claude Code、Cursor、Grok、其他类型原有稳定顺序、WorkBuddy 排列；Cursor 只有额度时仍在前排，不生成或推算 Token，WorkBuddy 固定最后，可滚动查看。明细首行采用左“设备时区”、右来源时区结构。Watch与Android悬浮窗采用独立额度页以适应小屏，和Token、Hooks左右切换并记住最后页。各面板的窗口文字统一为每月、每周、5h，按此顺序显示剩余百分比及细条，缺失窗口单独隐藏，只有周或月额度也保留，零余额显示0%。除 Watch 外，各模式标明额度自身的上游更新时间；内联条的读屏保留重置时间，Android 悬浮窗独立额度页可显示当地时间的重置时刻。Watch 额度页只显示类型、周期剩余额度和细条，不显示标题、更新时间或重置时间；无Token时有效额度仍可查看。Agent展示名统一为Codex、Claude Code、Grok、WorkBuddy、Cursor等标准写法，原始身份与未知自定义名称不改动。手机展示台的“刷新”仅在当前桌面广告snapshotQueryV1后出现，沿同一加密连接读取最新已知快照；桌面上游读取仍按约五分钟节流，不把查询时刻当作新上游观测。
 
 2026-10-21 起额度协议直接升级：provider 增加 `claude`（位于 codex 与 cursor 之间），窗口增加 `monthly`（当前只由 Cursor 提供），旧版终端会拒收新桌面的额度，需与桌面同版升级；Android 组件私有格式升级为 v3，仍可读取 v2 与更早格式。
 
@@ -152,3 +152,5 @@ Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-mu
 2026-10-21 额度卡片整合验证：Apple 97 项测试、Android 共享逻辑 47 项及共享UI 4 项宿主测试通过，Android Debug APK 和 iPhone／Watch 模拟器构建通过。42mm Watch 隔离预览覆盖首屏Token、滚动到额度及无Token但有额度；iOS小／中桌面组件使用生产视图和测试数据离屏检查，精确值、质量、窗口、更新时间均可读取。预览不等于真实账户或上游提供商取数验收。
 
 同日追加三页与内联布局：42mm Watch 隔离预览确认首次Token、独立额度页和重启恢复；Android模拟器确认悬浮窗双向手势、边界不循环及服务销毁重建后恢复最后页。详细卡片移除重复额度分组和总量下方的强制留白，手机、Pad、大字号以生产视图配合测试数据检查。97项Apple与51项Android共享测试再次通过，Android Debug及iPhone／Watch真机签名构建通过，最新iPhone包已保留数据覆盖安装；嵌入Watch签名有效不等于实体手表已安装。真实桌面认证HTTP已取到Codex与Grok周额度，移动端当前保存的旧桌面身份与运行实例不同，真实移动显示仍需连接对应桌面后验收。
+
+2026-10-22 `v1.0.1` 发布前验证：118 项 Apple 测试、60 项 Android 测试通过，Watch 模拟器构建、Android sharedUI 编译与 iOS 真实 SwiftUI 类型检查通过；Watch 模拟器已实测 Hooks 单卡上下吸附切换与 Hooks／Token／额度左右分页。上述结果不替代 Release 真机签名构建或实体 iPhone／Watch 安装验证。

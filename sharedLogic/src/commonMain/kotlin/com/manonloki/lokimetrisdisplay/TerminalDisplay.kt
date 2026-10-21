@@ -7,6 +7,17 @@ data class TerminalSnapshot(
     val assets: List<TerminalAsset>, val catalogError: String?,
     val providerQuota: ProviderQuotaSnapshot? = null,
 ) {
+    /** 合并真实Token明细和独立额度，只有额度的账户也按面板优先级显示。 */
+    val displayUsageRows: List<TerminalUsageRow> get() {
+        val agents = tokens?.agents.orEmpty()
+        val quotas = providerQuota?.providers.orEmpty()
+        val matchedKeys = agents.mapNotNull { providerQuotaKey(it.agent) }.toSet()
+        return (agents.map { agent ->
+            TerminalUsageRow(agent, quotas.firstOrNull { it.provider == providerQuotaKey(agent.agent) })
+        } + quotas.filterNot { it.provider in matchedKeys }.map { TerminalUsageRow(null, it) })
+            .sortedBy { displayAgentOrder(it.tokenAgent?.agent ?: requireNotNull(it.quota).provider) }
+    }
+
     /** 网络消息共用语义校验，未来版本、重复槽位或缺值不能冒充有效数据。 */
     fun validate() {
         require(version == 1 && hooks.size <= 12 && assets.size <= 64)
@@ -75,8 +86,27 @@ fun providerQuotaKey(agent: String): String? = when (normalizedAgentName(agent))
 }
 
 private fun normalizedAgentName(raw: String): String = raw.lowercase().filterNot { it == '_' || it == '-' || it.isWhitespace() }
+
+/** 只改变展示顺序；未指定的Agent保持相对次序，WorkBuddy留到最后。 */
+private fun displayAgentOrder(raw: String): Int = when (normalizedAgentName(raw)) {
+    "codex" -> 0
+    "claude", "claudecode" -> 1
+    "cursor" -> 2
+    "grok", "grokbuild" -> 3
+    "workbuddy" -> 5
+    else -> 4
+}
+
+/** Token与额度独立可缺失，不为只有额度的账户补造用量。 */
+data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?) {
+    val displayName: String get() = tokenAgent?.displayName ?: requireNotNull(quota).label
+}
+
 /** 完整Token总量及分Agent投影。 */
 data class TerminalTokens(val day: TerminalDay, val observedMs: Long, val all: TerminalAmount, val agents: List<TerminalAgent>) {
+    /** 各宿主共用的展示优先级，不修改快照中的统计次序。 */
+    val displayAgents: List<TerminalAgent> get() = agents.sortedBy { displayAgentOrder(it.agent) }
+
     /** 日界、观测和唯一Agent来自同一快照，不在移动端重算日期或补零。 */
     fun validate() {
         require(DAY_PATTERN.matches(day.date) && day.zone.encodeToByteArray().size <= 256)

@@ -166,6 +166,23 @@ struct WidgetTokens: Codable, Equatable {
     let all: WidgetAmount
     let agents: [Agent]
 
+    /// 仅调整展示顺序，原始列表、Agent 标识与精确数值保持上游结果。
+    var displayAgents: [Agent] { orderedAgentsForDisplay(agents, name: { $0.agent }) }
+
+    /// 额度独立存在时仍参与同一展示排序，不为缺少 Token 的账户合成用量。
+    func displayRows(quota: ProviderQuotaSnapshot?) -> [WidgetUsageRow] {
+        let matchedKeys = Set(agents.compactMap { providerQuotaKey(for: $0.agent) })
+        let tokenRows: [WidgetUsageRow] = agents.map { agent in
+            let entry = providerQuotaKey(for: agent.agent).flatMap { key in
+                quota?.providers.first { $0.provider == key }
+            }
+            return .agent(agent, quota: entry)
+        }
+        let quotaRows: [WidgetUsageRow] = (quota?.providers ?? [])
+            .filter { !matchedKeys.contains($0.provider) }.map { .quota($0) }
+        return orderedAgentsForDisplay(tokenRows + quotaRows, name: { $0.sourceName })
+    }
+
     /// 非法日界、重复Agent或未知质量不进入组件；不重算桌面统计口径。
     func validate() throws {
         guard day.date.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil,
@@ -176,6 +193,44 @@ struct WidgetTokens: Codable, Equatable {
         try all.validate()
         try agents.forEach { try $0.amount.validate() }
     }
+}
+
+/// 非 Codable 的 UI 行投影，使只有额度的账户与真实 Token 账户一起排序。
+enum WidgetUsageRow: Equatable, Identifiable {
+    case agent(WidgetTokens.Agent, quota: ProviderQuotaEntry?)
+    case quota(ProviderQuotaEntry)
+
+    var id: String {
+        switch self {
+        case .agent(let agent, _): "agent:\(agent.agent)"
+        case .quota(let quota): "quota:\(quota.provider)"
+        }
+    }
+
+    fileprivate var sourceName: String {
+        switch self {
+        case .agent(let agent, _): agent.agent
+        case .quota(let quota): quota.provider
+        }
+    }
+}
+
+/// 主要账户靠前，WorkBuddy 在末尾；相同优先级保持原始相对顺序。
+private func orderedAgentsForDisplay<Element>(_ values: [Element], name: (Element) -> String) -> [Element] {
+    func rank(_ raw: String) -> Int {
+        switch normalizedAgentName(raw) {
+        case "codex": 0
+        case "claude", "claudecode": 1
+        case "cursor": 2
+        case "grok", "grokbuild": 3
+        case "workbuddy": 5
+        default: 4
+        }
+    }
+    return values.enumerated().sorted {
+        let left = rank(name($0.element)), right = rank(name($1.element))
+        return left == right ? $0.offset < $1.offset : left < right
+    }.map(\.element)
 }
 
 /// 只规范展示名；网络标识与自定义名称保持原样。
