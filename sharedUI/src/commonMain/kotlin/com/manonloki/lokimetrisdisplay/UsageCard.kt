@@ -107,7 +107,7 @@ internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, c
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 UsageAgentName(row.displayName, scale, Modifier.weight(1f))
-                                agent?.let { UsageAgentTotal(it.amount, (18f * scale).sp, Modifier.widthIn(max = agentValueWidth)) }
+                                row.tokenText?.let { UsageAgentTotal(it, (18f * scale).sp, Modifier.widthIn(max = agentValueWidth)) }
                             }
                             if (agent != null) {
                                 UsageAgentDetails(agent, row.quota, detailSize)
@@ -223,9 +223,9 @@ private fun UsageAgentDetails(agent: TerminalAgent, provider: ProviderQuotaEntry
 
 /** Agent 用量的 K/M/B 近似值，可选中复制。 */
 @Composable
-private fun UsageAgentTotal(amount: TerminalAmount, size: TextUnit, modifier: Modifier = Modifier) {
+private fun UsageAgentTotal(tokenText: String, size: TextUnit, modifier: Modifier = Modifier) {
     SelectionContainer(modifier) {
-        Text(compactTokenAmount(amount.text), modifier = Modifier.horizontalScroll(rememberScrollState()),
+        Text(compactTokenAmount(tokenText), modifier = Modifier.horizontalScroll(rememberScrollState()),
             fontFamily = FontFamily.Monospace, fontSize = size, lineHeight = size * 1.35f,
             color = UsageForeground, maxLines = 1, softWrap = false)
     }

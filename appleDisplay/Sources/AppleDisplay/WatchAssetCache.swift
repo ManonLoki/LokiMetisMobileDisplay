@@ -1,7 +1,5 @@
 import Foundation
 import CryptoKit
-import ImageIO
-import CoreGraphics
 
 /// Watch只缓存当前展示引用的内容，系统配套通道传来的文件同样需完整校验。
 final class WatchAssetCache {
@@ -75,12 +73,12 @@ final class WatchAssetCache {
     private func validate(_ asset: LanDisplaySnapshot.Asset) throws {
         guard asset.isValid else { throw WidgetSnapshotError.invalid }
     }
-    /// 后台限制至256像素，Watch界面只持有当前最多十二张静态缩略图。
-    func thumbnail(_ path: URL) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(path as CFURL, nil) else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 256,
-            kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
+    /// 后台保留全部动画帧和原始时序；每张最多256像素、2MiB，十二张约24MiB。
+    func image(_ path: URL, mime: String) throws -> LanImageAsset {
+        var limits = LanImageAsset.Limits()
+        limits.maxPixelSize = 256
+        limits.maxDecodedBytes = 2 * 1024 * 1024
+        return try LanImageAsset.decode(contentsOf: path, mime: mime, limits: limits)
     }
     /// 当前引用优先保留，旧缓存按最近复用时间收敛到512MiB和512个文件。
     func prune(keeping: Set<String>) {

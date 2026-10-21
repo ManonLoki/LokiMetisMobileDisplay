@@ -169,7 +169,7 @@ struct WidgetTokens: Codable, Equatable {
     /// 仅调整展示顺序，原始列表、Agent 标识与精确数值保持上游结果。
     var displayAgents: [Agent] { orderedAgentsForDisplay(agents, name: { $0.agent }) }
 
-    /// 额度独立存在时仍参与同一展示排序，不为缺少 Token 的账户合成用量。
+    /// 额度独立存在时仍参与排序；Cursor 缺值只在 UI 行中显示 0，不改变统计快照。
     func displayRows(quota: ProviderQuotaSnapshot?) -> [WidgetUsageRow] {
         let matchedKeys = Set(agents.compactMap { providerQuotaKey(for: $0.agent) })
         let tokenRows: [WidgetUsageRow] = agents.map { agent in
@@ -179,8 +179,12 @@ struct WidgetTokens: Codable, Equatable {
             return .agent(agent, quota: entry)
         }
         let quotaRows: [WidgetUsageRow] = (quota?.providers ?? [])
-            .filter { !matchedKeys.contains($0.provider) }.map { .quota($0) }
-        return orderedAgentsForDisplay(tokenRows + quotaRows, name: { $0.sourceName })
+            .filter { !matchedKeys.contains($0.provider) }
+            .map { $0.provider == "cursor" ? .cursorDefault(quota: $0) : .quota($0) }
+        let rows = tokenRows + quotaRows
+        let cursorRow: [WidgetUsageRow] = rows.contains { providerQuotaKey(for: $0.sourceName) == "cursor" }
+            ? [] : [.cursorDefault(quota: nil)]
+        return orderedAgentsForDisplay(rows + cursorRow, name: { $0.sourceName })
     }
 
     /// 非法日界、重复Agent或未知质量不进入组件；不重算桌面统计口径。
@@ -199,11 +203,13 @@ struct WidgetTokens: Codable, Equatable {
 enum WidgetUsageRow: Equatable, Identifiable {
     case agent(WidgetTokens.Agent, quota: ProviderQuotaEntry?)
     case quota(ProviderQuotaEntry)
+    case cursorDefault(quota: ProviderQuotaEntry?)
 
     var id: String {
         switch self {
         case .agent(let agent, _): "agent:\(agent.agent)"
         case .quota(let quota): "quota:\(quota.provider)"
+        case .cursorDefault: "default:cursor"
         }
     }
 
@@ -211,7 +217,34 @@ enum WidgetUsageRow: Equatable, Identifiable {
         switch self {
         case .agent(let agent, _): agent.agent
         case .quota(let quota): quota.provider
+        case .cursorDefault: "cursor"
         }
+    }
+
+    var displayName: String {
+        switch self {
+        case .agent(let agent, _): agent.displayName
+        case .quota(let quota): quota.label
+        case .cursorDefault: "Cursor"
+        }
+    }
+
+    var tokenAmount: WidgetAmount? {
+        if case .agent(let agent, _) = self { return agent.amount }
+        return nil
+    }
+
+    var quotaEntry: ProviderQuotaEntry? {
+        switch self {
+        case .agent(_, let quota), .cursorDefault(let quota): quota
+        case .quota(let quota): quota
+        }
+    }
+
+    /// 默认值仅供展示，不写回 Token amount 或总量，也不补造额度窗口。
+    var tokenText: String? {
+        if providerQuotaKey(for: sourceName) == "cursor", tokenAmount?.hasNumericValue != true { return "0" }
+        return tokenAmount?.text
     }
 }
 

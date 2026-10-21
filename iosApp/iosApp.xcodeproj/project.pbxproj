@@ -19,6 +19,8 @@
 		C20000000000000000000102 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
 		C20000000000000000000202 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
 		A80000000000000000000016 /* LanImageAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000015 /* LanImageAsset.swift */; };
+		B20000000000000000000013 /* LanImageAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000015 /* LanImageAsset.swift */; };
+		B20000000000000000000014 /* HookAssetImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* HookAssetImage.swift */; };
 		A10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */; };
 		D10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift */; };
 		A10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift */; };
@@ -124,6 +126,7 @@
 		B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/WatchLinkEngine.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/LokiMetrisWatchApp.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000008 /* HookAssetImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iosApp/HookAssetImage.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000006 /* LokiMetrisWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LokiMetrisWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LokiMetrisWatch/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		F92000000000000000000001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "en.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
@@ -240,6 +243,7 @@
 		B60000000000000000000001 /* Watch Sources */ = {
 			isa = PBXGroup;
 			children = (
+				B10000000000000000000008 /* HookAssetImage.swift */,
 				B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */,
 				E10000000000000000000001 /* WatchHTTPConfiguration.swift */,
 				E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */,
@@ -520,6 +524,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20000000000000000000013 /* LanImageAsset.swift in Sources */,
+				B20000000000000000000014 /* HookAssetImage.swift in Sources */,
 				E20000000000000000000002 /* WatchHTTPConfiguration.swift in Sources */,
 				E20000000000000000000003 /* WidgetRefreshTarget.swift in Sources */,
 				E20000000000000000000004 /* WidgetHTTPClient.swift in Sources */,

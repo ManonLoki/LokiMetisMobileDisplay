@@ -429,23 +429,22 @@ private struct UsagePanelCard: View {
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
                 ForEach(rows) { row in
-                    switch row {
-                    case .agent(let agent, let entry):
+                    if let tokenText = row.tokenText {
                         VStack(alignment: .leading, spacing: 2) {
                             GeometryReader { geometry in
                                 ViewThatFits(in: .horizontal) {
-                                    agentHeadline(agent, quota: entry, size: size)
+                                    agentHeadline(row, tokenText: tokenText, size: size)
                                     ScrollView(.horizontal) {
-                                        agentHeadline(agent, quota: entry, size: size)
+                                        agentHeadline(row, tokenText: tokenText, size: size)
                                             .frame(minWidth: geometry.size.width)
                                     }.scrollIndicators(.visible)
                                 }
                             }.frame(height: agentNumberSize(size) * 1.3)
-                            if entry != nil || agent.amount.hasNumericValue {
-                                agentDetailLine(agent.amount, quota: entry)
+                            if row.quotaEntry != nil || row.tokenAmount?.hasNumericValue == true {
+                                agentDetailLine(row.tokenAmount, quota: row.quotaEntry)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                    case .quota(let entry):
+                    } else if let entry = row.quotaEntry {
                         ProviderQuotaEntryRow(provider: entry, detailed: true, contentWidth: rowWidth)
                     }
                 }
@@ -456,17 +455,17 @@ private struct UsagePanelCard: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func agentHeadline(_ agent: WidgetTokens.Agent, quota: ProviderQuotaEntry?, size: CGSize) -> some View {
+    private func agentHeadline(_ row: WidgetUsageRow, tokenText: String, size: CGSize) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            agentName(agent, size: size).fixedSize(horizontal: true, vertical: false)
-                .accessibilityLabel(quota?.plan.map { "\(agent.displayName)，\($0)" } ?? agent.displayName)
+            agentName(row.displayName, size: size).fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel(row.quotaEntry?.plan.map { "\(row.displayName)，\($0)" } ?? row.displayName)
             Spacer(minLength: 0)
-            agentTotal(agent, size: size).fixedSize(horizontal: true, vertical: false)
+            agentTotal(tokenText, size: size).fixedSize(horizontal: true, vertical: false)
         }
     }
 
     /// 先按真实文字宽度缩短细条；极窄和大字只横滚本行，不截断完整整数。
-    private func agentDetailLine(_ amount: WidgetAmount, quota: ProviderQuotaEntry?) -> some View {
+    private func agentDetailLine(_ amount: WidgetAmount?, quota: ProviderQuotaEntry?) -> some View {
         GeometryReader { geometry in
             ViewThatFits(in: .horizontal) {
                 agentDetailContents(amount, quota: quota, barWidth: 44)
@@ -480,12 +479,12 @@ private struct UsagePanelCard: View {
         }.frame(height: exactLineHeight)
     }
 
-    private func agentDetailContents(_ amount: WidgetAmount, quota: ProviderQuotaEntry?, barWidth: CGFloat) -> some View {
+    private func agentDetailContents(_ amount: WidgetAmount?, quota: ProviderQuotaEntry?, barWidth: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 6) {
             if let quota { inlineQuota(quota, barWidth: barWidth) }
             Spacer(minLength: 0)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                if amount.hasNumericValue { exactText(amount) }
+                if let amount, amount.hasNumericValue { exactText(amount) }
             }.fixedSize(horizontal: true, vertical: false)
         }
     }
@@ -506,8 +505,8 @@ private struct UsagePanelCard: View {
         }
     }
 
-    private func agentName(_ agent: WidgetTokens.Agent, size: CGSize) -> some View {
-        Text(agent.displayName)
+    private func agentName(_ name: String, size: CGSize) -> some View {
+        Text(name)
             .font(.system(size: min(24, max(16, size.width * 0.04)) * rowScale, weight: .bold))
             .foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
     }
@@ -516,10 +515,10 @@ private struct UsagePanelCard: View {
         min(26, max(16, size.width * 0.045)) * rowScale
     }
 
-    private func agentTotal(_ agent: WidgetTokens.Agent, size: CGSize) -> some View {
-        Text(agent.amount.compactText)
+    private func agentTotal(_ tokenText: String, size: CGSize) -> some View {
+        Text(TokenNumber.compact(tokenText))
             .font(.system(size: agentNumberSize(size), weight: .medium).monospacedDigit())
-            .accessibilityLabel(agent.amount.text)
+            .accessibilityLabel(tokenText)
     }
 
     @ViewBuilder private func amountNote(_ amount: WidgetAmount, centered: Bool = false) -> some View {

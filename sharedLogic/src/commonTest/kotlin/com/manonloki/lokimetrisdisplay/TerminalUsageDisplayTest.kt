@@ -40,21 +40,27 @@ class TerminalUsageDisplayTest {
             rows.map { it.displayName })
         val cursor = rows[2]
         assertNull(cursor.tokenAgent)
+        assertEquals("0", cursor.tokenText)
         assertEquals("50%", cursor.quota?.monthly?.percentText)
         assertEquals(6, snapshot.tokens?.agents?.size)
         assertNull(snapshot.tokens?.agents?.firstOrNull { it.agent == "cursor" })
         assertEquals("12345", rows.last().tokenAgent?.amount?.total)
     }
 
-    @Test fun matching_quota_stays_with_its_token_row_and_missing_accounts_are_not_added() {
+    @Test fun matching_quota_stays_with_its_token_row_and_missing_cursor_displays_zero() {
         val snapshot = snapshot(tokens("WorkBuddy", "Claude-Code", "codex"), "claude")
         snapshot.validate()
 
         val rows = snapshot.displayUsageRows
-        assertEquals(listOf("Codex", "Claude Code", "WorkBuddy"), rows.map { it.displayName })
+        assertEquals(listOf("Codex", "Claude Code", "Cursor", "WorkBuddy"), rows.map { it.displayName })
         assertSame(snapshot.providerQuota?.providers?.single(), rows[1].quota)
         assertSame(snapshot.tokens?.agents?.get(1), rows[1].tokenAgent)
         assertEquals(1, rows.count { it.quota != null })
+        assertNull(rows[2].tokenAgent)
+        assertNull(rows[2].quota)
+        assertEquals("0", rows[2].tokenText)
+        assertEquals(listOf("WorkBuddy", "Claude-Code", "codex"), snapshot.tokens?.agents?.map { it.agent })
+        assertSame(amount, snapshot.tokens?.all)
     }
 
     @Test fun quota_rows_survive_when_no_token_snapshot_is_available() {
@@ -64,5 +70,30 @@ class TerminalUsageDisplayTest {
         assertEquals(listOf("Codex", "Claude", "Cursor", "Grok"), snapshot.displayUsageRows.map { it.displayName })
         assertTrue(snapshot.displayUsageRows.all { it.tokenAgent == null && it.quota != null })
         assertNull(snapshot.tokens)
+    }
+
+    @Test fun cursor_missing_amount_displays_zero_without_changing_source_availability() {
+        for (availability in listOf("noRecords", "unavailable")) {
+            val amount = TerminalAmount(null, availability, "unknown", "exact")
+            val row = TerminalUsageRow(TerminalAgent("Cursor", amount), null)
+            assertEquals("0", row.tokenText)
+            assertSame(amount, row.tokenAgent?.amount)
+            assertNull(row.tokenAgent?.amount?.total)
+            assertEquals(availability, row.tokenAgent?.amount?.availability)
+        }
+    }
+
+    @Test fun cursor_real_zero_and_usage_are_retained_without_duplicate_fallback() {
+        for (total in listOf("0", "12345")) {
+            val amount = TerminalAmount(total, "available", "complete", "exact")
+            val tokens = tokens("CUR-SOR", "workbuddy").copy(agents = listOf(TerminalAgent("CUR-SOR", amount)))
+            val rows = snapshot(tokens).displayUsageRows
+            assertEquals(1, rows.size)
+            assertEquals(total, rows.single().tokenText)
+        }
+    }
+
+    @Test fun missing_tokens_do_not_add_default_cursor_to_unsynced_snapshot() {
+        assertTrue(snapshot(null).displayUsageRows.isEmpty())
     }
 }

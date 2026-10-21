@@ -1,13 +1,12 @@
 import Foundation
 import WatchConnectivity
-import CoreGraphics
 
 /// Watch页面仅持有当前会话数据和独立通信事实，不借用手机IP或认证心跳。
 struct WatchLinkView {
     var info: WatchDeviceInfo?
     var envelope: WatchSnapshotEnvelope?
     var receivedAt: Date?
-    var images: [String: CGImage] = [:]
+    var images: [String: LanImageAsset] = [:]
     var status = "等待 iPhone 同步…"
     var canSync = false
     var connectionMode = "等待同步"
@@ -320,12 +319,12 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
             guard let asset = request.asset, let snapshot = view.envelope?.snapshot, let cache,
                   snapshot.assets.contains(asset), snapshot.hooks.contains(where: { $0.image == asset.hash }) else { throw WidgetSnapshotError.invalid }
             cache.cancel(); assetTransfer = nil; assetDescriptor = nil
-            if let path = try cache.cached(asset) { reply.status = "cached"; view.images[asset.hash] = cache.thumbnail(path) }
+            if let path = try cache.cached(asset) { reply.status = "cached"; loadImage(path, asset: asset, cache: cache) }
             else { try cache.begin(asset, id: id); assetTransfer = id; assetDescriptor = asset; reply.offset = 0 }
         case "assetChunk":
             guard assetTransfer == id, let asset = assetDescriptor, let cache, let offset = request.offset, let data = request.data else { throw WidgetSnapshotError.invalid }
             let (next, path) = try cache.accept(id: id, offset: offset, data: data); reply.offset = next
-            if let path { view.images[asset.hash] = cache.thumbnail(path); assetTransfer = nil; assetDescriptor = nil; reply.status = "complete"; cache.prune(keeping: Set(view.envelope?.snapshot.hooks.compactMap(\.image) ?? [])) }
+            if let path { loadImage(path, asset: asset, cache: cache); assetTransfer = nil; assetDescriptor = nil; reply.status = "complete"; cache.prune(keeping: Set(view.envelope?.snapshot.hooks.compactMap(\.image) ?? [])) }
             else { reply.status = "continue" }
         default: throw WidgetSnapshotError.invalid
         }
@@ -339,8 +338,13 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
         guard let snapshot = view.envelope?.snapshot, let cache else { return }
         let hashes = Set(snapshot.hooks.compactMap(\.image))
         for asset in snapshot.assets where hashes.contains(asset.hash) && view.images[asset.hash] == nil {
-            if let path = try? cache.cached(asset) { view.images[asset.hash] = cache.thumbnail(path) }
+            if let path = try? cache.cached(asset) { loadImage(path, asset: asset, cache: cache) }
         }
+    }
+    /// 相同摘要复用完整动画，重复缓存ACK不会更换播放身份并从头重播。
+    private func loadImage(_ path: URL, asset: LanDisplaySnapshot.Asset, cache: WatchAssetCache) {
+        guard view.images[asset.hash] == nil else { return }
+        view.images[asset.hash] = try? cache.image(path, mime: asset.mime)
     }
     /// 失败、暂停和新快照只撤销未完成接收器，不删除已经完成的私有缓存。
     private func cancelTransfers() { assembler.cancel(); snapshotTransfer = nil; snapshotHash = nil; cache?.cancel(); assetTransfer = nil; assetDescriptor = nil }

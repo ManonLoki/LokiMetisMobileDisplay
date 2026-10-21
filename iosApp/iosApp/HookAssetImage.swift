@@ -3,14 +3,20 @@ import SwiftUI
 /// 图片帧已在后台有界解码；仅按可见且允许播放的时长选择位图。
 struct HookAssetImage: View {
     let asset: LanImageAsset
+    var playbackEnabled = true
     @State private var playback = HookPlaybackClock()
     @State private var finished = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(watchOS)
+    @Environment(\.isLuminanceReduced) private var reducedLuminance
+    private var motionEnabled: Bool { !reducedLuminance }
+    #else
     @Environment(\.cyberMotionEnabled) private var motionEnabled
+    #endif
     @State private var visible = false
     private var canPlay: Bool {
-        asset.isAnimated && !reduceMotion && motionEnabled && scenePhase == .active && !finished
+        asset.isAnimated && playbackEnabled && !reduceMotion && motionEnabled && scenePhase == .active && !finished
     }
     private var isPlaying: Bool { canPlay && visible }
 

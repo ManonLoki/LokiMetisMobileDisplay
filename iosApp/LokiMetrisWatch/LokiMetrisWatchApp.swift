@@ -67,7 +67,7 @@ private struct WatchRootView: View {
                 } else {
                     GeometryReader { pageArea in
                         TabView(selection: $selectedPage) {
-                            if showHooks { hooksPage.tag(Page.hooks.rawValue) }
+                            if showHooks { hooksPage(size: pageArea.size).tag(Page.hooks.rawValue) }
                             if showUsage { tokensPage.tag(Page.tokens.rawValue) }
                             if showUsage { quotaPage.tag(Page.quota.rawValue) }
                         }
@@ -225,7 +225,12 @@ private struct WatchRootView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(provider.displayName).font(.caption.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                    ForEach(provider.windows, id: \.kind) { value in quotaProgress(value, label: value.label) }
+                    HStack(spacing: 8) {
+                        ForEach(provider.windows, id: \.kind) { value in
+                            quotaProgress(value, label: value.label)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
                 }
             }
         }
@@ -237,9 +242,10 @@ private struct WatchRootView: View {
     private func quotaProgress(_ value: ProviderQuotaWindow, label: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(label).font(.caption2)
+                Text(label).font(.caption2).lineLimit(1).minimumScaleFactor(0.75)
                 Spacer(minLength: 0)
                 Text(value.percentText).font(.caption2.monospacedDigit()).fontWeight(.semibold)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
             GeometryReader { geometry in
                 let color: Color = value.level == 0 ? .red : value.level == 1 ? .yellow : .green
@@ -256,9 +262,13 @@ private struct WatchRootView: View {
         .accessibilityLabel("\(label)额度剩余，\(value.percentText)")
     }
 
-    /// 每屏固定一张活动卡，上下滚动吸附切换；左右手势留给主页面。
-    private var hooksPage: some View {
-        GeometryReader { viewport in
+    /// 每屏固定一张活动卡；沿用外层页尺寸，避免Watch分页压缩内层测量高度。
+    /// 上下滚动吸附切换，左右手势留给主页面；底部只为分页圆点留空。
+    private func hooksPage(size: CGSize) -> some View {
+        let width = max(0, size.width - 8)
+        let bottomInset: CGFloat = visiblePages.count > 1 ? 14 : 6
+        let height = max(0, size.height - bottomInset)
+        return GeometryReader { _ in
             ScrollView(.vertical) {
                 if let snapshot = model.state.envelope?.snapshot {
                     if !snapshot.hooksAvailable {
@@ -268,16 +278,11 @@ private struct WatchRootView: View {
                     } else {
                         LazyVStack(spacing: 0) {
                             ForEach(snapshot.hooks.sorted(by: { $0.slot < $1.slot }), id: \.slot) { hook in
-                                NavigationLink {
-                                    hookDetail(hook)
-                                } label: {
-                                    hookTile(hook, height: viewport.size.height)
-                                }
-                                .buttonStyle(.plain)
-                                .frame(width: viewport.size.width, height: viewport.size.height)
-                                .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
-                                .accessibilityHint("打开活动详情")
-                                .accessibilityIdentifier("watch-hook-\(hook.slot)")
+                                hookTile(hook, height: height)
+                                    .frame(width: width, height: height)
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
+                                    .accessibilityIdentifier("watch-hook-\(hook.slot)")
                             }
                         }.scrollTargetLayout()
                     }
@@ -288,11 +293,11 @@ private struct WatchRootView: View {
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .contentMargins(.vertical, 0, for: .scrollContent)
-            .frame(width: viewport.size.width, height: viewport.size.height)
+            .frame(width: width, height: height)
+            .clipped()
+            .padding(.horizontal, 4)
+            .padding(.bottom, bottomInset)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("活动状态页面")
     }
 
@@ -329,19 +334,23 @@ private struct WatchRootView: View {
     }
 
     private func hookTile(_ hook: LanDisplaySnapshot.Hook, height: CGFloat) -> some View {
-        let inset: CGFloat = 13
-        return VStack(alignment: .leading, spacing: 9) {
-            Text(agentDisplayName(hook.agent))
-                .font(.headline)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .fixedSize(horizontal: false, vertical: true)
+        let inset: CGFloat = 9
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(agentDisplayName(hook.agent))
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.65)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 3) {
+                    Circle().fill(behaviorColor(hook.behavior)).frame(width: 5, height: 5)
+                    Text(hook.behavior.label).font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(behaviorColor(hook.behavior))
+                .fixedSize(horizontal: true, vertical: false)
+            }
+            .fixedSize(horizontal: false, vertical: true)
             hookImage(hook)
-            HStack(spacing: 4) {
-                Circle().fill(behaviorColor(hook.behavior)).frame(width: 6, height: 6)
-                Text(hook.behavior.label).font(.title3.weight(.semibold))
-                    .lineLimit(1).minimumScaleFactor(0.75)
-            }.foregroundStyle(behaviorColor(hook.behavior))
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
         .frame(height: max(0, height - inset * 2))
@@ -356,7 +365,7 @@ private struct WatchRootView: View {
         return GeometryReader { area in
             Group {
                 if let image {
-                    Image(decorative: image, scale: 1).resizable().scaledToFit()
+                    HookAssetImage(asset: image, playbackEnabled: selectedPage == Page.hooks.rawValue && !showingSettings)
                 } else {
                     VStack(spacing: 4) {
                         Image(systemName: "photo").accessibilityHidden(true)
@@ -369,39 +378,6 @@ private struct WatchRootView: View {
         }
         .frame(minHeight: 44)
         .accessibilityLabel(image == nil ? placeholder : "活动图片")
-    }
-
-    /// 详情保留完整正文与图片，使用活动类型作为标题。
-    private func hookDetail(_ hook: LanDisplaySnapshot.Hook) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(agentDisplayName(hook.agent)).font(.headline)
-                Text(hook.behavior.label).font(.title3.weight(.semibold)).foregroundStyle(behaviorColor(hook.behavior))
-                if !hook.content.isEmpty {
-                    Text(hook.content).font(.caption).fixedSize(horizontal: false, vertical: true)
-                }
-                if hook.contentTruncated { Text("正文已截断").font(.caption2).foregroundStyle(.secondary) }
-                if let hash = hook.image {
-                    if let image = model.state.images[hash] {
-                        Image(decorative: image, scale: 1).resizable().scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else {
-                        Label("图片未缓存", systemImage: "photo").font(.caption2).foregroundStyle(.secondary)
-                    }
-                }
-                if model.state.summaryOnly {
-                    Text("HTTP 直连提供用量、账户额度与插槽状态；正文和图片需通过 iPhone 同步。")
-                        .font(.caption2).foregroundStyle(.secondary)
-                } else if hook.content.isEmpty && hook.image == nil {
-                    Text("暂无正文或图片").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8).padding(.bottom, 12)
-        }
-        .navigationTitle(agentDisplayName(hook.agent))
-        .privacySensitive()
     }
 
     private func behaviorColor(_ behavior: WidgetHook.Behavior) -> Color {

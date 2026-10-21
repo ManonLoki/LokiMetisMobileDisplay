@@ -61,7 +61,8 @@ struct LanImageAsset {
         var images: [CGImage] = [], delays: [TimeInterval] = [], ends: [TimeInterval] = []
         var bytes = 0, total: TimeInterval = 0
         // 以帧数分配统一边长，保持全部动画帧而不增加位图副本；实际行字节再严格核算。
-        let perFramePixels = limits.maxDecodedBytes / count / 4
+        let perFrameBytes = limits.maxDecodedBytes / count
+        let perFramePixels = perFrameBytes / 4
         let pixelSize = min(limits.maxPixelSize, Int(Double(perFramePixels).squareRoot()))
         guard pixelSize >= 1 else { throw Failure.resourceLimit }
         for index in 0..<count {
@@ -71,13 +72,15 @@ struct LanImageAsset {
                       let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
                       width.doubleValue > 0, height.doubleValue > 0,
                       width.doubleValue * height.doubleValue <= Double(limits.maxSourcePixels) else { throw Failure.resourceLimit }
-                guard let frame = CGImageSourceCreateThumbnailAtIndex(source, index, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: pixelSize,
-                    kCGImageSourceShouldCacheImmediately: true,
-                    kCGImageSourceShouldCache: false
-                ] as CFDictionary) else { throw Failure.invalidImage }
+                var edge = pixelSize
+                var frame = try thumbnail(source, index: index, pixelSize: edge)
+                // ImageIO行字节含对齐开销；按实际占用缩小，不能把可缩放动画误判为超限。
+                while frame.bytesPerRow * frame.height > perFrameBytes {
+                    guard edge > 1 else { throw Failure.resourceLimit }
+                    let ratio = Double(perFrameBytes) / Double(frame.bytesPerRow * frame.height)
+                    edge = max(1, min(edge - 1, Int(Double(edge) * ratio.squareRoot())))
+                    frame = try thumbnail(source, index: index, pixelSize: edge)
+                }
                 let size = frame.bytesPerRow * frame.height
                 guard size <= limits.maxDecodedBytes - bytes else { throw Failure.resourceLimit }
                 let delay = delayTime(properties, mime: mime)
@@ -86,6 +89,17 @@ struct LanImageAsset {
         }
         return Self(frames: images, frameDurations: delays, playCount: plays(metadata, mime: mime),
                     decodedByteCount: bytes, frameEnds: ends, duration: total)
+    }
+
+    private static func thumbnail(_ source: CGImageSource, index: Int, pixelSize: Int) throws -> CGImage {
+        guard let frame = CGImageSourceCreateThumbnailAtIndex(source, index, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: pixelSize,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceShouldCache: false
+        ] as CFDictionary) else { throw Failure.invalidImage }
+        return frame
     }
 
     /// 直接按累计时长定位，快帧/慢帧保持原时序；有限播放结束后停留末帧。

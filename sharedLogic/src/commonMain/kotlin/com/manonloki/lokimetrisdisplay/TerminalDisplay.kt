@@ -7,15 +7,17 @@ data class TerminalSnapshot(
     val assets: List<TerminalAsset>, val catalogError: String?,
     val providerQuota: ProviderQuotaSnapshot? = null,
 ) {
-    /** 合并真实Token明细和独立额度，只有额度的账户也按面板优先级显示。 */
+    /** 合并真实Token明细和独立额度；Cursor缺值只补UI行，不改变统计快照。 */
     val displayUsageRows: List<TerminalUsageRow> get() {
         val agents = tokens?.agents.orEmpty()
         val quotas = providerQuota?.providers.orEmpty()
         val matchedKeys = agents.mapNotNull { providerQuotaKey(it.agent) }.toSet()
-        return (agents.map { agent ->
+        val rows = agents.map { agent ->
             TerminalUsageRow(agent, quotas.firstOrNull { it.provider == providerQuotaKey(agent.agent) })
-        } + quotas.filterNot { it.provider in matchedKeys }.map { TerminalUsageRow(null, it) })
-            .sortedBy { displayAgentOrder(it.tokenAgent?.agent ?: requireNotNull(it.quota).provider) }
+        } + quotas.filterNot { it.provider in matchedKeys }.map { TerminalUsageRow(null, it) }
+        val cursorRow = if (tokens != null && rows.none { providerQuotaKey(it.sourceName) == "cursor" })
+            listOf(TerminalUsageRow(null, null, fallbackAgent = "cursor")) else emptyList()
+        return (rows + cursorRow).sortedBy { displayAgentOrder(it.sourceName) }
     }
 
     /** 网络消息共用语义校验，未来版本、重复槽位或缺值不能冒充有效数据。 */
@@ -97,9 +99,12 @@ private fun displayAgentOrder(raw: String): Int = when (normalizedAgentName(raw)
     else -> 4
 }
 
-/** Token与额度独立可缺失，不为只有额度的账户补造用量。 */
-data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?) {
-    val displayName: String get() = tokenAgent?.displayName ?: requireNotNull(quota).label
+/** 非序列化UI投影；缺失Cursor的默认零不参与统计或额度。 */
+data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?, val fallbackAgent: String? = null) {
+    internal val sourceName: String get() = tokenAgent?.agent ?: quota?.provider ?: requireNotNull(fallbackAgent)
+    val displayName: String get() = tokenAgent?.displayName ?: quota?.label ?: agentDisplayName(sourceName)
+    val tokenText: String? get() = if (providerQuotaKey(sourceName) == "cursor" && tokenAgent?.amount?.total == null)
+        "0" else tokenAgent?.amount?.text
 }
 
 /** 完整Token总量及分Agent投影。 */
