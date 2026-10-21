@@ -1,0 +1,804 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C20000000000000000000101 /* WidgetRefreshTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* WidgetRefreshTarget.swift */; };
+		C20000000000000000000201 /* WidgetRefreshTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* WidgetRefreshTarget.swift */; };
+		C20000000000000000000102 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
+		C20000000000000000000202 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
+		A80000000000000000000016 /* LanImageAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000015 /* LanImageAsset.swift */; };
+		A10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */; };
+		A10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift */; };
+		A10000000000000000000003 /* WidgetShared/WidgetContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* WidgetShared/WidgetContainer.swift */; };
+		A10000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */; };
+		A10000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift */; };
+		A10000000000000000000006 /* WidgetShared/WidgetContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* WidgetShared/WidgetContainer.swift */; };
+		A10000000000000000000007 /* LokiMetrisWidgets/LokiMetrisWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* LokiMetrisWidgets/LokiMetrisWidgets.swift */; };
+		A10000000000000000000008 /* LokiMetrisWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* LokiMetrisWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A80000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */; };
+		A80000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */; };
+		A80000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */; };
+		A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */; };
+		A80000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift */; };
+		A80000000000000000000012 /* ../appleDisplay/Sources/AppleDisplay/LanDisplayStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000011 /* ../appleDisplay/Sources/AppleDisplay/LanDisplayStore.swift */; };
+		A80000000000000000000014 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000013 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift */; };
+		B20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */; };
+		B20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift */; };
+		B20000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */; };
+		B20000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift */; };
+		B20000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */; };
+		B20000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */; };
+		B20000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */; };
+		B20000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift */; };
+		B20000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */; };
+		B20000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */; };
+		B20000000000000000000011 /* LokiMetrisWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* LokiMetrisWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B20000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1E01BBF7E190922A87C3ECDF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A40000000000000000000001;
+			remoteInfo = LokiMetrisWidgets;
+		};
+		B30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1E01BBF7E190922A87C3ECDF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B40000000000000000000001;
+			remoteInfo = LokiMetrisWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A50000000000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000008 /* LokiMetrisWidgets.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B50000000000000000000001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				B20000000000000000000011 /* LokiMetrisWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		C10000000000000000000001 /* WidgetRefreshTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetRefreshTarget.swift; sourceTree = SOURCE_ROOT; };
+		C10000000000000000000002 /* WidgetHTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetHTTPClient.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000015 /* LanImageAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanImageAsset.swift; sourceTree = SOURCE_ROOT; };
+		459F7582EF5F5E372A566A38 /* LokiMetrisDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LokiMetrisDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift; sourceTree = SOURCE_ROOT; };
+		A20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift; sourceTree = SOURCE_ROOT; };
+		A20000000000000000000003 /* WidgetShared/WidgetContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetShared/WidgetContainer.swift; sourceTree = SOURCE_ROOT; };
+		A20000000000000000000004 /* LokiMetrisWidgets/LokiMetrisWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWidgets/LokiMetrisWidgets.swift; sourceTree = SOURCE_ROOT; };
+		A20000000000000000000005 /* LokiMetrisWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LokiMetrisWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanFrames.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000011 /* ../appleDisplay/Sources/AppleDisplay/LanDisplayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanDisplayStore.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000013 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanSocket.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/WatchLinkEngine.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/LokiMetrisWatchApp.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000006 /* LokiMetrisWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LokiMetrisWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LokiMetrisWatch/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		681F30872BB39BE6B56189F9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				iosApp.entitlements,
+			);
+			target = 96ED09AB414FB9C2BF197F07 /* iosApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3096AD102E2186AB511AB800 /* Configuration */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
+		ED81279EE87F6414ED22543A /* iosApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				681F30872BB39BE6B56189F9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = iosApp;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9E384A2EE81CF57E7B92D05F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A50000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B50000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5832BB6D54B3B38D9449D897 = {
+			isa = PBXGroup;
+			children = (
+				3096AD102E2186AB511AB800 /* Configuration */,
+				B60000000000000000000001 /* Watch Sources */,
+				ED81279EE87F6414ED22543A /* iosApp */,
+				A60000000000000000000001 /* Apple Display Sources */,
+				5EE9D8C06CD81519F1CC5AB2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5EE9D8C06CD81519F1CC5AB2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				459F7582EF5F5E372A566A38 /* LokiMetrisDisplay.app */,
+				B10000000000000000000006 /* LokiMetrisWatch.app */,
+				A20000000000000000000005 /* LokiMetrisWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000001 /* Apple Display Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A80000000000000000000015 /* LanImageAsset.swift */,
+				A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */,
+				A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */,
+				A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */,
+				A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */,
+				A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */,
+				C10000000000000000000002 /* WidgetHTTPClient.swift */,
+				C10000000000000000000001 /* WidgetRefreshTarget.swift */,
+				A20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift */,
+				A20000000000000000000003 /* WidgetShared/WidgetContainer.swift */,
+				A20000000000000000000004 /* LokiMetrisWidgets/LokiMetrisWidgets.swift */,
+			);
+			name = "Apple Display Sources";
+			sourceTree = "<group>";
+		};
+		B60000000000000000000001 /* Watch Sources */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */,
+				B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */,
+				B10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift */,
+				B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */,
+				B10000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift */,
+				B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */,
+			);
+			name = "Watch Sources";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		96ED09AB414FB9C2BF197F07 /* iosApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 772CC2FAA452E2EB720EC53E /* Build configuration list for PBXNativeTarget "iosApp" */;
+			buildPhases = (
+				E661C94D0BFA4B7C9B871001 /* Compile Rust Mobile Bridge */,
+				6AE3F1CBB1DE3EE6A122E5F2 /* Compile Kotlin Framework */,
+				6448FEE80CEBDEBA24C5A631 /* Sources */,
+				9E384A2EE81CF57E7B92D05F /* Frameworks */,
+				20EE89029AAB5DDA370C9D53 /* Resources */,
+				A50000000000000000000001 /* Embed App Extensions */,
+				B50000000000000000000001 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A30000000000000000000002 /* PBXTargetDependency */,
+				B30000000000000000000002 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				ED81279EE87F6414ED22543A /* iosApp */,
+			);
+			name = iosApp;
+			packageProductDependencies = (
+			);
+			productName = iosApp;
+			productReference = 459F7582EF5F5E372A566A38 /* LokiMetrisDisplay.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A40000000000000000000001 /* LokiMetrisWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWidgets" */;
+			buildPhases = (
+				A50000000000000000000003 /* Sources */,
+				A50000000000000000000002 /* Frameworks */,
+				A50000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LokiMetrisWidgets;
+			packageProductDependencies = (
+			);
+			productName = LokiMetrisWidgets;
+			productReference = A20000000000000000000005 /* LokiMetrisWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		B40000000000000000000001 /* LokiMetrisWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWatch" */;
+			buildPhases = (
+				B50000000000000000000002 /* Sources */,
+				B50000000000000000000003 /* Frameworks */,
+				B50000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LokiMetrisWatch;
+			packageProductDependencies = (
+			);
+			productName = LokiMetrisWatch;
+			productReference = B10000000000000000000006 /* LokiMetrisWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1E01BBF7E190922A87C3ECDF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					96ED09AB414FB9C2BF197F07 = {
+						CreatedOnToolsVersion = 16.2;
+						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
+					A40000000000000000000001 = {
+						CreatedOnToolsVersion = 16.2;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
+					B40000000000000000000001 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = 8270BD7A451F0DD4548B580B /* Build configuration list for PBXProject "iosApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5832BB6D54B3B38D9449D897;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5EE9D8C06CD81519F1CC5AB2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				96ED09AB414FB9C2BF197F07 /* iosApp */,
+				A40000000000000000000001 /* LokiMetrisWidgets */,
+				B40000000000000000000001 /* LokiMetrisWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		20EE89029AAB5DDA370C9D53 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A50000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B50000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000000000000000000012 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		6AE3F1CBB1DE3EE6A122E5F2 /* Compile Kotlin Framework */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Kotlin Framework";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :sharedLogic:embedAndSignAppleFrameworkForXcode\n";
+		};
+		E661C94D0BFA4B7C9B871001 /* Compile Rust Mobile Bridge */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Rust Mobile Bridge";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\ncd \"$SRCROOT/..\"\npython3 scripts/build_mobile_native.py --desktop-root \"${LOKI_DESKTOP_ROOT:-$SRCROOT/../../../../my-work/ai/loki_metris}\" --platform ios --sdk \"$PLATFORM_NAME\" --configuration \"$CONFIGURATION\" --out \"$SRCROOT/build/native/$PLATFORM_NAME\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6448FEE80CEBDEBA24C5A631 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A80000000000000000000016 /* LanImageAsset.swift in Sources */,
+				B20000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */,
+				A10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
+				C20000000000000000000102 /* WidgetHTTPClient.swift in Sources */,
+				C20000000000000000000101 /* WidgetRefreshTarget.swift in Sources */,
+				A10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift in Sources */,
+				A10000000000000000000003 /* WidgetShared/WidgetContainer.swift in Sources */,
+				A80000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift in Sources */,
+				A80000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */,
+				A80000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */,
+				A80000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */,
+				A80000000000000000000012 /* ../appleDisplay/Sources/AppleDisplay/LanDisplayStore.swift in Sources */,
+				A80000000000000000000014 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift in Sources */,
+				A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A50000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
+				C20000000000000000000202 /* WidgetHTTPClient.swift in Sources */,
+				C20000000000000000000201 /* WidgetRefreshTarget.swift in Sources */,
+				A10000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift in Sources */,
+				A10000000000000000000006 /* WidgetShared/WidgetContainer.swift in Sources */,
+				A10000000000000000000007 /* LokiMetrisWidgets/LokiMetrisWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B50000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */,
+				B20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift in Sources */,
+				B20000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift in Sources */,
+				B20000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift in Sources */,
+				B20000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift in Sources */,
+				B20000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
+				B20000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */,
+				B20000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */,
+				B20000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A30000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A40000000000000000000001 /* LokiMetrisWidgets */;
+			targetProxy = A30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		B30000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B40000000000000000000001 /* LokiMetrisWatch */;
+			targetProxy = B30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A70000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_ENTITLEMENTS = LokiMetrisWidgets/LokiMetrisWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "诡秘神谕";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).widgets";
+				PRODUCT_NAME = LokiMetrisWidgets;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A70000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_ENTITLEMENTS = LokiMetrisWidgets/LokiMetrisWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "诡秘神谕";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).widgets";
+				PRODUCT_NAME = LokiMetrisWidgets;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A9221415717C580796533759 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
+				DEVELOPMENT_TEAM = "${TEAM_ID}";
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/build/native/$(PLATFORM_NAME)";
+				INFOPLIST_FILE = iosApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(SRCROOT)/build/native/$(PLATFORM_NAME)";
+				OTHER_LDFLAGS = "$(inherited) -lloki_metris_mobile_bridge -framework SharedLogic";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = iosApp/MobileBridge.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AC4A49B651108AF15972F19C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 3096AD102E2186AB511AB800 /* Configuration */;
+			baseConfigurationReferenceRelativePath = Config.xcconfig;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B70000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LokiMetrisWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).watchkitapp";
+				PRODUCT_NAME = LokiMetrisWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
+		B70000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LokiMetrisWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).watchkitapp";
+				PRODUCT_NAME = LokiMetrisWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
+		BE3EF97BF700C3E77FBDECD2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_ASSET_PATHS = "\"iosApp/Preview Content\"";
+				DEVELOPMENT_TEAM = "${TEAM_ID}";
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/build/native/$(PLATFORM_NAME)";
+				INFOPLIST_FILE = iosApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(SRCROOT)/build/native/$(PLATFORM_NAME)";
+				OTHER_LDFLAGS = "$(inherited) -lloki_metris_mobile_bridge -framework SharedLogic";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = iosApp/MobileBridge.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D247A371657D4191C2FCC5E7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 3096AD102E2186AB511AB800 /* Configuration */;
+			baseConfigurationReferenceRelativePath = Config.xcconfig;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		772CC2FAA452E2EB720EC53E /* Build configuration list for PBXNativeTarget "iosApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE3EF97BF700C3E77FBDECD2 /* Debug */,
+				A9221415717C580796533759 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8270BD7A451F0DD4548B580B /* Build configuration list for PBXProject "iosApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AC4A49B651108AF15972F19C /* Debug */,
+				D247A371657D4191C2FCC5E7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A70000000000000000000002 /* Debug */,
+				A70000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B70000000000000000000002 /* Debug */,
+				B70000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1E01BBF7E190922A87C3ECDF /* Project object */;
+}

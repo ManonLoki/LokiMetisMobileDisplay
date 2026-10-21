@@ -1,0 +1,292 @@
+import SwiftUI
+import WidgetKit
+
+/// 五种尺寸共用系统Timeline，系统唤醒时使用独立只读权限短时拉取摘要。
+@main
+struct LokiMetrisWidgets: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: WidgetSnapshot.kind, provider: DisplayTimeline()) { entry in
+            DisplayWidgetView(entry: entry)
+                .containerBackground(for: .widget) { WidgetCyberMaterial() }
+                .privacySensitive()
+        }
+        .configurationDisplayName("诡秘神谕")
+        .description("上次同步的 Token 用量与 Hooks 摘要。")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline, .accessoryCircular, .accessoryRectangular])
+    }
+}
+
+struct DisplayEntry: TimelineEntry {
+    let date: Date
+    let snapshot: WidgetSnapshot?
+}
+
+/// 本地缓存优先；Timeline唤醒时独立HTTP读取，系统决定实际执行时间。
+struct DisplayTimeline: TimelineProvider {
+    func placeholder(in context: Context) -> DisplayEntry { DisplayEntry(date: Date(), snapshot: nil) }
+    func getSnapshot(in context: Context, completion: @escaping (DisplayEntry) -> Void) { completion(load()) }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<DisplayEntry>) -> Void) {
+        Task {
+            if !context.isPreview, let store = try? WidgetContainer.store(),
+               let target = try? store.loadRefreshTarget() {
+                do {
+                    let snapshot = try await WidgetHTTPClient().fetch(target)
+                    _ = try store.saveFetchedSnapshot(snapshot, for: target)
+                } catch {
+                    // 局域网不可达或桌面离线时保留真实上次同步时间，之后继续申请刷新。
+                }
+            }
+            let entry = load()
+            completion(Timeline(entries: [entry], policy: .after(Date(timeIntervalSinceNow: 5 * 60))))
+        }
+    }
+    private func load() -> DisplayEntry {
+        let now = Date()
+        return DisplayEntry(date: now, snapshot: try? WidgetContainer.store().loadCached(atMs: Int64(now.timeIntervalSince1970 * 1000)))
+    }
+}
+
+/// 每种组件各自组织信息；锁屏保持系统单色，桌面使用高对比数字。
+struct DisplayWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    private let accent = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
+    private let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
+    let entry: DisplayEntry
+
+    @ViewBuilder var body: some View {
+        if let record = entry.snapshot {
+            switch family {
+            case .accessoryInline:
+                Text("上次 \(cacheStamp(record)) · \(record.snapshot.hooksText)")
+            case .accessoryCircular:
+                VStack(spacing: 1) {
+                    Text("Hooks").font(.caption2)
+                    Text(record.snapshot.hooksAvailable ? "\(record.snapshot.hooks.count)" : "—")
+                        .font(.system(.title2, design: .rounded, weight: .semibold)).monospacedDigit()
+                    Text("上次同步").font(.caption2)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("上次同步于 \(cacheDescription(record))，\(record.snapshot.hooksText)")
+            case .accessoryRectangular:
+                rectangular(record)
+            case .systemMedium:
+                medium(record).foregroundStyle(.white)
+            default:
+                small(record).foregroundStyle(.white)
+            }
+        } else {
+            empty
+        }
+    }
+
+    private func small(_ record: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Token 用量").font(.system(size: 11, weight: .medium)).foregroundStyle(accent)
+                Spacer(minLength: 0)
+                Image(systemName: "square.grid.2x2.fill").font(.caption2).foregroundStyle(accent)
+            }
+            tokenValue(record, size: 32)
+            quality(record.snapshot.tokens?.all)
+            Spacer(minLength: 0)
+            if let tokens = record.snapshot.tokens {
+                Text(tokens.day.date).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
+                    .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
+            }
+            syncTime(record)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func medium(_ record: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("Token 用量").font(.caption.weight(.medium)).foregroundStyle(accent)
+                Spacer(minLength: 0)
+                if let tokens = record.snapshot.tokens {
+                    Text(tokens.day.date).font(.caption2).foregroundStyle(.white.opacity(0.6))
+                        .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
+                }
+            }
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    tokenValue(record, size: 34)
+                    quality(record.snapshot.tokens?.all)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Rectangle().fill(LinearGradient(colors: [accent.opacity(0.4), violet.opacity(0.1)], startPoint: .top, endPoint: .bottom)).frame(width: 0.5)
+                agents(record).frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(maxHeight: .infinity, alignment: .top)
+            HStack(alignment: .bottom, spacing: 8) {
+                hookSummary(record)
+                Spacer(minLength: 0)
+                syncTime(record)
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder private func agents(_ record: WidgetSnapshot) -> some View {
+        if let tokens = record.snapshot.tokens, !tokens.agents.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Array(tokens.agents.prefix(2)), id: \.agent) { agent in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(agent.agent).font(.caption2).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Text(agent.amount.compactText).font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
+                                .layoutPriority(1)
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            if agent.amount.hasNumericValue {
+                                Text(agent.amount.exactText).font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .monospacedDigit().foregroundStyle(.white.opacity(0.65))
+                                    .lineLimit(1).minimumScaleFactor(0.4)
+                            }
+                            Spacer(minLength: 0)
+                            quality(agent.amount, size: 9)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(agent.agent)，\(agent.amount.text)\(agent.amount.quality.isEmpty ? "" : "，" + agent.amount.quality)")
+                }
+                if tokens.agents.count > 2 {
+                    Text("另 \(tokens.agents.count - 2) 个 Agent").font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Agent").font(.caption2).foregroundStyle(.white.opacity(0.65))
+                Text(record.snapshot.tokens == nil ? (record.snapshot.tokenError == nil ? "尚未同步" : "暂不可用") : "无分项记录").font(.caption)
+            }
+        }
+    }
+
+    private func hookSummary(_ record: WidgetSnapshot) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(accent)
+            Text(record.snapshot.hooksAvailable ? "上次 Hooks \(record.snapshot.hooks.count)" : "Hooks 未同步")
+            if let hook = record.snapshot.hooks.sorted(by: { $0.slot < $1.slot }).first {
+                Text("· \(hook.agent) \(hook.behavior.label)").foregroundStyle(.white.opacity(0.65))
+            }
+        }.font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
+    }
+
+    private func rectangular(_ record: WidgetSnapshot) -> some View {
+        let amountQuality = record.snapshot.tokens?.all.quality ?? ""
+        return VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                Text("Token")
+                if let tokens = record.snapshot.tokens { Text(tokens.day.date) }
+            }.font(.caption2).lineLimit(1).minimumScaleFactor(0.75)
+            tokenValue(record, size: 20, exactSize: 9)
+            Text("上次同步 \(cacheStamp(record))\(amountQuality.isEmpty ? "" : " · " + amountQuality)")
+                .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6)
+        }
+    }
+
+    /// 缩略值仅用于大字扫读，下方完整整数不经过浮点转换。
+    private func tokenValue(_ record: WidgetSnapshot, size: CGFloat, exactSize: CGFloat = 10) -> some View {
+        let amount = record.snapshot.tokens?.all
+        let fallback = record.snapshot.tokenError == nil ? "未同步" : "不可用"
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(amount?.compactText ?? fallback)
+                .font(.system(size: size, weight: .semibold, design: .monospaced))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.25)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let amount, amount.hasNumericValue {
+                Text(amount.exactText).font(.system(size: exactSize, weight: .medium, design: .monospaced))
+                    .monospacedDigit().opacity(0.65).lineLimit(1).minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("总 Token，\(amount?.text ?? fallback)")
+    }
+
+    @ViewBuilder private func quality(_ amount: WidgetAmount?, size: CGFloat = 10) -> some View {
+        if let amount, !amount.quality.isEmpty {
+            Text(amount.quality).font(.system(size: size, weight: .medium))
+                .foregroundStyle(violet)
+                .lineLimit(1).minimumScaleFactor(0.65)
+        }
+    }
+
+    /// 标明最近同步时间，不从系统时间推断在线或今日用量。
+    private func syncTime(_ record: WidgetSnapshot) -> some View {
+        Text("上次同步 \(cacheStamp(record))")
+            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .accessibilityLabel("上次同步于 \(cacheDescription(record))")
+    }
+
+    private func cacheStamp(_ record: WidgetSnapshot) -> String {
+        record.receivedDate.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+    }
+
+    private func cacheDescription(_ record: WidgetSnapshot) -> String {
+        record.receivedDate.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).year().month().day().hour().minute())
+    }
+
+    /// 未同步不表示零用量，也不推断设备离线。
+    @ViewBuilder private var empty: some View {
+        switch family {
+        case .accessoryInline:
+            Text("LokiMetris · 尚未同步")
+        case .accessoryCircular:
+            VStack(spacing: 2) {
+                Image(systemName: "square.grid.2x2")
+                Text("未同步").font(.caption2)
+            }
+        case .accessoryRectangular:
+            VStack(alignment: .leading, spacing: 3) {
+                Text("LokiMetris").font(.caption2)
+                Text("尚未同步").font(.headline)
+            }
+        default:
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: "square.grid.2x2.fill").font(.title3).foregroundStyle(accent)
+                Spacer(minLength: 0)
+                Text("尚未同步").font(.headline)
+                Text("打开 App 连接桌面").font(.caption2).foregroundStyle(.white.opacity(0.65))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// WidgetKit仅绘制静态材质；锁屏交还系统单色背景，不运行持续动画。
+private struct WidgetCyberMaterial: View {
+    @Environment(\.widgetFamily) private var family
+    private let cyan = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
+    private let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
+
+    @ViewBuilder var body: some View {
+        switch family {
+        case .accessoryInline, .accessoryCircular, .accessoryRectangular:
+            Color.clear
+        default:
+            ZStack {
+                LinearGradient(colors: [Color(red: 17 / 255, green: 29 / 255, blue: 45 / 255), Color(red: 5 / 255, green: 10 / 255, blue: 18 / 255)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                WidgetCircuitGrid().stroke(cyan.opacity(0.055), lineWidth: 0.5)
+                RadialGradient(colors: [cyan.opacity(0.11), .clear], center: .topLeading, startRadius: 0, endRadius: 130)
+                RadialGradient(colors: [violet.opacity(0.1), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 110)
+                ContainerRelativeShape().strokeBorder(LinearGradient(colors: [cyan.opacity(0.5), .white.opacity(0.04), violet.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8)
+            }
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct WidgetCircuitGrid: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for x in stride(from: CGFloat(0), through: rect.width, by: 18) {
+            path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: rect.height))
+        }
+        for y in stride(from: CGFloat(0), through: rect.height, by: 18) {
+            path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: rect.width, y: y))
+        }
+        return path
+    }
+}

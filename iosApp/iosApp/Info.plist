@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.manonloki.lokimetrisdisplay.widget-refresh</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>发现同一局域网内的诡秘神谕桌面端，配对后同步Token用量与Hooks图文，并在系统允许后台刷新时更新小组件摘要。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_loki-host._tcp</string>
+	</array>
+	<key>LokiWidgetAppGroup</key>
+	<string>$(LOKI_WIDGET_APP_GROUP)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict>
+</plist>

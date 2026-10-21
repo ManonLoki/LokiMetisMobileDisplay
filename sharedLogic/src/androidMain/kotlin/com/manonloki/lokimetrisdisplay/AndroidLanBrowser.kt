@@ -1,0 +1,156 @@
+package com.manonloki.lokimetrisdisplay
+
+import android.content.Context
+import android.net.Network
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.ext.SdkExtensions
+import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.util.concurrent.Executor
+
+/** 解析后的临时候选；TXT只能选端点，授信仍唯一由Rust认证决定。 */
+data class AndroidLanEndpoint(val id: String, val name: String, val address: InetSocketAddress, val network: Network?)
+
+/** 前台DNS-SD浏览器；主线程拥有注册，迟到回调不能跨浏览代次复活端点。 */
+class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanEndpoint>) -> Unit, private val failed: () -> Unit) {
+    private val main = Handler(Looper.getMainLooper())
+    private val executor = Executor { main.post(it) }
+    private val nsd = context.applicationContext.getSystemService(NsdManager::class.java)
+    private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
+    private var generation = 0L
+    private var discovery: NsdManager.DiscoveryListener? = null
+    private var multicast: WifiManager.MulticastLock? = null
+    private val services = linkedMapOf<String, NsdServiceInfo>()
+    private val watchers = mutableMapOf<String, NsdManager.ServiceInfoCallback>()
+    private val resolved = mutableMapOf<String, AndroidLanEndpoint>()
+    private val pending = ArrayDeque<Pair<String, NsdServiceInfo>>()
+    // API31/32没有物理取消接口；旧回调终态前不释放唯一解析槽。
+    private var physicalResolve: NsdManager.ResolveListener? = null
+    private var refresh: Runnable? = null
+
+    /** 同一应用只建立一个浏览，失败统一收回前台多播锁。 */
+    fun start() { main.post {
+        if (discovery != null) return@post
+        val token = ++generation
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(type: String) = Unit
+            override fun onDiscoveryStopped(type: String) = Unit
+            override fun onStartDiscoveryFailed(type: String, code: Int) { main.post { if (generation == token) { stopNow(); failed() } } }
+            override fun onStopDiscoveryFailed(type: String, code: Int) = Unit
+            override fun onServiceFound(info: NsdServiceInfo) { main.post {
+                if (generation != token) return@post
+                val key = key(info)
+                if (services.containsKey(key) || services.size >= 64) return@post
+                services[key] = info
+                if (Build.VERSION.SDK_INT >= 34) watch(key, info, token) else { pending.add(key to info); resolveNext() }
+            } }
+            override fun onServiceLost(info: NsdServiceInfo) { main.post {
+                if (generation != token) return@post
+                val key = key(info); services.remove(key); resolved.remove(key); pending.removeAll { it.first == key }
+                if (Build.VERSION.SDK_INT >= 34) watchers.remove(key)?.let { runCatching { nsd.unregisterServiceInfoCallback(it) } }
+                publish()
+            } }
+        }
+        discovery = listener
+        try {
+            if (Build.VERSION.SDK_INT < 33 || SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU) < 7) {
+                multicast = wifi.createMulticastLock("LokiMetris foreground discovery").apply { setReferenceCounted(false); acquire() }
+            }
+            nsd.discoverServices(MdnsProtocol.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
+            if (Build.VERSION.SDK_INT < 34) scheduleRefresh(token)
+        } catch (_: Exception) { stopNow(); failed() }
+    } }
+
+    /** 停止仅取消本应用精确注册，已经无法取消的旧解析结果按代次丢弃。 */
+    fun stop() { main.post { stopNow() } }
+    /** 所有调用处已在主线程，先增代次再清理以拒绝迟到更新。 */
+    private fun stopNow() {
+        generation++
+        discovery?.let { runCatching { nsd.stopServiceDiscovery(it) } }; discovery = null
+        if (Build.VERSION.SDK_INT >= 34) watchers.values.forEach { runCatching { nsd.unregisterServiceInfoCallback(it) } }
+        watchers.clear(); services.clear(); resolved.clear(); pending.clear()
+        refresh?.let(main::removeCallbacks); refresh = null
+        multicast?.let { if (it.isHeld) it.release() }; multicast = null
+        publish()
+    }
+    /** 服务key保留网络，不能同名跨网络覆盖。 */
+    private fun key(info: NsdServiceInfo): String = info.serviceName + "|" + info.serviceType.trimEnd('.') + "|" +
+        if (Build.VERSION.SDK_INT >= 33) info.network.toString() else "default"
+
+    /** API34持续跟踪SRV/TXT/IP；注册成功回调到API37才存在，故不等待它才记录owner。 */
+    private fun watch(key: String, info: NsdServiceInfo, token: Long) {
+        val callback = object : NsdManager.ServiceInfoCallback {
+            override fun onServiceInfoCallbackRegistrationFailed(code: Int) {
+                if (generation == token && watchers[key] === this) { watchers.remove(key); resolved.remove(key); publish() }
+            }
+            override fun onServiceUpdated(value: NsdServiceInfo) {
+                if (generation != token || watchers[key] !== this) return
+                resolved.remove(key); endpoint(value)?.let { resolved[key] = it }; publish()
+            }
+            override fun onServiceLost() {
+                if (generation == token && watchers[key] === this) { resolved.remove(key); publish() }
+            }
+            override fun onServiceInfoCallbackUnregistered() = Unit
+        }
+        watchers[key] = callback
+        try { nsd.registerServiceInfoCallback(info, executor, callback) }
+        catch (_: Exception) { watchers.remove(key); resolved.remove(key); publish() }
+    }
+
+    /** API31–33一次只提交一个系统解析，过期回调也必须先释放物理槽。 */
+    @Suppress("DEPRECATION")
+    private fun resolveNext() {
+        if (physicalResolve != null || discovery == null || pending.isEmpty()) return
+        val (key, info) = pending.removeFirst(); val token = generation
+        val listener = object : NsdManager.ResolveListener {
+            override fun onResolveFailed(value: NsdServiceInfo, code: Int) { main.post { finish(null) } }
+            override fun onServiceResolved(value: NsdServiceInfo) { main.post { finish(value) } }
+            /** 只释放自身物理槽，不能误清新浏览代次的在途解析。 */
+            private fun finish(value: NsdServiceInfo?) {
+                if (physicalResolve !== this) return
+                physicalResolve = null
+                if (generation == token && services[key] === info) {
+                    resolved.remove(key); value?.let(::endpoint)?.let { resolved[key] = it }; publish()
+                }
+                resolveNext()
+            }
+        }
+        physicalResolve = listener
+        try { nsd.resolveService(info, listener) } catch (_: Exception) { physicalResolve = null; resolveNext() }
+    }
+    /** 旧系统的一次解析会过时；只在当前浏览前台周期内定期刷新现有候选。 */
+    private fun scheduleRefresh(token: Long) {
+        val task = Runnable {
+            if (generation == token && discovery != null) {
+                services.forEach { (key, info) -> if (pending.none { it.first == key }) pending.add(key to info) }
+                resolveNext(); scheduleRefresh(token)
+            }
+        }
+        refresh = task; main.postDelayed(task, 15_000)
+    }
+    /** 严格读取TXT及当前SRV，只接受桌面现有监听能力对应的私有IPv4。 */
+    @Suppress("DEPRECATION")
+    private fun endpoint(info: NsdServiceInfo): AndroidLanEndpoint? = runCatching {
+        val attributes = info.attributes
+        fun text(key: String): String {
+            val bytes = requireNotNull(attributes[key]); require(bytes.size <= 256)
+            return Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+        }
+        require(text("v") == "1")
+        val id = text("id"); val name = text("name")
+        require(MdnsProtocol.isCanonicalDeviceId(id) && MdnsProtocol.nameError(name) == null && info.port in 1..65535)
+        val addresses = if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else listOfNotNull(info.host)
+        val address = addresses.firstOrNull { it is Inet4Address && !it.isLoopbackAddress && (it.isSiteLocalAddress || it.isLinkLocalAddress) }
+            ?: return null
+        AndroidLanEndpoint(id, name, InetSocketAddress(address, info.port), if (Build.VERSION.SDK_INT >= 33) info.network else null)
+    }.getOrNull()
+    /** 重复UUID广告拒绝自动选取，输出最多64个元信息且不包含可信状态。 */
+    private fun publish() {
+        changed(resolved.values.groupBy { it.id }.values.filter { it.size == 1 }.map { it.single() }.take(64))
+    }
+}
