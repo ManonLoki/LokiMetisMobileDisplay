@@ -58,7 +58,7 @@ final class WidgetSnapshotPublisher {
         if let selectedSource { self.selectedSource = selectedSource; sourceCheckPending = true }
         if let forgottenSource { forgottenSources.insert(forgottenSource) }
         let superseded = pending?.completion
-        pending = Work(revision: revision, data: data, source: source, received: Int64(Date().timeIntervalSince1970 * 1000),
+        pending = Work(revision: revision, data: data, source: source, received: Date().epochMs,
                        retainLive: retainLive, completion: completion, refreshTarget: refreshTarget)
         if data == nil { delivery.submit((nil, true)) }
         let start = !scheduled; scheduled = true; lock.unlock()
@@ -71,7 +71,7 @@ final class WidgetSnapshotPublisher {
         lock.lock(); let token = revision; lock.unlock()
         queue.async {
             self.lock.lock(); let current = self.revision == token; self.lock.unlock()
-            guard current, let next = self.latest?.renewed(atMs: Int64(Date().timeIntervalSince1970 * 1000)) else { return }
+            guard current, let next = self.latest?.renewed(atMs: Date().epochMs) else { return }
             self.lock.lock(); defer { self.lock.unlock() }
             guard self.revision == token else { return }
             self.latest = next
@@ -93,21 +93,20 @@ final class WidgetSnapshotPublisher {
             do {
                 if let data = work.data {
                     let snapshot = try WidgetSnapshot.authenticatedMessage(data, sourceId: work.source, receivedAtMs: work.received)
-                    if snapshot.isLive(atMs: Int64(Date().timeIntervalSince1970 * 1000)) { value = snapshot }
+                    if snapshot.isLive(atMs: Date().epochMs) { value = snapshot }
                 }
             } catch { shared = false }
             lock.lock()
             // 检查代次与磁盘提交共用锁，清除之后不允许迟到快照写回旧来源。
+            let saving = work.revision == revision ? value : nil
             do {
-                if clearShared { try WidgetContainer.store().clear() }
-                if checkSource != nil || !forgotten.isEmpty {
+                // 每轮最多定位一次共享容器，清除、换源、忘记与保存按原顺序提交。
+                if clearShared || checkSource != nil || !forgotten.isEmpty || saving != nil {
                     let store = try WidgetContainer.store()
+                    if clearShared { try store.clear() }
                     if let checkSource { try store.selectSource(checkSource) }
                     for id in forgotten { try store.forgetSource(id) }
-                }
-                if work.revision == revision, let value {
-                    let store = try WidgetContainer.store()
-                    try store.saveAuthenticatedSnapshot(value, refreshTarget: work.refreshTarget)
+                    if let saving { try store.saveAuthenticatedSnapshot(saving, refreshTarget: work.refreshTarget) }
                 }
             } catch { shared = false }
             let current = work.revision == revision
@@ -140,5 +139,6 @@ final class WidgetDisplayState: ObservableObject {
     @Published private(set) var snapshot: WidgetSnapshot?
     @Published private(set) var sharingError = false
     private init() {}
+    /// 记录本次共享结果，写入 App Group 失败时标记错误。
     func received(_ value: WidgetSnapshot?, shared: Bool) { snapshot = value; sharingError = !shared }
 }

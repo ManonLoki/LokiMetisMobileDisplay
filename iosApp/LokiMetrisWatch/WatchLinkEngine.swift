@@ -54,7 +54,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
             if manager.fileExists(atPath: identity.path) {
                 let properties = try identity.resourceValues(forKeys: [.isSymbolicLinkKey,.isRegularFileKey,.fileSizeKey])
                 guard properties.isSymbolicLink != true, properties.isRegularFile == true, (properties.fileSize ?? 2048) <= 1024 else { throw WidgetSnapshotError.invalid }
-                let saved = try JSONDecoder().decode(WatchDeviceInfo.self, from: Data(contentsOf: identity)); try saved.validate()
+                let saved = try SharedJSON.decoder.decode(WatchDeviceInfo.self, from: Data(contentsOf: identity)); try saved.validate()
                 info = WatchDeviceInfo(deviceId: saved.deviceId, name: saved.name, appVersion: appVersion)
             } else {
                 info = WatchDeviceInfo(deviceId: UUID().uuidString.lowercased(), name: "Watch 显示端", appVersion: appVersion)
@@ -77,8 +77,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
         if active {
             self.clearLiveDisplay()
             try? self.lease.activate(session: UUID().uuidString.lowercased())
-            let timer = DispatchSource.makeTimerSource(queue: self.queue); timer.schedule(deadline: .now() + 1, repeating: 15)
-            timer.setEventHandler { [weak owner = self] in owner?.tick() }; self.timer = timer; timer.resume()
+            self.timer = WatchProtocol.heartbeat(on: self.queue) { [weak owner = self] in owner?.tick() }
             self.requestSync()
         } else {
             let oldSession = self.lease.session
@@ -105,7 +104,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
         if FileManager.default.fileExists(atPath: path.path) {
             let values = try path.resourceValues(forKeys: [.isSymbolicLinkKey,.isRegularFileKey]); guard values.isSymbolicLink != true, values.isRegularFile == true else { throw WidgetSnapshotError.invalid }
         }
-        let data = try JSONEncoder().encode(info); try data.write(to: path, options: [.atomic,.completeFileProtectionUntilFirstUserAuthentication])
+        let data = try SharedJSON.encoder.encode(info); try data.write(to: path, options: [.atomic,.completeFileProtectionUntilFirstUserAuthentication])
         guard try Data(contentsOf: path) == data else { throw WidgetSnapshotError.unavailable }
     }
     /// 同步意图有一个物理请求槽；后台手机回复paused，Watch不借此启动手机LAN。
@@ -139,12 +138,12 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
             invalidateDisplay(); view.status = "等待新的实时同步"; publish(); return WatchRPCReply("paused")
         }
         if request.op == "probe" {
-            guard let id = request.id, WatchProtocol.validId(id) else { throw WidgetSnapshotError.invalid }
+            guard let id = request.id, SharedValidation.validId(id) else { throw WidgetSnapshotError.invalid }
             try lease.received(session: session, now: now)
             var reply = WatchRPCReply("ready"); reply.id = id; reply.session = session; reply.info = info; reply.snapshotHash = record?.snapshotHash
             view.canSync = true; view.status = "可经 iPhone 同步"; publish(); return reply
         }
-        guard request.session == session, let id = request.id, WatchProtocol.validId(id) else { throw WidgetSnapshotError.invalid }
+        guard request.session == session, let id = request.id, SharedValidation.validId(id) else { throw WidgetSnapshotError.invalid }
         try lease.received(session: session, now: now)
         var reply = WatchRPCReply("accepted"); reply.id = id; reply.session = session
         switch request.op {
@@ -162,9 +161,9 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
             guard snapshotTransfer == id, let offset = request.offset, let data = request.data else { throw WidgetSnapshotError.invalid }
             let (next, value) = try assembler.accept(id: id, offset: offset, data: data); reply.offset = next
             if let value {
-                let record = WatchDisplayRecord(schemaVersion: 1, envelopeData: value.data, snapshotHash: value.hash, receivedAtMs: Int64(Date().timeIntervalSince1970 * 1000))
+                let record = WatchDisplayRecord(schemaVersion: 1, envelopeData: value.data, snapshotHash: value.hash, receivedAtMs: Date().epochMs)
                 try record.validate(); self.record = record; view.envelope = value.envelope
-                view.receivedAt = Date(timeIntervalSince1970: Double(record.receivedAtMs) / 1000)
+                view.receivedAt = Date(epochMs: record.receivedAtMs)
                 snapshotTransfer = nil; snapshotHash = nil; reply.status = "complete"; reply.snapshotHash = record.snapshotHash
                 let hashes = Set(value.envelope.snapshot.hooks.compactMap(\.image)); view.images = view.images.filter { hashes.contains($0.key) }
                 cache?.prune(keeping: hashes); loadImages()
@@ -203,7 +202,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate {
             guard let self, self.physicalRPC == id else { return }; self.outgoingExpired = true
             self.invalidateDisplay(); self.view.error = "iPhone 响应超时，等待系统结束上次请求。"; self.publish()
         }
-        self.timeout = timeout; queue.asyncAfter(deadline: .now() + 8, execute: timeout)
+        self.timeout = timeout; queue.asyncAfter(deadline: .now() + WatchProtocol.rpcTimeout, execute: timeout)
         session.sendMessageData(data, replyHandler: { [weak self] data in self?.queue.async { self?.sent(id: id, generation: generation, data: data, completed: completed) } }, errorHandler: { [weak self] _ in self?.queue.async { self?.sent(id: id, generation: generation, data: nil, completed: completed) } })
     }
     /// 旧系统回调只释放自身槽，不能把已退出的Watch前台租约恢复。

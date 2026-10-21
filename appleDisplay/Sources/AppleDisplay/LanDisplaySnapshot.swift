@@ -32,7 +32,7 @@ struct LanDisplaySnapshot: Codable, Equatable {
         guard message["type"] as? String == "snapshot", let raw = message["snapshot"] else { throw WidgetSnapshotError.invalid }
         let data = try JSONSerialization.data(withJSONObject: raw)
         guard data.count <= 65536 else { throw WidgetSnapshotError.tooLarge }
-        let value = try JSONDecoder().decode(Self.self, from: data)
+        let value = try SharedJSON.decoder.decode(Self.self, from: data)
         try value.validate()
         return value
     }
@@ -44,12 +44,33 @@ struct LanDisplaySnapshot: Codable, Equatable {
               Set(value.hooks.map(\.slot)).count == value.hooks.count,
               Set(value.assets.map(\.hash)).count == value.assets.count,
               value.hooks.allSatisfy({ (1...12).contains($0.slot) && $0.content.utf8.count <= 512 }),
-              value.assets.allSatisfy({ $0.hash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil &&
-                  ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"].contains($0.mime) && (1...33_554_432).contains($0.length) }) else {
+              value.assets.allSatisfy(\.isValid) else {
             throw WidgetSnapshotError.invalid
         }
         let summary = WidgetDisplaySnapshot(version: value.version, tokens: value.tokens, tokenError: value.tokenError,
             hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) })
         try summary.validate()
+    }
+}
+
+/// 图片元信息与格式魔数在网络、手机缓存和 Watch 缓存间共用同一边界。
+extension LanDisplaySnapshot.Asset {
+    static let supportedMimes: Set<String> = ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"]
+    /// 单张编码正文上限 32MiB。
+    static let maxLength: UInt64 = 33_554_432
+    /// 摘要、公开 MIME 与长度都在协议边界内。
+    var isValid: Bool { SharedValidation.validHash(hash) && Self.supportedMimes.contains(mime) && (1...Self.maxLength).contains(length) }
+    /// 摘要之外再核对公开 MIME 与实际文件头，防止格式混淆。
+    static func validMagic(_ bytes: Data, mime: String) -> Bool {
+        switch mime {
+        case "image/bmp": return bytes.starts(with: [0x42, 0x4d])
+        case "image/png": return bytes.starts(with: [137, 80, 78, 71, 13, 10, 26, 10])
+        case "image/jpeg": return bytes.starts(with: [255, 216, 255])
+        case "image/gif": return bytes.starts(with: Array("GIF87a".utf8)) || bytes.starts(with: Array("GIF89a".utf8))
+        case "image/webp":
+            return bytes.count >= 12 && bytes.starts(with: Array("RIFF".utf8))
+                && bytes[bytes.startIndex + 8 ..< bytes.startIndex + 12].elementsEqual("WEBP".utf8)
+        default: return false
+        }
     }
 }

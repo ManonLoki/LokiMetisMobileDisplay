@@ -10,7 +10,7 @@ enum LanAssetFiles {
         for file in try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) {
             guard file.lastPathComponent.hasPrefix(".partial-") else { continue }
             let id = String(file.lastPathComponent.dropFirst(9))
-            guard UUID(uuidString: id)?.uuidString.lowercased() == id,
+            guard SharedValidation.isCanonicalUUID(id),
                   let attributes = try? file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
                   attributes.isRegularFile == true, attributes.isSymbolicLink != true else { continue }
             try manager.removeItem(at: file)

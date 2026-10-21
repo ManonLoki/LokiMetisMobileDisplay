@@ -35,7 +35,7 @@ final class BackgroundTargetStore {
     func save(_ target: BackgroundTarget) throws {
         let canonical = try validated(target)
         let record = Record(version: 1, deviceId: deviceId, target: canonical)
-        let data = try JSONEncoder().encode(record)
+        let data = try SharedJSON.encoder.encode(record)
         guard data.count <= 4096 else { throw Failure.invalid }
         Self.lock.lock(); defer { Self.lock.unlock() }
         let file = try fileURL()
@@ -57,7 +57,7 @@ final class BackgroundTargetStore {
 
     /// 仅清除本机当前记录中精确匹配的桌面，避免旧会话清除新选择。
     func forget(_ id: String) throws {
-        guard Self.validId(id) else { throw Failure.invalid }
+        guard SharedValidation.validId(id) else { throw Failure.invalid }
         Self.lock.lock(); defer { Self.lock.unlock() }
         guard let target = try loadRecord(), target.id == id else { return }
         try FileManager.default.removeItem(at: fileURL())
@@ -87,13 +87,13 @@ final class BackgroundTargetStore {
             return nil
         }
         guard data.count <= 4096 else { throw Failure.storage }
-        let record = try JSONDecoder().decode(Record.self, from: data)
+        let record = try SharedJSON.decoder.decode(Record.self, from: data)
         guard record.version == 1, record.deviceId == deviceId else { throw Failure.storage }
         return try validated(record.target)
     }
 
     private func fileURL() throws -> URL {
-        guard Self.validId(deviceId) else { throw Failure.invalid }
+        guard SharedValidation.validId(deviceId) else { throw Failure.invalid }
         let folder: URL
         if let directory { folder = directory }
         else {
@@ -104,15 +104,11 @@ final class BackgroundTargetStore {
     }
 
     private func validated(_ target: BackgroundTarget) throws -> BackgroundTarget {
-        guard Self.validId(deviceId), Self.validId(target.id), target.id != deviceId,
+        guard SharedValidation.validId(deviceId), SharedValidation.validId(target.id), target.id != deviceId,
               !target.name.isEmpty, target.name.utf8.count <= 63,
-              !target.name.unicodeScalars.contains(where: { $0.value < 32 || (127...159).contains($0.value) }),
+              !SharedValidation.containsControl(target.name),
               ["_loki-host._tcp", "_loki-host._tcp."].contains(target.type.lowercased()),
               target.domain.lowercased() == "local." else { throw Failure.invalid }
         return BackgroundTarget(id: target.id, name: target.name, type: "_loki-host._tcp", domain: "local.")
-    }
-
-    private static func validId(_ id: String) -> Bool {
-        UUID(uuidString: id)?.uuidString.lowercased() == id && id != "00000000-0000-0000-0000-000000000000"
     }
 }

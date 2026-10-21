@@ -40,7 +40,7 @@ struct WidgetHTTPClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpShouldHandleCookies = false
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try SharedJSON.encoder.encode(payload)
 
         // 每次独立会话，不共享 Cookie、HTTP 认证、缓存或代理凭据。
         guard let config = configuration.copy() as? URLSessionConfiguration else { throw WidgetHTTPError.invalidResponse }
@@ -54,7 +54,7 @@ struct WidgetHTTPClient {
         config.connectionProxyDictionary = [:]
         let data = try await BoundedWidgetRequest().perform(request, configuration: config)
         try Task.checkCancellation()
-        let response = try JSONDecoder().decode(Response.self, from: data)
+        let response = try SharedJSON.decoder.decode(Response.self, from: data)
         guard let responseNonce = Data(base64Encoded: response.nonce), responseNonce.count == 12,
               let ciphertext = Data(base64Encoded: response.ciphertext),
               (16...(WidgetSnapshot.maxBytes + 16)).contains(ciphertext.count) else {
@@ -65,7 +65,7 @@ struct WidgetHTTPClient {
         let plaintext = try ChaChaPoly.open(box, using: key,
                                            authenticating: Self.responseContext + requestNonce)
         guard plaintext.count <= WidgetSnapshot.maxBytes,
-              try JSONDecoder().decode(Source.self, from: plaintext).sourceId == target.sourceId else {
+              try SharedJSON.decoder.decode(Source.self, from: plaintext).sourceId == target.sourceId else {
             throw WidgetHTTPError.invalidResponse
         }
         try Task.checkCancellation()
@@ -95,6 +95,7 @@ private final class BoundedWidgetRequest: NSObject, URLSessionDataDelegate, @unc
     private var finished = false
     private var bytes = Data()
 
+    /// 单次请求带截止时间与取消联动，响应体超限即中止。
     func perform(_ request: URLRequest, configuration: URLSessionConfiguration) async throws -> Data {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -179,12 +180,14 @@ private final class BoundedWidgetRequest: NSObject, URLSessionDataDelegate, @unc
         finish(.success(result))
     }
 
+    /// 拒绝任何重定向，防止摘要请求被引向其他主机。
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(nil)
         finish(.failure(WidgetHTTPError.redirect))
     }
 
+    /// 不接受系统凭据质询，认证只依赖请求内密钥。
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         completionHandler(.cancelAuthenticationChallenge, nil)

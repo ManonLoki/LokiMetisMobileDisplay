@@ -6,6 +6,8 @@ final class IOSAssetCache {
     private var partial: URL?
     private var writer: FileHandle?
     private var descriptor: LanDisplaySnapshot.Asset?
+    /// 上次完整收敛时保留的引用集；引用不变且没有新文件落盘时无需重新扫描目录。
+    private var settledKeeping: Set<String>?
 
     /// 固定缓存目录不参与备份；所有调用必须位于连接owner的后台串行队列。
     init() throws {
@@ -45,7 +47,7 @@ final class IOSAssetCache {
         writer = try FileHandle(forWritingTo: path)
     }
 
-    /// 核心校验一块后才写入；最终同步并重新核验磁盘字节，成功原子替换后返回命中路径。
+    /// 核心校验一块后才写入；最终同步并核验落盘字节，原子替换后直接返回命中路径，不再整文件重读。
     func accept(_ chunk: [String: Any], bridge: NativeLinkBridge) throws -> (UInt64, URL?) {
         guard let writer, let descriptor, let partial else { throw WidgetSnapshotError.invalid }
         let result = try bridge.call(["op": "assetChunk", "chunk": chunk])
@@ -62,9 +64,9 @@ final class IOSAssetCache {
             guard values.isSymbolicLink != true, values.isRegularFile == true else { throw WidgetSnapshotError.invalid }
             _ = try FileManager.default.replaceItemAt(destination, withItemAt: partial)
         } else { try FileManager.default.moveItem(at: partial, to: destination) }
-        self.partial = nil; self.descriptor = nil
-        guard let verified = try cached(descriptor, bridge: bridge) else { throw WidgetSnapshotError.unavailable }
-        return (offset.uint64Value, verified)
+        self.partial = nil; self.descriptor = nil; settledKeeping = nil
+        // 临时文件已在原名下通过完整校验，原子改名不改变内容；修改时间即最近复用时间。
+        return (offset.uint64Value, destination)
     }
 
     /// 后台保留动画的全部帧与时长；像素、帧数和总解码内存由共享解码器约束。
@@ -74,20 +76,23 @@ final class IOSAssetCache {
 
     /// 保留当前正在展示的最多十二张图片，其余按最后复用顺序收敛到512MiB。
     func prune(keeping hashes: Set<String>) {
+        guard hashes != settledKeeping else { return }
         let manager = FileManager.default
         guard let files = try? manager.contentsOfDirectory(at: directory,
                 includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return }
         let entries = files.compactMap { path -> (URL, Int, Date)? in
-            guard path.lastPathComponent.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+            guard SharedValidation.validHash(path.lastPathComponent),
                   let values = try? path.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]),
                   values.isRegularFile == true, values.isSymbolicLink != true else { return nil }
             return (path, values.fileSize ?? 0, values.contentModificationDate ?? .distantPast)
         }
         var total = entries.reduce(0) { $0 + $1.1 }
+        var settled = true
         for (path, length, _) in entries.sorted(by: { $0.2 < $1.2 }) where total > 512 * 1024 * 1024 {
             guard !hashes.contains(path.lastPathComponent) else { continue }
-            do { try manager.removeItem(at: path); total -= length } catch { /* 下轮继续，不扩大删除范围。 */ }
+            do { try manager.removeItem(at: path); total -= length } catch { settled = false /* 下轮继续，不扩大删除范围。 */ }
         }
+        settledKeeping = settled ? hashes : nil
     }
 
     /// 断线、取消及清单失效仅清理本owner的精确临时文件，不删除已经验证的缓存。

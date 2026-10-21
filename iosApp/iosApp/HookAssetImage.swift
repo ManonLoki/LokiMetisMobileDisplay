@@ -56,6 +56,7 @@ private struct HookPlaybackClock {
     private var accumulated: TimeInterval = 0
     private var started: Date?
 
+    /// 返回累计播放时长，暂停期间不计时。
     func elapsed(at date: Date) -> TimeInterval {
         accumulated + (started.map { max(0, date.timeIntervalSince($0)) } ?? 0)
     }

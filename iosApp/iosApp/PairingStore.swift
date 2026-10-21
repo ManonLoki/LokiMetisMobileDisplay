@@ -9,7 +9,7 @@ final class PairingStore {
     init(deviceId: String) { self.deviceId = deviceId }
 
     private func query(_ clientId: String) throws -> [String: Any] {
-        guard UUID(uuidString: clientId)?.uuidString.lowercased() == clientId else { throw Failure.invalid }
+        guard SharedValidation.isCanonicalUUID(clientId) else { throw Failure.invalid }
         return [kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service, kSecAttrAccount as String: clientId + "." + deviceId,
                 kSecAttrSynchronizable as String: false]
@@ -44,7 +44,7 @@ final class PairingStore {
         for row in rows {
             guard let account = row[kSecAttrAccount as String] as? String, account.hasSuffix(suffix) else { continue }
             let id = String(account.dropLast(suffix.count))
-            guard UUID(uuidString: id)?.uuidString.lowercased() == id else { throw Failure.storage }
+            guard SharedValidation.isCanonicalUUID(id) else { throw Failure.storage }
             result.insert(id)
         }
         return result

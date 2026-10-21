@@ -22,6 +22,7 @@ final class WatchLinkModel: ObservableObject {
         let delivery = LanProjectionDelivery<WatchLinkView> { [weak self] value in self?.state = value }
         self.delivery = delivery; engine = WatchLinkEngine { value in delivery.submit(value) }
     }
+    /// 以下操作都转发给引擎；引擎未就绪时忽略。
     func setActive(_ active: Bool) { engine?.setActive(active) }
     func synchronize() { engine?.synchronize() }
     func saveName(_ value: String) { engine?.saveName(value) }
@@ -175,10 +176,10 @@ private struct WatchRootView: View {
                 .font(.system(size: 10, weight: .medium)).fixedSize()
             Spacer(minLength: 0)
             if let received = model.state.receivedAt {
-                Text(received.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month().day().hour().minute()))
+                Text(received.formatted(SyncTimeFormat.short))
                     .font(.system(size: 9)).foregroundStyle(.secondary)
                     .lineLimit(1).minimumScaleFactor(0.8)
-                    .accessibilityLabel("接收于 \(received.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).year().month().day().hour().minute()))")
+                    .accessibilityLabel("接收于 \(received.formatted(SyncTimeFormat.full))")
             }
         }.padding(.horizontal, 4)
     }

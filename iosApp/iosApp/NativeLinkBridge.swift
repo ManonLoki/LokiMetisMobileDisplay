@@ -4,6 +4,8 @@ import Foundation
 final class NativeLinkBridge {
     enum Failure: Error { case invalid(String) }
     private var handle: UInt64
+    /// 调用方串行使用同一句柄，因此复用一块输出缓冲；每次返回前只清零实际写入部分。
+    private var output = [UInt8](repeating: 0, count: 192 * 1024)
 
     init(deviceId: String, name: String) throws {
         let identity = try JSONSerialization.data(withJSONObject: ["deviceId": deviceId, "name": name])
@@ -17,7 +19,6 @@ final class NativeLinkBridge {
     func call(_ command: [String: Any]) throws -> [String: Any] {
         guard handle != 0 else { throw Failure.invalid("mobile_handle_closed") }
         let input = try JSONSerialization.data(withJSONObject: command)
-        var output = [UInt8](repeating: 0, count: 192 * 1024)
         var count = 0
         let status = output.withUnsafeMutableBufferPointer { destination in
             input.withUnsafeBytes { source in
@@ -25,7 +26,9 @@ final class NativeLinkBridge {
                                  destination.baseAddress, destination.count, &count)
             }
         }
-        defer { for index in 0..<min(count, output.count) { output[index] = 0 } }
+        defer { output.withUnsafeMutableBufferPointer { buffer in
+            buffer.baseAddress.map { _ = memset($0, 0, min(count, buffer.count)) }
+        } }
         guard status >= 0, count <= output.count,
               let value = try JSONSerialization.jsonObject(with: Data(output.prefix(count))) as? [String: Any] else {
             throw Failure.invalid("mobile_native_unavailable")

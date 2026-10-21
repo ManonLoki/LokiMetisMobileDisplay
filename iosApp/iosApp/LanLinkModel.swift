@@ -42,6 +42,7 @@ final class LanLinkModel: ObservableObject {
             DispatchQueue.main.async { completion(success) }
         }
     }
+    /// 到期或前台接管时撤销后台连接代次，完成回调切回主线程。
     func cancelBackgroundRefresh(completion: @escaping () -> Void = {}) {
         guard let engine else { completion(); return }
         engine.cancelBackgroundRefresh { DispatchQueue.main.async { completion() } }

@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 /// 配套表身份独立于iPhone，信息只通过已配对应用的系统通道传递。
 struct WatchDeviceInfo: Codable, Equatable {
@@ -8,10 +7,10 @@ struct WatchDeviceInfo: Codable, Equatable {
     let appVersion: String
     /// 名称可编辑但不能改变UUID，拒绝无界文本和控制字符。
     func validate() throws {
-        guard WatchProtocol.validId(deviceId), !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              name.utf8.count <= 160, !name.unicodeScalars.contains(where: { $0.value < 32 || (127...159).contains($0.value) }),
+        guard SharedValidation.validId(deviceId), !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.utf8.count <= 160, !SharedValidation.containsControl(name),
               !appVersion.isEmpty, appVersion.utf8.count <= 64,
-              !appVersion.unicodeScalars.contains(where: { $0.value < 32 || (127...159).contains($0.value) }) else { throw WidgetSnapshotError.invalid }
+              !SharedValidation.containsControl(appVersion) else { throw WidgetSnapshotError.invalid }
     }
 }
 
@@ -24,7 +23,7 @@ struct WatchSnapshotEnvelope: Codable, Equatable {
     let snapshot: LanDisplaySnapshot
     /// 历史时间不能用来续前台租约，数值和图文共用完整快照校验。
     func validate() throws {
-        guard version == 1, WatchProtocol.validId(phoneId), WatchProtocol.validId(sourceId), phoneId != sourceId,
+        guard version == 1, SharedValidation.validId(phoneId), SharedValidation.validId(sourceId), phoneId != sourceId,
               phoneReceivedAtMs >= 0 else { throw WidgetSnapshotError.invalid }
         try snapshot.validate()
     }
@@ -84,29 +83,34 @@ enum WatchProtocol {
     static let chunkSize = 16 * 1024
     static let maxRPCBytes = 32 * 1024
     static let maxSnapshotBytes = 96 * 1024
-    /// 稳定身份和前台/传输代次统一使用规范非零UUID。
-    static func validId(_ id: String) -> Bool { UUID(uuidString: id)?.uuidString.lowercased() == id && id != "00000000-0000-0000-0000-000000000000" }
-    /// 内容摘要不接受大小写变体或远端路径。
-    static func validHash(_ hash: String) -> Bool { hash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil }
+    /// 单个物理 RPC 的逻辑超时；系统回调终态前仍占用槽位。
+    static let rpcTimeout: TimeInterval = 8
+    /// 两端前台心跳：1 秒后首次检查，此后每 15 秒一次；调用方以弱引用传入 tick。
+    static func heartbeat(on queue: DispatchQueue, tick: @escaping () -> Void) -> DispatchSourceTimer {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 1, repeating: 15, leeway: .seconds(1))
+        timer.setEventHandler(handler: tick); timer.resume()
+        return timer
+    }
     /// SHA-256绑定完整传输正文，不把排队或分块ACK当作完整同步。
-    static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    static func hash(_ data: Data) -> String { SharedValidation.sha256Hex(data) }
     /// 编码后再次限制容量，包装和Base64开销也包含在32KiB RPC上限内。
     static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let data = try JSONEncoder().encode(value)
+        let data = try SharedJSON.encoder.encode(value)
         guard data.count <= maxRPCBytes else { throw WidgetSnapshotError.tooLarge }
         return data
     }
     /// 系统回调先做字节上限再解析，不接受未来版本或未知请求操作。
     static func request(_ data: Data) throws -> WatchRPC {
         guard data.count <= maxRPCBytes else { throw WidgetSnapshotError.tooLarge }
-        let value = try JSONDecoder().decode(WatchRPC.self, from: data)
+        let value = try SharedJSON.decoder.decode(WatchRPC.self, from: data)
         guard value.version == 1, ["probe", "requestSync", "pause", "snapshotBegin", "snapshotChunk", "assetBegin", "assetChunk"].contains(value.op) else { throw WidgetSnapshotError.invalid }
         return value
     }
     /// 回执状态使用有界封闭集合，错误不能被默认为成功。
     static func reply(_ data: Data) throws -> WatchRPCReply {
         guard data.count <= maxRPCBytes else { throw WidgetSnapshotError.tooLarge }
-        let value = try JSONDecoder().decode(WatchRPCReply.self, from: data)
+        let value = try SharedJSON.decoder.decode(WatchRPCReply.self, from: data)
         guard ["ready", "accepted", "continue", "complete", "cached", "paused", "unavailable", "invalid"].contains(value.status) else { throw WidgetSnapshotError.invalid }
         return value
     }
@@ -127,7 +131,7 @@ final class WatchSnapshotAssembler {
     private var bytes = Data()
     /// 新传输替换旧半成品，不替换已经成功提交的展示缓存。
     func begin(id: String, hash: String, length: UInt64) throws {
-        guard WatchProtocol.validId(id), WatchProtocol.validHash(hash), (1...UInt64(WatchProtocol.maxSnapshotBytes)).contains(length) else { throw WidgetSnapshotError.invalid }
+        guard SharedValidation.validId(id), SharedValidation.validHash(hash), (1...UInt64(WatchProtocol.maxSnapshotBytes)).contains(length) else { throw WidgetSnapshotError.invalid }
         self.id = id; self.hash = hash; self.length = Int(length); bytes = Data()
     }
     /// 每块恰好16KiB或最终余量；重复、跳号、空块和错误代次均失败。
@@ -138,7 +142,7 @@ final class WatchSnapshotAssembler {
         if bytes.count < length { return (UInt64(bytes.count), nil) }
         defer { cancel() }
         guard WatchProtocol.hash(bytes) == hash else { throw WidgetSnapshotError.invalid }
-        let envelope = try JSONDecoder().decode(WatchSnapshotEnvelope.self, from: bytes)
+        let envelope = try SharedJSON.decoder.decode(WatchSnapshotEnvelope.self, from: bytes)
         try envelope.validate()
         return (UInt64(length), WatchAssembledSnapshot(data: bytes, envelope: envelope, hash: hash))
     }
@@ -151,7 +155,7 @@ struct WatchForegroundLease {
     private(set) var session: String?
     private(set) var lastContact: UInt64?
     /// 每次真正回前台产生新代次，防止后台前的迟到RPC或ACK续租。
-    mutating func activate(session: String) throws { guard WatchProtocol.validId(session) else { throw WidgetSnapshotError.invalid }; self.session = session; lastContact = nil }
+    mutating func activate(session: String) throws { guard SharedValidation.validId(session) else { throw WidgetSnapshotError.invalid }; self.session = session; lastContact = nil }
     /// 离开前台立即撤销，不能依赖bye一定发送成功。
     mutating func deactivate() { session = nil; lastContact = nil }
     /// 接收必须匹配本次前台代次；旧或倒退时钟不能恢复同步资格。

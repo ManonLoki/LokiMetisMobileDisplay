@@ -1,11 +1,13 @@
 import SwiftUI
 
+/// 用量卡片详略档位，rawValue 用于持久化。
 enum UsageDetail: String, CaseIterable, Identifiable {
     case compact, detailed
     var id: String { rawValue }
     var title: String { self == .compact ? "精简" : "详细" }
 }
 
+/// Hooks 区域布局方式，rawValue 用于持久化。
 enum HookLayout: String, CaseIterable, Identifiable {
     case single = "1x1", grid = "2x2"
     var id: String { rawValue }

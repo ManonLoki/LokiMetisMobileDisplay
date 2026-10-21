@@ -11,6 +11,7 @@ struct WidgetSnapshotStore {
     private var file: URL { directory.appendingPathComponent("display-widget-v1.json", isDirectory: false) }
     private var targetFile: URL { directory.appendingPathComponent("display-widget-refresh-v1.json", isDirectory: false) }
 
+    /// 加锁读取并校验摘要，不判断租约或缓存时效。
     func load() throws -> WidgetSnapshot { try withLock { try loadSnapshot() } }
 
     /// 连接 owner 只加载租约内摘要；过期缓存不能凭自身恢复认证连接。
@@ -23,11 +24,12 @@ struct WidgetSnapshotStore {
         let snapshot = try load(); return snapshot.isCached(atMs: now) ? snapshot : nil
     }
 
+    /// 加锁读取独立只读刷新凭据；未授权时返回 nil。
     func loadRefreshTarget() throws -> WidgetRefreshTarget? { try withLock { try loadTarget() } }
 
     /// 已认证来源不再支持独立获取时撤销凭据，保留最近一次合法摘要。
     func clearRefreshTarget(sourceId: String) throws {
-        guard WidgetRefreshTarget.validId(sourceId) else { throw WidgetSnapshotError.invalid }
+        guard SharedValidation.validId(sourceId) else { throw WidgetSnapshotError.invalid }
         try withLock {
             if (try? loadTarget())?.sourceId == sourceId { try remove(targetFile) }
         }
@@ -39,7 +41,7 @@ struct WidgetSnapshotStore {
         try target.validate()
         return try withLock {
             if let previous = try? loadTarget(), previous.sameConnection(as: target) { return previous }
-            try write(try JSONEncoder().encode(target), to: targetFile, limit: 4096)
+            try write(try SharedJSON.encoder.encode(target), to: targetFile, limit: 4096)
             return target
         }
     }
@@ -48,14 +50,14 @@ struct WidgetSnapshotStore {
     func saveAuthenticatedSnapshot(_ snapshot: WidgetSnapshot, refreshTarget: WidgetRefreshTarget?) throws {
         try snapshot.validate(); try refreshTarget?.validate()
         guard refreshTarget == nil || refreshTarget?.sourceId == snapshot.sourceId else { throw WidgetSnapshotError.invalid }
-        let snapshotData = try JSONEncoder().encode(snapshot)
+        let snapshotData = try SharedJSON.encoder.encode(snapshot)
         guard snapshotData.count <= WidgetSnapshot.maxBytes else { throw WidgetSnapshotError.tooLarge }
         try withLock {
             let previous = try? loadTarget()
             let next: WidgetRefreshTarget?
             if let refreshTarget, let previous, previous.sameConnection(as: refreshTarget) { next = previous }
             else { next = refreshTarget }
-            let targetData = try next.map { try JSONEncoder().encode($0) }
+            let targetData = try next.map { try SharedJSON.encoder.encode($0) }
             if let targetData, targetData.count > 4096 { throw WidgetSnapshotError.tooLarge }
             if previous != next || next == nil { try remove(targetFile) }
             let current = try? loadSnapshot()
@@ -80,7 +82,7 @@ struct WidgetSnapshotStore {
 
     /// 明确选择另一来源时同时撤销其摘要和凭据，即使其中一个文件不存在也检查另一个。
     func selectSource(_ id: String) throws {
-        guard WidgetRefreshTarget.validId(id) else { throw WidgetSnapshotError.invalid }
+        guard SharedValidation.validId(id) else { throw WidgetSnapshotError.invalid }
         try withLock {
             if FileManager.default.fileExists(atPath: targetFile.path), (try? loadTarget())?.sourceId != id { try remove(targetFile) }
             if FileManager.default.fileExists(atPath: file.path), (try? loadSnapshot())?.sourceId != id { try remove(file) }
@@ -89,7 +91,7 @@ struct WidgetSnapshotStore {
 
     /// 只撤销被忘记来源，保留另一个桌面留下的最近同步摘要。
     func forgetSource(_ id: String) throws {
-        guard WidgetRefreshTarget.validId(id) else { throw WidgetSnapshotError.invalid }
+        guard SharedValidation.validId(id) else { throw WidgetSnapshotError.invalid }
         try withLock {
             if (try? loadTarget())?.sourceId == id { try remove(targetFile) }
             if (try? loadSnapshot())?.sourceId == id { try remove(file) }
@@ -118,13 +120,14 @@ struct WidgetSnapshotStore {
     /// 明确撤销共享同时删除摘要和刷新凭据；不清理容器内其他文件。
     func clear() throws { try withLock { try remove(targetFile); try remove(file) } }
 
+    /// 先校验再加锁原子写入，非法摘要不覆盖现有文件。
     func save(_ snapshot: WidgetSnapshot) throws {
         try snapshot.validate()
         try withLock { try writeSnapshot(snapshot) }
     }
 
     private func loadSnapshot() throws -> WidgetSnapshot {
-        let snapshot = try JSONDecoder().decode(WidgetSnapshot.self, from: read(file, limit: WidgetSnapshot.maxBytes))
+        let snapshot = try SharedJSON.decoder.decode(WidgetSnapshot.self, from: read(file, limit: WidgetSnapshot.maxBytes))
         try snapshot.validate()
         return snapshot
     }
@@ -132,14 +135,14 @@ struct WidgetSnapshotStore {
     private func loadTarget() throws -> WidgetRefreshTarget? {
         let data: Data
         do { data = try read(targetFile, limit: 4096) }
-        catch let error as NSError where error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code) { return nil }
-        let target = try JSONDecoder().decode(WidgetRefreshTarget.self, from: data)
+        catch where SharedFiles.isMissing(error) { return nil }
+        let target = try SharedJSON.decoder.decode(WidgetRefreshTarget.self, from: data)
         try target.validate()
         return target
     }
 
     private func writeSnapshot(_ snapshot: WidgetSnapshot) throws {
-        try write(try JSONEncoder().encode(snapshot), to: file, limit: WidgetSnapshot.maxBytes)
+        try write(try SharedJSON.encoder.encode(snapshot), to: file, limit: WidgetSnapshot.maxBytes)
     }
 
     private func read(_ url: URL, limit: Int) throws -> Data {
@@ -169,13 +172,7 @@ struct WidgetSnapshotStore {
         }
     }
 
-    private func remove(_ url: URL) throws {
-        do {
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            guard attributes[.type] as? FileAttributeType != .typeDirectory else { throw WidgetSnapshotError.invalid }
-            try FileManager.default.removeItem(at: url)
-        } catch let error as NSError where error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code) {}
-    }
+    private func remove(_ url: URL) throws { try SharedFiles.removeIfPresent(url) }
 
     /// 固定锁文件不删除，避免不同进程锁住不同 inode；短时非阻塞重试限制挂起进程的影响。
     private func withLock<T>(_ body: () throws -> T) throws -> T {
@@ -191,11 +188,14 @@ struct WidgetSnapshotStore {
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: lockFile.path)
         #endif
         let deadline = DispatchTime.now().uptimeNanoseconds + 2_000_000_000
+        // 指数退避（5ms 起、上限 100ms），短竞争快速拿锁，长时间占用时少空转。
+        var backoff: TimeInterval = 0.005
         while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
             guard (errno == EWOULDBLOCK || errno == EINTR), DispatchTime.now().uptimeNanoseconds < deadline else {
                 throw WidgetSnapshotError.unavailable
             }
-            Thread.sleep(forTimeInterval: 0.005)
+            Thread.sleep(forTimeInterval: backoff)
+            backoff = min(backoff * 2, 0.1)
         }
         defer { _ = flock(descriptor, LOCK_UN) }
         return try body()

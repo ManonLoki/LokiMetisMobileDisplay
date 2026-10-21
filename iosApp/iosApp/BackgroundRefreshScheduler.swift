@@ -1,7 +1,7 @@
 import BackgroundTasks
 import UIKit
 
-/// 系统按电量与使用情况决定实际唤醒时间；15 分钟只是下一次允许执行的最早时间。
+/// 系统按电量与使用情况决定实际唤醒时间；`WidgetSnapshot.refreshInterval`（5 分钟）只是下一次允许执行的最早时间。
 @MainActor
 final class BackgroundRefreshScheduler {
     static let shared = BackgroundRefreshScheduler()
@@ -46,6 +46,7 @@ final class BackgroundRefreshScheduler {
         }
     }
 
+    /// 绑定唯一 LAN owner；未配置时后台任务直接以失败结束。
     func configure(model: LanLinkModel) {
         self.model = model
     }
@@ -54,7 +55,7 @@ final class BackgroundRefreshScheduler {
     func scheduleNextRefresh() {
         guard registered, UIApplication.shared.backgroundRefreshStatus == .available else { return }
         let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: WidgetSnapshot.refreshInterval)
         // 系统关闭后台刷新、配额暂满等情况无需向用户报错；下次后台转换会再申请。
         try? BGTaskScheduler.shared.submit(request)
     }
@@ -112,6 +113,7 @@ private final class RefreshExecution: @unchecked Sendable {
         return expired || completed
     }
 
+    /// 记录系统到期；已完成则返回 false，避免重复处理。
     func markExpired() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -120,12 +122,14 @@ private final class RefreshExecution: @unchecked Sendable {
         return true
     }
 
+    /// 标记需等待旧连接清理，期间拦截迟到的完成回调。
     func awaitCleanup() {
         lock.lock()
         awaitingCleanup = true
         lock.unlock()
     }
 
+    /// 清理结束后解除拦截，并以失败结束被替换的任务。
     func completeAfterCleanup() {
         lock.lock()
         awaitingCleanup = false
@@ -133,6 +137,7 @@ private final class RefreshExecution: @unchecked Sendable {
         complete(success: false)
     }
 
+    /// 保证系统 completion 只调用一次；已到期一律按失败上报。
     func complete(success: Bool) {
         lock.lock()
         // 被替换的旧任务仍可能到期或收到迟到回调；它们必须让已请求的清理先完成。

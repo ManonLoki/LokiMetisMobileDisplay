@@ -9,9 +9,9 @@ struct WatchDisplayRecord: Codable, Equatable {
     /// 保存来源和旧时刻是历史事实，不能让缓存建立前台可达状态。
     @discardableResult
     func validate() throws -> WatchSnapshotEnvelope {
-        guard schemaVersion == 1, WatchProtocol.validHash(snapshotHash), receivedAtMs >= 0,
+        guard schemaVersion == 1, SharedValidation.validHash(snapshotHash), receivedAtMs >= 0,
               envelopeData.count <= WatchProtocol.maxSnapshotBytes, WatchProtocol.hash(envelopeData) == snapshotHash else { throw WidgetSnapshotError.invalid }
-        let envelope = try JSONDecoder().decode(WatchSnapshotEnvelope.self, from: envelopeData)
+        let envelope = try SharedJSON.decoder.decode(WatchSnapshotEnvelope.self, from: envelopeData)
         try envelope.validate(); return envelope
     }
 }
@@ -21,12 +21,6 @@ struct WatchDisplayStore {
     let directory: URL
     /// 精确删除旧展示文件，不删除Watch身份和已校验图片。
     func discardLegacy() throws {
-        let path = directory.appendingPathComponent("watch-display-v1.json")
-        let manager = FileManager.default
-        do {
-            let attributes = try manager.attributesOfItem(atPath: path.path)
-            guard attributes[.type] as? FileAttributeType != .typeDirectory else { throw WidgetSnapshotError.invalid }
-            try manager.removeItem(at: path)
-        } catch let error as NSError where error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code) {}
+        try SharedFiles.removeIfPresent(directory.appendingPathComponent("watch-display-v1.json"))
     }
 }

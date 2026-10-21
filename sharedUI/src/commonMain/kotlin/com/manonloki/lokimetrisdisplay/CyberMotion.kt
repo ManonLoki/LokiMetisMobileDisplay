@@ -3,6 +3,8 @@ package com.manonloki.lokimetrisdisplay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -44,12 +46,9 @@ internal expect fun rememberCyberMotionEnabled(): Boolean
 private fun rememberCyberPhase(enabled: Boolean, durationMillis: Int): State<Float> {
     val phase = remember { Animatable(0f) }
     LaunchedEffect(enabled, durationMillis) {
-        if (!enabled) phase.snapTo(0f)
-        else while (true) {
-            phase.snapTo(0f)
-            phase.animateTo(1f, tween(durationMillis, easing = LinearEasing))
-            delay(16)
-        }
+        phase.snapTo(0f)
+        // 无限重复由同一动画驱动，循环衔接不再额外停顿一帧；取消协程即停止。
+        if (enabled) phase.animateTo(1f, infiniteRepeatable(tween(durationMillis, easing = LinearEasing), RepeatMode.Restart))
     }
     return phase.asState()
 }

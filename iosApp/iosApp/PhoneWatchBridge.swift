@@ -53,9 +53,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         queue.async {
             guard WCSession.isSupported() else { self.view.error = "当前设备不支持Watch配套通信。"; self.publish(); return }
             let session = WCSession.default; self.session = session; session.delegate = self; session.activate()
-            let timer = DispatchSource.makeTimerSource(queue: self.queue)
-            timer.schedule(deadline: .now() + 1, repeating: 15)
-            timer.setEventHandler { [weak owner = self] in owner?.tick() }; self.timer = timer; timer.resume()
+            self.timer = WatchProtocol.heartbeat(on: self.queue) { [weak owner = self] in owner?.tick() }
         }
     }
     /// 只有当前iPhone认证连接可供同步，后台或断线撤销所有前台证明。
@@ -67,8 +65,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
                 self.setParentNow(active: true, generation: generation)
                 let value = WatchSnapshotEnvelope(version: 1, phoneId: self.phoneId, sourceId: sourceId, phoneReceivedAtMs: receivedAtMs, snapshot: snapshot)
                 try value.validate()
-                let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-                let data = try encoder.encode(value)
+                                let data = try SharedJSON.sortedEncoder.encode(value)
                 guard data.count <= WatchProtocol.maxSnapshotBytes else { throw WidgetSnapshotError.tooLarge }
                 let hash = WatchProtocol.hash(data)
                 if hash != self.latestHash {
@@ -113,7 +110,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         rpc(request) { [weak self] reply in
             guard let self else { return }
             guard reply.status == "ready", reply.id == challenge, let watchSession = reply.session,
-                  WatchProtocol.validId(watchSession), let info = reply.info, (try? info.validate()) != nil else {
+                  SharedValidation.validId(watchSession), let info = reply.info, (try? info.validate()) != nil else {
                 self.view.reachable = false; self.publish(); return
             }
             if self.watchSession != watchSession || self.view.info?.deviceId != info.deviceId {
@@ -240,7 +237,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             self.expiredRPC = true; self.cancelJob(); self.view.reachable = false
             self.view.error = "手表响应超时，等待系统结束上次请求后重试。"; self.publish()
         }
-        self.timeout = timeout; queue.asyncAfter(deadline: .now() + 8, execute: timeout)
+        self.timeout = timeout; queue.asyncAfter(deadline: .now() + WatchProtocol.rpcTimeout, execute: timeout)
         session.sendMessageData(bytes, replyHandler: { [weak self] data in
             self?.queue.async { [weak self] in self?.finished(id: id, epoch: token, data: data, allowInactive: allowInactive, completed: completed) }
         }, errorHandler: { [weak self] _ in
@@ -274,7 +271,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             guard ["requestSync", "pause"].contains(request.op) else {
                 replyHandler((try? WatchProtocol.encode(WatchRPCReply("invalid"))) ?? Data()); return
             }
-            if request.op == "pause", let stopped = request.session, WatchProtocol.validId(stopped),
+            if request.op == "pause", let stopped = request.session, SharedValidation.validId(stopped),
                self.watchSession == nil || self.watchSession == stopped {
                 self.epoch = UUID(); self.watchLease.deactivate(); self.cancelJob(); self.view.reachable = false;  self.publish()
             }

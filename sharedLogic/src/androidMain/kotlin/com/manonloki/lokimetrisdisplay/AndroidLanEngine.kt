@@ -1,6 +1,7 @@
 package com.manonloki.lokimetrisdisplay
 
 import android.content.Context
+import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
@@ -119,7 +120,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
                 if (overflowPending.getAndSet(false)) { view = view.copy(error = "操作过快，请稍后重试。"); publish() }
                 discovered.getAndSet(null)?.let(::browsed)
                 tick()
-                val selected = selector.select(100)
+                val selected = selector.select(selectTimeoutMs())
                 if (selected > 0) {
                     try { socket?.process(now) } catch (error: Exception) { socketFailed(error) }
                     selector.selectedKeys().clear()
@@ -282,6 +283,15 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         else fail(error !is NativeLinkBridge.Failure && error !is IllegalArgumentException && error !is JSONException && error !is java.nio.charset.CharacterCodingException,
             if (error is NativeLinkBridge.Failure || error is IllegalArgumentException || error is JSONException || error is java.nio.charset.CharacterCodingException) "认证或消息校验失败，请重试或重新配对。" else "连接中断，正在等待桌面恢复…")
     }
+    /** 只睡到最近的期限；有待写数据时保持100ms检查写超时，空闲最长1秒，新命令随时可wakeup。 */
+    private fun selectTimeoutMs(): Long {
+        val now = now
+        var next = now + 1_000
+        for (at in listOfNotNull(pairingDeadline, deadline, assetDeadline, retryAt,
+            lastInbound.takeIf { phase == Phase.STREAMING }?.plus(45_000))) next = minOf(next, at)
+        if (socket?.hasPendingWrites == true) next = minOf(next, now + 100)
+        return (next - now).coerceIn(1, 1_000)
+    }
     /** 单调期限覆盖密码、首次快照、心跳及图片请求。 */
     private fun tick() {
         val now = now
@@ -327,7 +337,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         view = view.copy(snapshot = snapshot, receivedAtMs = received, connected = true, status = "已连接，正在同步", error = null)
         deadline = null; intent.renewedEndpoint()
         val hashes = snapshot.hooks.mapNotNull { it.image }.toSet()
-        // 动画Drawable只有一个Callback，因此同hash在不同槽位也各自后台解码。
+        // 动画Drawable只有一个Callback，同hash在不同槽位各持独立Drawable实例。
         images = images.filter { (hash, slots) -> hash in hashes &&
             slots.keys == snapshot.hooks.filter { it.image == hash }.map { it.slot }.toSet() }
         cache?.prune(hashes); nextAsset(); publish()
@@ -366,19 +376,25 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             failedAssets += asset.hash; cache.close(); currentAsset = null; assetDeadline = null
             view = view.copy(assetWarning = "部分图片未能保存，重新连接后可补取。"); nextAsset(); publish(); return
         }
-        if (result.first) {
-            val path = cache.cached(AndroidDisplayJson.asset(asset), bridge); val image = path?.let { imageSlots(asset.hash, it) }
+        val path = result.first
+        if (path != null) {
+            val image = imageSlots(asset.hash, path)
             if (image != null) images = images + (asset.hash to image) else { failedAssets += asset.hash; view = view.copy(assetWarning = "部分图片无法解码。") }
             cache.prune(snapshot.hooks.mapNotNull { it.image }.toSet()); currentAsset = null; assetDeadline = null; nextAsset(); publish()
         } else requestAsset(asset.hash, result.second)
     }
-    /** 每个槽位持有单独实例，避免相同动画摘要覆盖ImageView的唯一回调。 */
+    /** 每个槽位持有单独实例，避免相同动画摘要覆盖ImageView的唯一回调；静态图只解码一次，其余槽位共享位图的新Drawable。 */
     private fun imageSlots(hash: String, path: java.io.File): Map<Int, Drawable>? {
         val cache = cache ?: return null
         val slots = view.snapshot?.hooks?.filter { it.image == hash }?.map { it.slot } ?: return null
+        val first = slots.firstOrNull()?.let { cache.thumbnail(path) } ?: return null
         val decoded = mutableMapOf<Int, Drawable>()
-        for (slot in slots) decoded[slot] = cache.thumbnail(path) ?: return null
-        return decoded.takeIf { it.isNotEmpty() }
+        for (slot in slots) decoded[slot] = when {
+            decoded.isEmpty() -> first
+            first !is AnimatedImageDrawable -> first.constantState?.newDrawable() ?: cache.thumbnail(path) ?: return null
+            else -> cache.thumbnail(path) ?: return null
+        }
+        return decoded
     }
     /** 摘要与严格偏移都由当前资源核心决定。 */
     private fun requestAsset(hash: String, offset: Long) {
@@ -388,7 +404,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private fun clearLiveDisplay() { view = view.withoutLiveDisplay(); images = emptyMap() }
     /** 主线程最多排一个投影任务，最新值覆盖旧值，慢UI不累积图片和快照。 */
     private fun publish() {
-        view = view.copy(requested = intent.requested, deviceName = settings.name)
+        view = view.copy(deviceName = settings.name)
         projection.set(AndroidLinkProjection(view, images))
         synchronized(projection) {
             if (deliveryQueued) return

@@ -17,7 +17,7 @@ struct LanImageAsset {
 
     /// 每张最多8MiB解码帧，最多十二个Hook约96MiB；编码正文仍限制32MiB。
     struct Limits {
-        var maxEncodedBytes = 33_554_432
+        var maxEncodedBytes = Int(LanDisplaySnapshot.Asset.maxLength)
         var maxSourcePixels = 16_777_216
         var maxFrames = 512
         var maxDecodedBytes = 8 * 1024 * 1024
@@ -42,11 +42,12 @@ struct LanImageAsset {
         return try decode(Data(contentsOf: url, options: .mappedIfSafe), mime: mime, limits: limits)
     }
 
+    /// 按白名单 MIME 与尺寸限制解码，超限或格式不符即拒绝。
     static func decode(_ data: Data, mime: String, limits: Limits = Limits()) throws -> Self {
-        guard ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"].contains(mime) else { throw Failure.unsupportedFormat }
+        guard LanDisplaySnapshot.Asset.supportedMimes.contains(mime) else { throw Failure.unsupportedFormat }
         guard !data.isEmpty, data.count <= limits.maxEncodedBytes,
               limits.maxFrames > 0, limits.maxPixelSize > 0, limits.maxDecodedBytes >= 4 else { throw Failure.resourceLimit }
-        guard validMagic(data, mime: mime), let source = CGImageSourceCreateWithData(data as CFData,
+        guard LanDisplaySnapshot.Asset.validMagic(data, mime: mime), let source = CGImageSourceCreateWithData(data as CFData,
                 [kCGImageSourceShouldCache: false] as CFDictionary), CGImageSourceGetStatus(source) == .statusComplete else { throw Failure.invalidImage }
         let count = CGImageSourceGetCount(source)
         guard count > 0 else { throw Failure.invalidImage }
@@ -121,16 +122,5 @@ struct LanImageAsset {
         let value = count.intValue
         guard value > 0 else { return 0 }
         return mime == "image/gif" && value < Int.max ? value + 1 : value
-    }
-
-    private static func validMagic(_ bytes: Data, mime: String) -> Bool {
-        switch mime {
-        case "image/bmp": return bytes.starts(with: [0x42, 0x4d])
-        case "image/png": return bytes.starts(with: [137, 80, 78, 71, 13, 10, 26, 10])
-        case "image/jpeg": return bytes.starts(with: [255, 216, 255])
-        case "image/gif": return bytes.starts(with: Array("GIF87a".utf8)) || bytes.starts(with: Array("GIF89a".utf8))
-        case "image/webp": return bytes.count >= 12 && bytes.starts(with: Array("RIFF".utf8)) && bytes[8..<12].elementsEqual("WEBP".utf8)
-        default: return false
-        }
     }
 }

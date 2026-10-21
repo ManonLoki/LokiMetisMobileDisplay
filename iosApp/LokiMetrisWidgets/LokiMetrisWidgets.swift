@@ -16,6 +16,7 @@ struct LokiMetrisWidgets: Widget {
     }
 }
 
+/// Timeline 条目；snapshot 为空时显示未同步占位。
 struct DisplayEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
@@ -25,6 +26,7 @@ struct DisplayEntry: TimelineEntry {
 struct DisplayTimeline: TimelineProvider {
     func placeholder(in context: Context) -> DisplayEntry { DisplayEntry(date: Date(), snapshot: nil) }
     func getSnapshot(in context: Context, completion: @escaping (DisplayEntry) -> Void) { completion(load()) }
+    /// 有凭据时先 HTTP 拉取并落盘，再按 `WidgetSnapshot.refreshInterval` 申请下次刷新。
     func getTimeline(in context: Context, completion: @escaping (Timeline<DisplayEntry>) -> Void) {
         Task {
             if !context.isPreview, let store = try? WidgetContainer.store(),
@@ -37,12 +39,12 @@ struct DisplayTimeline: TimelineProvider {
                 }
             }
             let entry = load()
-            completion(Timeline(entries: [entry], policy: .after(Date(timeIntervalSinceNow: 5 * 60))))
+            completion(Timeline(entries: [entry], policy: .after(Date(timeIntervalSinceNow: WidgetSnapshot.refreshInterval))))
         }
     }
     private func load() -> DisplayEntry {
         let now = Date()
-        return DisplayEntry(date: now, snapshot: try? WidgetContainer.store().loadCached(atMs: Int64(now.timeIntervalSince1970 * 1000)))
+        return DisplayEntry(date: now, snapshot: try? WidgetContainer.store().loadCached(atMs: now.epochMs))
     }
 }
 
@@ -220,11 +222,11 @@ struct DisplayWidgetView: View {
     }
 
     private func cacheStamp(_ record: WidgetSnapshot) -> String {
-        record.receivedDate.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        record.receivedDate.formatted(.dateTime.locale(SyncTimeFormat.locale).month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
 
     private func cacheDescription(_ record: WidgetSnapshot) -> String {
-        record.receivedDate.formatted(.dateTime.locale(Locale(identifier: "zh_CN")).year().month().day().hour().minute())
+        record.receivedDate.formatted(SyncTimeFormat.full)
     }
 
     /// 未同步不表示零用量，也不推断设备离线。

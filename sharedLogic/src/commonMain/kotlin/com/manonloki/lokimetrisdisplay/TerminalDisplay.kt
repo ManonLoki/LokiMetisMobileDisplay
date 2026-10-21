@@ -35,6 +35,9 @@ data class TerminalAmount(val total: String?, val availability: String, val comp
         when (confidence) { "derived" -> "估算"; "suspected" -> "待核对"; else -> null }).joinToString(" · ")
 }
 
+/** 统计日期只接受 yyyy-MM-dd；预编译避免每份快照重复构造。 */
+private val DAY_PATTERN = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
 /** 桌面同轮统计日界；毫秒不替换为手机时区。 */
 data class TerminalDay(val date: String, val zone: String, val startMs: Long, val endMs: Long)
 /** 单个Agent组件与总量保留同一观测时刻。 */
@@ -43,7 +46,7 @@ data class TerminalAgent(val agent: String, val amount: TerminalAmount)
 data class TerminalTokens(val day: TerminalDay, val observedMs: Long, val all: TerminalAmount, val agents: List<TerminalAgent>) {
     /** 日界、观测和唯一Agent来自同一快照，不在移动端重算日期或补零。 */
     fun validate() {
-        require(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}").matches(day.date) && day.zone.encodeToByteArray().size <= 256)
+        require(DAY_PATTERN.matches(day.date) && day.zone.encodeToByteArray().size <= 256)
         require(day.startMs < day.endMs && observedMs >= day.startMs && observedMs < day.endMs)
         require(agents.size <= 14 && agents.map { it.agent }.distinct().size == agents.size)
         all.validate(); agents.forEach { require(validAgent(it.agent)); it.amount.validate() }
@@ -64,7 +67,14 @@ data class TerminalHook(val agent: String, val slot: Int, val behavior: String, 
 /** 资源只以摘要寻址，禁止远端路径或URL。 */
 data class TerminalAsset(val hash: String, val mime: String, val length: Long) {
     /** 符合协议上限的元信息才允许建立Rust资源接收器。 */
-    fun validate() { require(validHash(hash) && mime in listOf("image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif") && length in 1..33_554_432L) }
+    fun validate() { require(validHash(hash) && mime in SUPPORTED_MIMES && length in 1..MAX_LENGTH) }
+
+    companion object {
+        /** 与桌面协议一致的图片格式白名单。 */
+        val SUPPORTED_MIMES = setOf("image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif")
+        /** 单张编码正文上限32MiB。 */
+        const val MAX_LENGTH = 33_554_432L
+    }
 }
 
 /** 规范u64十进制贯穿展示和缓存，不允许前导零、符号或超界。 */
@@ -80,7 +90,7 @@ data class TerminalHost(val id: String, val name: String, val paired: Boolean, v
 /** UI不可包含秘密；应用owner持有网络，切页只改变本地展示。 */
 data class TerminalLinkView(
     val deviceId: String, val deviceName: String, val hosts: List<TerminalHost> = emptyList(),
-    val requested: Boolean = false, val selectedId: String? = null, val status: String = "正在发现桌面端…",
+    val selectedId: String? = null, val status: String = "正在发现桌面端…",
     val error: String? = null, val pairingCode: String? = null, val connected: Boolean = false,
     val snapshot: TerminalSnapshot? = null, val receivedAtMs: Long? = null, val assetWarning: String? = null,
 )

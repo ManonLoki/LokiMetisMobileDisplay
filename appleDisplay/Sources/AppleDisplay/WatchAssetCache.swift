@@ -11,6 +11,8 @@ final class WatchAssetCache {
     private var descriptor: LanDisplaySnapshot.Asset?
     private var transferId: String?
     private var offset: UInt64 = 0
+    /// 上次完整收敛时保留的引用集；引用不变且没有新文件落盘时无需重新扫描目录。
+    private var settledKeeping: Set<String>?
     /// 目录由Watch宿主创建并标记不备份，初始化精确回收本产品半成品。
     init(directory: URL) throws {
         let root = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -27,18 +29,18 @@ final class WatchAssetCache {
         guard values.isRegularFile == true, values.isSymbolicLink != true, values.fileSize == Int(asset.length) else { return nil }
         let handle = try FileHandle(forReadingFrom: file); defer { try? handle.close() }
         let prefix = try handle.read(upToCount: 16) ?? Data()
-        guard validMagic(prefix, mime: asset.mime) else { return nil }
+        guard LanDisplaySnapshot.Asset.validMagic(prefix, mime: asset.mime) else { return nil }
         try handle.seek(toOffset: 0)
         var hasher = SHA256()
         while let data = try handle.read(upToCount: 65536), !data.isEmpty { hasher.update(data: data) }
-        guard hasher.finalize().map({ String(format: "%02x", $0) }).joined() == asset.hash else { return nil }
+        guard SharedValidation.hex(hasher.finalize()) == asset.hash else { return nil }
         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
         return file
     }
     /// 同时只接收一个摘要，UUID临时文件不允许远端指定路径。
     func begin(_ asset: LanDisplaySnapshot.Asset, id: String) throws {
         cancel(); try validate(asset)
-        guard WatchProtocol.validId(id) else { throw WidgetSnapshotError.invalid }
+        guard SharedValidation.validId(id) else { throw WidgetSnapshotError.invalid }
         let path = directory.appendingPathComponent(".partial-" + UUID().uuidString.lowercased())
         guard FileManager.default.createFile(atPath: path.path, contents: nil) else { throw WidgetSnapshotError.unavailable }
         partial = path
@@ -60,30 +62,18 @@ final class WatchAssetCache {
             guard values.isRegularFile == true, values.isSymbolicLink != true else { throw WidgetSnapshotError.invalid }
             _ = try FileManager.default.replaceItemAt(destination, withItemAt: partial)
         } else { try FileManager.default.moveItem(at: partial, to: destination) }
-        self.partial = nil; descriptor = nil; transferId = nil
-        guard let verified = try cached(asset) else { throw WidgetSnapshotError.unavailable }
-        return (asset.length, verified)
+        self.partial = nil; descriptor = nil; transferId = nil; settledKeeping = nil
+        // 临时文件已完整校验，原子改名不改变内容，无需再整文件重读一次。
+        return (asset.length, destination)
     }
     /// 临时完整文件只在接收结束时读取一次，长度上限32MiB且不进入UI线程。
     private func validPartial(_ path: URL, asset: LanDisplaySnapshot.Asset) throws -> Bool {
         let data = try Data(contentsOf: path, options: .mappedIfSafe)
-        return data.count == Int(asset.length) && validMagic(data.prefix(16), mime: asset.mime) && WatchProtocol.hash(data) == asset.hash
+        return data.count == Int(asset.length) && LanDisplaySnapshot.Asset.validMagic(data.prefix(16), mime: asset.mime) && WatchProtocol.hash(data) == asset.hash
     }
     /// 资源元信息与现有展示协议保持同一容量和格式边界。
     private func validate(_ asset: LanDisplaySnapshot.Asset) throws {
-        guard WatchProtocol.validHash(asset.hash), ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"].contains(asset.mime),
-              (1...33_554_432).contains(asset.length) else { throw WidgetSnapshotError.invalid }
-    }
-    /// 摘要之外还核对公开MIME与实际格式魔数，静态解码失败另行披露。
-    private func validMagic(_ bytes: Data, mime: String) -> Bool {
-        switch mime {
-        case "image/bmp": return bytes.starts(with: [0x42, 0x4d])
-        case "image/webp": return bytes.count >= 12 && bytes.starts(with: Array("RIFF".utf8)) && bytes[8..<12].elementsEqual("WEBP".utf8)
-        case "image/png": return bytes.starts(with: [137,80,78,71,13,10,26,10])
-        case "image/jpeg": return bytes.starts(with: [255,216,255])
-        case "image/gif": return bytes.starts(with: Array("GIF87a".utf8)) || bytes.starts(with: Array("GIF89a".utf8))
-        default: return false
-        }
+        guard asset.isValid else { throw WidgetSnapshotError.invalid }
     }
     /// 后台限制至256像素，Watch界面只持有当前最多十二张静态缩略图。
     func thumbnail(_ path: URL) -> CGImage? {
@@ -94,17 +84,19 @@ final class WatchAssetCache {
     }
     /// 当前引用优先保留，旧缓存按最近复用时间收敛到512MiB和512个文件。
     func prune(keeping: Set<String>) {
+        guard keeping != settledKeeping else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]) else { return }
         let entries = files.compactMap { path -> (URL, Int, Date)? in
-            guard WatchProtocol.validHash(path.lastPathComponent), let value = try? path.resourceValues(forKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]),
+            guard SharedValidation.validHash(path.lastPathComponent), let value = try? path.resourceValues(forKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]),
                   value.isRegularFile == true, value.isSymbolicLink != true else { return nil }
             return (path, value.fileSize ?? 0, value.contentModificationDate ?? .distantPast)
         }
-        var bytes = entries.reduce(0) { $0 + $1.1 }; var count = entries.count
+        var bytes = entries.reduce(0) { $0 + $1.1 }; var count = entries.count; var settled = true
         for (path, size, _) in entries.sorted(by: { $0.2 < $1.2 }) where bytes > 512 * 1024 * 1024 || count > 512 {
             guard !keeping.contains(path.lastPathComponent) else { continue }
-            if (try? FileManager.default.removeItem(at: path)) != nil { bytes -= size; count -= 1 }
+            if (try? FileManager.default.removeItem(at: path)) != nil { bytes -= size; count -= 1 } else { settled = false }
         }
+        settledKeeping = settled ? keeping : nil
     }
     /// 取消只清理本次部分文件，已完整验证的缓存继续保留。
     func cancel() { try? writer?.close(); writer = nil; if let partial { try? FileManager.default.removeItem(at: partial) }; self.partial = nil; descriptor = nil; transferId = nil; offset = 0 }

@@ -11,11 +11,13 @@ struct WidgetSnapshot: Codable, Equatable {
     /// 仅当前认证连接可续期；租约到期后仍可作为最近同步摘要展示。
     var validUntilMs: Int64? = nil
     static let leaseMs: Int64 = 45_000
+    /// 后台定期拉取（BGAppRefresh 最早执行时间与 Timeline `.after`）统一申请间隔；实际唤醒仍由系统调度。
+    static let refreshInterval: TimeInterval = 5 * 60
 
     /// 仅由成功解密的snapshot消息创建；解析失败不能触发文件覆盖。
     static func authenticatedMessage(_ data: Data, sourceId: String, receivedAtMs: Int64) throws -> Self {
         guard data.count <= maxBytes, receivedAtMs >= 0, receivedAtMs <= Int64.max - leaseMs else { throw WidgetSnapshotError.invalid }
-        let message = try JSONDecoder().decode(WidgetWireMessage.self, from: data)
+        let message = try SharedJSON.decoder.decode(WidgetWireMessage.self, from: data)
         guard message.type == "snapshot" else { throw WidgetSnapshotError.invalid }
         let value = Self(schemaVersion: 2, sourceId: sourceId, receivedAtMs: receivedAtMs, snapshot: message.snapshot, validUntilMs: receivedAtMs + leaseMs)
         try value.validate()
@@ -26,7 +28,7 @@ struct WidgetSnapshot: Codable, Equatable {
     func validate() throws {
         guard schemaVersion == 2, receivedAtMs >= 0, receivedAtMs <= Int64.max - Self.leaseMs,
               let validUntilMs, validUntilMs >= receivedAtMs + Self.leaseMs,
-              UUID(uuidString: sourceId)?.uuidString.lowercased() == sourceId else { throw WidgetSnapshotError.invalid }
+              SharedValidation.isCanonicalUUID(sourceId) else { throw WidgetSnapshotError.invalid }
         try snapshot.validate()
     }
 
@@ -47,7 +49,22 @@ struct WidgetSnapshot: Codable, Equatable {
         var next = self; next.validUntilMs = now + Self.leaseMs; return next
     }
     /// 保留真实接收时间，跨日缓存也不会被重新标作今日同步。
-    var receivedDate: Date { Date(timeIntervalSince1970: Double(receivedAtMs) / 1000) }
+    var receivedDate: Date { Date(epochMs: receivedAtMs) }
+}
+
+/// App、组件与 Watch 共用的毫秒时间戳换算，避免各处重复手写截断规则。
+extension Date {
+    init(epochMs: Int64) { self.init(timeIntervalSince1970: Double(epochMs) / 1000) }
+    var epochMs: Int64 { Int64(timeIntervalSince1970 * 1000) }
+}
+
+/// 组件与 Watch 共用的中文同步时间格式；静态保存，避免视图每次渲染重建 Locale。
+enum SyncTimeFormat {
+    static let locale = Locale(identifier: "zh_CN")
+    /// 读屏使用的完整年月日时分。
+    static let full = Date.FormatStyle.dateTime.locale(locale).year().month().day().hour().minute()
+    /// 空间有限时省略年份。
+    static let short = Date.FormatStyle.dateTime.locale(locale).month().day().hour().minute()
 }
 
 /// 线协议外壳只取snapshot，其他消息不参与组件持久化。
@@ -173,8 +190,9 @@ struct WidgetHook: Codable, Equatable {
     let behavior: Behavior
 }
 
-/// Presentation only: integer quotient/remainder rounding leaves the stored UInt64 untouched.
+/// 仅用于展示：整数商余取舍，不改动存储的 UInt64 原值。
 enum TokenNumber {
+    /// 纯数字字符串按千位加逗号；非数字原样返回。
     static func grouped(_ raw: String) -> String {
         guard !raw.isEmpty, raw.utf8.allSatisfy({ (48...57).contains($0) }) else { return raw }
         return raw.reversed().enumerated().map {
@@ -182,6 +200,7 @@ enum TokenNumber {
         }.reversed().joined()
     }
 
+    /// 千以上缩写为 K/M/B，仅用整数运算避免精度损失。
     static func compact(_ raw: String) -> String {
         guard !raw.isEmpty, raw.utf8.allSatisfy({ (48...57).contains($0) }),
               let value = UInt64(raw), value >= 1_000 else { return raw }

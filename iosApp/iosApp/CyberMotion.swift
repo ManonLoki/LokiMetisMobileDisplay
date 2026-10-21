@@ -104,6 +104,7 @@ private struct CyberEntrance: ViewModifier {
     }
 }
 
+/// 按压缩放反馈，尊重系统减弱动态效果设置。
 struct CyberPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
@@ -115,6 +116,7 @@ struct CyberPressStyle: ButtonStyle {
     }
 }
 
+/// 连接状态指示点，仅前台播放脉冲。
 struct CyberConnectionDot: View {
     let connected: Bool
     @Environment(\.scenePhase) private var scenePhase

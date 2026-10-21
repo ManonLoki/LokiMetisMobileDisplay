@@ -67,6 +67,8 @@ class AndroidLanSocket(endpoint: AndroidLanEndpoint, selector: Selector,
         writes.add(Write(buffer, completed))
         if (channel.isConnected) key.interestOps(key.interestOps() or SelectionKey.OP_WRITE)
     }
+    /** 有待写数据时owner需要短间隔检查写超时。 */
+    val hasPendingWrites: Boolean get() = writes.isNotEmpty()
     /** 首项写从入队即限两秒，慢对端不能累积无界内存或永久占有连接。 */
     fun tick(now: Long) {
         writes.peekFirst()?.let { if (it.started == 0L) it.started = now else check(now - it.started < 2_000) { "lan_write_timeout" } }

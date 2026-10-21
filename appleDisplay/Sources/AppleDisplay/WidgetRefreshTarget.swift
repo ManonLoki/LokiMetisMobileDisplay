@@ -22,9 +22,10 @@ struct WidgetRefreshTarget: Codable, Equatable {
         try validate()
     }
 
+    /// 构造与解码共用的边界检查：版本、ID、私有主机、端口与密钥格式。
     func validate() throws {
-        guard version == 1, Self.validId(sourceId), Self.validId(deviceId), sourceId != deviceId,
-              Self.validId(generation), (1...65535).contains(port), Self.validHost(host),
+        guard version == 1, SharedValidation.validId(sourceId), SharedValidation.validId(deviceId), sourceId != deviceId,
+              SharedValidation.validId(generation), (1...65535).contains(port), Self.validHost(host),
               let bytes = Data(base64Encoded: key), bytes.count == 32, bytes.base64EncodedString() == key else {
             throw WidgetSnapshotError.invalid
         }
@@ -49,9 +50,6 @@ struct WidgetRefreshTarget: Codable, Equatable {
         host == other.host && port == other.port && key == other.key
     }
 
-    static func validId(_ id: String) -> Bool {
-        UUID(uuidString: id)?.uuidString.lowercased() == id && id != "00000000-0000-0000-0000-000000000000"
-    }
 
     private static func validHost(_ host: String) -> Bool {
         guard !host.isEmpty, host.utf8.count <= 253, host == host.lowercased(),

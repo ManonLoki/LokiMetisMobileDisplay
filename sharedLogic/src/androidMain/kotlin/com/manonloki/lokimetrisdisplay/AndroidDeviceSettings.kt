@@ -21,7 +21,6 @@ class AndroidDeviceSettings(context: Context) {
             showUsage = savedPanel["panel.show_usage"] as? Boolean ?: true,
             showHooks = savedPanel["panel.show_hooks"] as? Boolean ?: true,
             detail = savedPanel["panel.usage_detail"] as? String,
-            size = savedPanel["panel.usage_size"] as? String,
             hookLayout = savedPanel["panel.hook_layout"] as? String,
         )
         check(preferences.edit().putString("device_id", deviceId).putString("device_name", name).commit()) { "device_identity_unavailable" }
@@ -39,7 +38,7 @@ class AndroidDeviceSettings(context: Context) {
                 .putBoolean("panel.show_usage", value.showUsage)
                 .putBoolean("panel.show_hooks", value.showHooks)
                 .putString("panel.usage_detail", value.usageDetail.key)
-                .putString("panel.usage_size", value.usageSize.key)
+                .remove("panel.usage_size") // 旧版卡片尺寸已不再使用，保存时顺带清理。
                 .putString("panel.hook_layout", value.hookLayout.key).commit()) return false
         panel = value
         return true
