@@ -6,6 +6,7 @@ extension LanLinkEngine {
     func acceptSnapshot(_ message: [String: Any]) throws {
         let snapshot = try LanDisplaySnapshot.decode(message)
         let refreshTarget = widgetRefreshTarget(message)
+        watch.configureHTTP(refreshTarget)
         if let run = backgroundRun, let source = view.selectedId {
             // 后台不投影在线状态、不取图片或同步Watch；完成必须等待共享文件真正提交。
             phase = .pausing
@@ -22,6 +23,7 @@ extension LanLinkEngine {
         let supportsWatch = try WatchCompanionFacts.hostSupports(message)
         if let report = try deviceType.afterAuthenticatedSnapshot(message) { try sendSecure(report) }
         watchCapability = supportsWatch
+        view.canQuerySnapshot = (message["capabilities"] as? [String])?.contains("snapshotQueryV1") == true
         if let id = view.selectedId { WidgetSnapshotPublisher.shared.enqueue(message, sourceId: id, refreshTarget: refreshTarget) }
         view.snapshot = snapshot; view.receivedDate = Date(); view.connected = true; view.status = "已连接，正在同步"; view.error = nil
         if let id = view.selectedId, let endpoint = endpoints[id], case let .service(service, type, domain, _) = endpoint {
@@ -146,6 +148,7 @@ extension LanLinkEngine {
 
     /// 失效立即丢弃Token、Hooks及解码图片；磁盘图片只由新快照重新引用后复用。
     func clearLiveDisplay() {
+        view.canQuerySnapshot = false; lastSnapshotQueryAt = nil
         view.snapshot = nil; view.receivedDate = nil; view.images = [:]; view.assetWarning = nil
         assetPaths = [:]
         WidgetSnapshotPublisher.shared.invalidate()

@@ -19,6 +19,10 @@ struct ContentView: View {
     @AppStorage("panel.usageDetail") private var usageDetail = UsageDetail.compact.rawValue
     @AppStorage("panel.hookLayout") private var hookLayout = HookLayout.single.rawValue
 
+    private var appDisplayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LokiMetris"
+    }
+
     init(settings: DeviceSettings, link: LanLinkModel) {
         self.settings = settings
         self.link = link
@@ -37,7 +41,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack(spacing: 10) {
                         Image(systemName: "square.stack.3d.up.fill").foregroundStyle(DisplayStyle.accent)
-                        Text("LokiMetris").font(.headline)
+                        Text(appDisplayName).font(.headline)
                     }.padding(.horizontal, 24).padding(.top, 30)
                     VStack(spacing: 8) {
                         sidebarItem(.panel, title: "展示台", symbol: "square.grid.2x2")
@@ -73,6 +77,7 @@ struct ContentView: View {
                 usageDetail: UsageDetail(rawValue: usageDetail) ?? .compact,
                 hookLayout: HookLayout(rawValue: hookLayout) ?? .single,
                 openSettings: { selected = .settings },
+                refreshSnapshot: { link.requestSnapshot() },
                 motionEnabled: selected == .panel)
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
@@ -129,6 +134,17 @@ struct ContentView: View {
                     .accessibilityIdentifier("settings-panel")
                 }
                 deviceSettings
+                settingsSection("配对备份与恢复") {
+                    NavigationLink { PairingRecoveryView(settings: settings, link: link) } label: {
+                        SettingsCard {
+                            HStack(spacing: 12) {
+                                SettingsLabel(title: "备份与恢复配对", subtitle: "保存加密文件与恢复码，重装后恢复", symbol: "key.fill")
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }.buttonStyle(CyberPressStyle()).foregroundStyle(.primary)
+                }
                 extensionSettings
             }
             .frame(maxWidth: 680)
@@ -234,7 +250,7 @@ struct ContentView: View {
                                 Text(settings.deviceId).font(.caption.monospaced()).textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            LabeledContent("应用", value: "LokiMetris Display")
+                            LabeledContent("应用", value: appDisplayName)
                         }.font(.subheadline).padding(.top, 14)
                     } label: {
                         Label("设备信息", systemImage: "info.circle").font(.subheadline)
@@ -279,8 +295,8 @@ struct ContentView: View {
                     Divider().overlay(Color.white.opacity(0.04))
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("在系统小组件列表添加“诡秘神谕”。").font(.subheadline)
-                            Text("显示最近摘要与同步时间。连接新版桌面端后，小组件可按系统调度独立通过 HTTP 获取摘要；服务地址每次连通时自动更新。电脑需在同一局域网，申请约 5 分钟后刷新，实际时间由系统安排。")
+                            Text("在系统小组件列表添加“\(appDisplayName)”。").font(.subheadline)
+                            Text("显示最近摘要与同步时间。连接新版桌面端后，小组件可按系统调度独立通过 HTTP 获取摘要；服务地址每次连通时自动更新。电脑需在同一局域网，申请约 \(Int(WidgetSnapshot.refreshInterval / 60)) 分钟后刷新，实际时间由系统安排。")
                                 .font(.footnote).foregroundStyle(.secondary)
                             if let error = link.state.backgroundRefreshError {
                                 Text(error).font(.footnote).foregroundStyle(.secondary)
@@ -361,7 +377,7 @@ struct ContentView: View {
             if let date = link.state.watch.lastSync {
                 Text("最近同步 " + date.formatted(date: .abbreviated, time: .shortened)).font(.caption)
             }
-        } else { Text("在手表上打开诡秘神谕即可同步。").font(.subheadline).foregroundStyle(.secondary) }
+        } else { Text("在手表上打开\(appDisplayName)即可同步。").font(.subheadline).foregroundStyle(.secondary) }
         if let error = link.state.watch.error { Text(error).font(.caption).foregroundStyle(.secondary) }
         Button("重试手表同步", action: link.retryWatch)
             .font(.subheadline.weight(.semibold)).buttonStyle(.bordered).controlSize(.large)

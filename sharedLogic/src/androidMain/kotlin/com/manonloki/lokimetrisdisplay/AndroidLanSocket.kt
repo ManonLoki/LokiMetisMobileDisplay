@@ -6,6 +6,7 @@ import java.nio.channels.SelectionKey
 import java.nio.channels.Selector
 import java.nio.channels.SocketChannel
 import java.util.ArrayDeque
+import java.net.InetSocketAddress
 
 /** 单一selector线程持有非阻塞TCP、帧和八项写队列；所有异常交owner关闭原连接。 */
 class AndroidLanSocket(endpoint: AndroidLanEndpoint, selector: Selector,
@@ -29,6 +30,8 @@ class AndroidLanSocket(endpoint: AndroidLanEndpoint, selector: Selector,
     }
     /** 已立即建立的本地连接仍在owner赋值socket后才触发ready。 */
     fun begin() { if (channel.isConnected) ready() }
+    /** 从实际已连接对端取得数字地址，不能把发现广告或远端提供的URL当作HTTP目标。 */
+    val peerHost: String get() = requireNotNull((channel.remoteAddress as InetSocketAddress).address.hostAddress)
     /** 一次就绪事件只操作本实例精确key，收发错误不在原nonce流重试。 */
     fun process(now: Long) {
         if (closed || !key.isValid) return

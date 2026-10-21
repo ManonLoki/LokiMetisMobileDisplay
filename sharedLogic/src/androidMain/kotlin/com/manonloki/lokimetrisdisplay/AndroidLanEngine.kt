@@ -18,7 +18,8 @@ import org.json.JSONException
 data class AndroidLinkProjection(val view: TerminalLinkView, val images: Map<String, Map<Int, Drawable>> = emptyMap())
 
 /** 应用级单线程网络owner；Activity旋转、菜单和权限弹窗都不重新创建密码窗口。 */
-class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSettings) {
+class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSettings,
+    private val onSurfaceChanged: () -> Unit = {}) {
     /** 本地协议阶段，密码预算、会话nonce和资源验证仍由Rust核心唯一拥有。 */
     private enum class Phase { IDLE, PAIR_HELLO, PAIR_CONFIRMATION, PAIR_CLOSE, RESUME_REPLY, METADATA, STREAMING, PAUSING }
     private val app = context.applicationContext
@@ -28,6 +29,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private val selector = Selector.open()
     private val commands = ArrayBlockingQueue<() -> Unit>(32)
     private val foreground = AtomicReference(false to false)
+    private val backgroundConnection = AtomicBoolean(false)
     private val userIntent = TerminalPendingIntent()
     private val overflowPending = AtomicBoolean(false)
     private val discovered = AtomicReference<List<AndroidLanEndpoint>?>(null)
@@ -37,7 +39,12 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     var state = AndroidLinkProjection(TerminalLinkView(settings.deviceId, settings.name)); private set
     private var view = state.view
     private var images = emptyMap<String, Map<Int, Drawable>>()
+    private var lastSnapshotQueryAt: Long? = null
     private var active = false
+    private var running = true
+    private var stoppedForRecovery: (() -> Unit)? = null
+    private var foregroundVisible = false
+    private var widgetStore: AndroidWidgetStore? = null
     private var store: AndroidPairingStore? = null
     private var cache: AndroidAssetCache? = null
     private var paired = emptySet<String>()
@@ -68,8 +75,18 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     fun clearListener(value: (AndroidLinkProjection) -> Unit) { if (listener === value) listener = null }
     /** 前后台和权限使用最新值槽位，队列满也不会丢弃真实后台变化。 */
     fun setForeground(value: Boolean, permitted: Boolean) { foreground.set(value to permitted); selector.wakeup() }
+    /** 仅用户开启的connectedDevice前台服务可延长已配对连接，不允许后台开启配对窗口。 */
+    fun setBackgroundConnection(enabled: Boolean) { backgroundConnection.set(enabled); selector.wakeup() }
     /** 发现失败后的重试入口；首次发现由前台生命周期自动开启。 */
     fun discover() { requestIntent(TerminalUserIntent.Discover) }
+    /** 主动查询只使用当前认证连接广告过的能力；每秒合并重复点击。 */
+    fun requestSnapshot() { submit {
+        val last = lastSnapshotQueryAt
+        if (active && phase == Phase.STREAMING && view.connected && view.canQuerySnapshot && (last == null || now - last >= 1000)) {
+            lastSnapshotQueryAt = now
+            sendSecure(JSONObject().put("type", "snapshotRequest"))
+        }
+    } }
     /** 用户选择才开启首次密码窗口，已配对候选只做新会话认证。 */
     fun select(id: String) { requestIntent(TerminalUserIntent.Select(id)) }
     /** 最新连接意图不经过可能已满的普通队列，同一轮按真实提交先后覆盖。 */
@@ -90,12 +107,31 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     }
     /** 设置保存不重启网络，也不修改密码窗口的身份快照。 */
     fun nameChanged() { submit { view = view.copy(deviceName = settings.name); publish() } }
+    /** 在唯一存储owner上导出一致的配对快照，秘密不进入常规UI投影。 */
+    fun exportPairingRecovery(completion: (Result<AndroidPairingRecovery.Exported>) -> Unit) {
+        if (!commands.offer {
+            val result = runCatching { requireNotNull(store).exportRecovery() }
+            main.post { completion(result) }
+        }) main.post { completion(Result.failure(IllegalStateException("recovery_busy"))) }
+        selector.wakeup()
+    }
+    /** 恢复先终结旧owner；完成回调之后不再读写旧身份或发布旧连接投影。 */
+    fun stopForRecovery(completion: (Boolean) -> Unit) {
+        if (!commands.offer {
+            active = false; intent.leaveForeground()
+            runCatching { browser.stop() }; runCatching { cancelSession() }
+            running = false; stoppedForRecovery = { completion(true) }
+        }) { main.post { completion(false) }; return }
+        selector.wakeup()
+    }
     /** 忘记精确桌面信任；系统存储失败时保持原信任列表。 */
     fun forget(id: String) {
         synchronized(userIntent) { userIntent.forget(id) }
         submit {
-        if (view.selectedId == id) { cancelSession(); view = view.copy(selectedId = null) }
         try {
+            check(requireNotNull(widgetStore).clear(id))
+            onSurfaceChanged()
+            if (view.selectedId == id) { cancelSession(); view = view.copy(selectedId = null) }
             check(requireNotNull(store).forget(id)); paired = paired - id
             view = view.copy(status = "已忘记，可重新配对", error = null); rebuildHosts()
         } catch (_: Exception) { view = view.copy(error = "无法删除配对记录，请重试。") }
@@ -110,12 +146,21 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private fun run() {
         try { store = AndroidPairingStore(app, settings.deviceId); cache = AndroidAssetCache(app) }
         catch (_: Exception) { view = view.copy(error = "私有存储暂不可用，请解锁后重试。") }
+        try {
+            widgetStore = AndroidWidgetStore(app)
+            val source = widgetStore?.target()?.sourceId ?: widgetStore?.read()?.sourceId
+            if (source != null && source in (store?.clientIds() ?: emptySet())) view = view.copy(selectedId = source)
+        } catch (_: Exception) { view = view.copy(assetWarning = "小组件摘要存储暂不可用，请解锁后重试。") }
         try { AndroidDisplayStore(app).discardLegacy() }
         catch (_: Exception) { view = view.copy(assetWarning = "旧展示快照未能清理，当前不会恢复或使用其中的数据。") }
-        while (true) {
+        while (running) {
             try {
                 syncForeground()
-                repeat(32) { commands.poll()?.invoke() }
+                for (index in 0 until 32) {
+                    commands.poll()?.invoke()
+                    if (!running) break
+                }
+                if (!running) break
                 synchronized(userIntent) { userIntent.take() }?.let(::applyIntent)
                 if (overflowPending.getAndSet(false)) { view = view.copy(error = "操作过快，请稍后重试。"); publish() }
                 discovered.getAndSet(null)?.let(::browsed)
@@ -128,14 +173,33 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             } catch (_: LinkageError) { fail(false, "原生协议库不可用，请重新安装完整应用。"); intent.leaveForeground(); browser.stop() }
             catch (_: Exception) { fail(false, "连接状态异常，请重新选择桌面重试。") }
         }
+        runCatching { selector.close() }
+        stoppedForRecovery?.let { callback -> main.post { listener = null; callback() } }
     }
     /** 真后台关闭浏览和会话；权限对话框及Activity旋转由应用层合并，不调用此分支。 */
     private fun syncForeground() {
-        val (visible, permitted) = foreground.get(); val next = visible && permitted
+        val (visible, permitted) = foreground.get()
+        val visibilityChanged = foregroundVisible != visible
+        foregroundVisible = visible
+        val next = (visible || backgroundConnection.get()) && permitted
+        if (!visible && pairingDeadline != null) {
+            cancelSession()
+            view = view.copy(status = "配对已暂停，请回到前台重新选择桌面。")
+            publish()
+        }
         if (active == next) {
             if (visible && !permitted && view.status != "需要本地网络权限") {
                 view = view.copy(status = "需要本地网络权限", error = "允许本地网络权限后会自动发现桌面端。")
                 publish()
+            }
+            if (visibilityChanged && visible && active) {
+                intent.enterForeground()
+                browser.start()
+                if (socket == null && pairingDeadline == null) {
+                    retryAt = null; view = view.copy(error = null)
+                    browsed(endpoints.values.toList())
+                }
+                nextAsset(); publish()
             }
             return
         }
@@ -182,6 +246,13 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     /** 每次明确选择建立新bridge；同一次配对的传输重试继续复用该bridge及offer。 */
     private fun selectNow(id: String) {
         if (!active || !intent.requested || id !in endpoints) return
+        if (!foregroundVisible && id !in paired) return
+        try {
+            val retained = widgetStore?.target()?.sourceId ?: widgetStore?.read()?.sourceId
+            if (retained != null && retained != id) {
+                check(requireNotNull(widgetStore).clear()); onSurfaceChanged()
+            }
+        } catch (_: Exception) { fail(false, "无法清除上一个桌面的组件摘要，请重试。"); return }
         cancelSession(); intent.renewedEndpoint(); view = view.copy(selectedId = id, error = null)
         try {
             sessionName = settings.name; bridge = NativeLinkBridge(settings.deviceId, sessionName)
@@ -311,7 +382,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     /** 保留有效配对记录；协议失败关闭密码窗口，传输失败可复用尚有效的窗口。 */
     private fun fail(retry: Boolean, message: String) {
         clearLiveDisplay()
-        retryAt = null; socket?.close(); socket = null; deviceType.reset(); cache?.close(); currentAsset = null; assetDeadline = null
+        retryAt = null; socket?.close(); socket = null; deviceType.reset(); lastSnapshotQueryAt = null; cache?.close(); currentAsset = null; assetDeadline = null
         runCatching { bridge?.call(JSONObject().put("op", "disconnect")) }
         phase = Phase.IDLE; deadline = null; view = view.copy(connected = false, error = message, status = "暂未连接")
         if (retry) scheduleRetry() else {
@@ -323,7 +394,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     /** 切换目标或进入后台时取消整个配对窗口，仅保留图片磁盘缓存与系统凭据。 */
     private fun cancelSession() {
         clearLiveDisplay()
-        retryAt = null; socket?.close(); socket = null; deviceType.reset()
+        retryAt = null; socket?.close(); socket = null; deviceType.reset(); lastSnapshotQueryAt = null
         runCatching { bridge?.call(JSONObject().put("op", "cancelPairing")) }; bridge?.close(); bridge = null
         cache?.close(); currentAsset = null; assetDeadline = null; pairingDeadline = null; deadline = null; offer = null
         failedAssets.clear(); phase = Phase.IDLE; view = view.copy(pairingCode = null, connected = false)
@@ -334,7 +405,13 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         deviceType.afterAuthenticatedSnapshot(AndroidDisplayJson.capabilities(message))?.let { type ->
             sendSecure(JSONObject().put("type", "deviceFormFactor").put("formFactor", type.wireValue))
         }
-        view = view.copy(snapshot = snapshot, receivedAtMs = received, connected = true, status = "已连接，正在同步", error = null)
+        view = view.copy(snapshot = snapshot, receivedAtMs = received, connected = true,
+            canQuerySnapshot = "snapshotQueryV1" in AndroidDisplayJson.capabilities(message), status = "已连接，正在同步", error = null)
+        try {
+            if (requireNotNull(widgetStore).acceptLive(requireNotNull(view.selectedId), settings.deviceId,
+                    snapshot, message, requireNotNull(socket).peerHost, received)) onSurfaceChanged()
+            else view = view.copy(assetWarning = "小组件摘要未能保存，稍后同步时会重试。")
+        } catch (_: Exception) { view = view.copy(assetWarning = "小组件摘要未能保存，稍后同步时会重试。") }
         deadline = null; intent.renewedEndpoint()
         val hashes = snapshot.hooks.mapNotNull { it.image }.toSet()
         // 动画Drawable只有一个Callback，同hash在不同槽位各持独立Drawable实例。
@@ -344,6 +421,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     }
     /** 单资源单块请求，IO允许降级，已消费nonce的发送操作必须在IO异常捕获之外。 */
     private fun nextAsset() {
+        if (!foregroundVisible) return
         val bridge = bridge ?: return; val cache = cache ?: return; val snapshot = view.snapshot ?: return
         if (phase != Phase.STREAMING || currentAsset != null) return
         val hashes = snapshot.hooks.mapNotNull { it.image }.toSet()

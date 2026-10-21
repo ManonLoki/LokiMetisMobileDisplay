@@ -41,6 +41,8 @@ struct WatchRPC: Codable {
     var offset: UInt64?
     var data: Data?
     var asset: LanDisplaySnapshot.Asset?
+    var configurationRevision: UInt64?
+    var configurationHash: String?
     /// 字段默认为缺省，具体操作在接收owner按阶段检查，不允许缺字段自动补真值。
     init(_ op: String) { version = 1; self.op = op }
 }
@@ -53,6 +55,8 @@ struct WatchRPCReply: Codable {
     var info: WatchDeviceInfo?
     var offset: UInt64?
     var snapshotHash: String?
+    /// 只读 HTTP 授权通过系统配套通道下发，nil target 表示明确撤销。
+    var configuration: WatchHTTPConfiguration?
     /// 稳定状态不携带系统路径、Hook正文或配对秘密。
     init(_ status: String) { self.status = status }
 }
@@ -111,7 +115,8 @@ enum WatchProtocol {
     static func reply(_ data: Data) throws -> WatchRPCReply {
         guard data.count <= maxRPCBytes else { throw WidgetSnapshotError.tooLarge }
         let value = try SharedJSON.decoder.decode(WatchRPCReply.self, from: data)
-        guard ["ready", "accepted", "continue", "complete", "cached", "paused", "unavailable", "invalid"].contains(value.status) else { throw WidgetSnapshotError.invalid }
+        guard ["ready", "accepted", "continue", "complete", "cached", "paused", "http", "unavailable", "invalid"].contains(value.status) else { throw WidgetSnapshotError.invalid }
+        try value.configuration?.validate()
         return value
     }
 }

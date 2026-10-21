@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 静态预览避免部分启动器为预览创建不兼容的 AppWidgetHostView；仅示意空态结构。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="196dp"
+    android:height="196dp"
+    android:viewportWidth="196"
+    android:viewportHeight="196">
+    <path
+        android:fillColor="#111B24"
+        android:pathData="M24,1H172A23,23 0,0 1,195 24V172A23,23 0,0 1,172 195H24A23,23 0,0 1,1 172V24A23,23 0,0 1,24 1Z"
+        android:strokeColor="#31515B"
+        android:strokeWidth="1" />
+    <path
+        android:fillColor="#9BB1BC"
+        android:pathData="M20,25H92V29H20Z M20,37H70V40H20Z M20,146H110V149H20Z M20,161H93V164H20Z M20,176H119V179H20Z" />
+    <path
+        android:fillColor="#64E5E3"
+        android:pathData="M20,80H55V85H20Z" />
+    <path
+        android:fillColor="#31515B"
+        android:pathData="M20,105H150V108H20Z M20,119H119V122H20Z" />
+    <path
+        android:fillColor="#142E38"
+        android:pathData="M157,17A20,20 0,1 0,157 57A20,20 0,1 0,157 17Z" />
+    <path
+        android:fillColor="#64E5E3"
+        android:pathData="M162.65,31.35A7.95,7.95 0,0 0,157 29a8,8 0,1 0,7.75 10h-2.09A6,6 0,1 1,157 31c1.66,0 3.14,0.69 4.22,1.78L158,36h8V28z" />
+</vector>

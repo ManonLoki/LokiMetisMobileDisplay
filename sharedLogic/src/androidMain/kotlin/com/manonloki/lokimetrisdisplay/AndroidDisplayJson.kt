@@ -14,10 +14,20 @@ object AndroidDisplayJson {
                 TerminalHook(item.string("agent"), item.int("slot"), item.string("behavior"), item.string("content"),
                     item.bool("contentTruncated"), item.optionalString("image"))
             }, value.array("assets", 64).map { TerminalAsset(it.string("hash"), it.string("mime"), it.long("length")) },
-            value.optionalString("catalogError"))
+            value.optionalString("catalogError"), value.optionalObject("providerQuota")?.let(::providerQuota))
         result.validate()
         return result
     }
+    /** 额度JSON只做严格类型映射，值域与排序交由共享领域模型。 */
+    private fun providerQuota(value: JSONObject): ProviderQuotaSnapshot = ProviderQuotaSnapshot(
+        value.long("observedAtUnix"), value.array("providers", 3).map { item ->
+            ProviderQuotaEntry(item.string("provider"), item.optionalString("plan"),
+                item.optionalObject("fiveHour")?.let(::quotaWindow), item.optionalObject("weekly")?.let(::quotaWindow),
+                item.optionalObject("monthly")?.let(::quotaWindow))
+        })
+    /** 百分比必须为整数千分比，不接受数字字符串或小数。 */
+    private fun quotaWindow(value: JSONObject) = ProviderQuotaWindow(value.string("kind"), value.int("usedTenths"),
+        if (!value.has("resetAtUnix") || value.isNull("resetAtUnix")) null else value.long("resetAtUnix"))
     /** 只解析当前解密快照外壳的有界能力，不将缓存当作协商来源。 */
     fun capabilities(message: JSONObject): List<String> {
         if (!message.has("capabilities")) return emptyList()

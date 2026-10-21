@@ -20,6 +20,7 @@ struct LanDisplayPage: View {
     var usageDetail: UsageDetail = .compact
     var hookLayout: HookLayout = .single
     var openSettings: () -> Void = {}
+    var refreshSnapshot: () -> Void = {}
     var motionEnabled = true
     @State private var preview: HookPreview?
     @State private var selectedHookPage = 0
@@ -78,7 +79,7 @@ struct LanDisplayPage: View {
                     }
                 }
                 .background(DisplayStyle.canvas).privacySensitive()
-                .navigationTitle(item.hook.agent).navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(agentDisplayName(item.hook.agent)).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { preview = nil } } }
             }.tint(DisplayStyle.accent)
                 .environment(\.cyberMotionEnabled, motionEnabled)
@@ -95,7 +96,8 @@ struct LanDisplayPage: View {
             layout {
                 if showUsage {
                     UsagePanelCard(tokens: snapshot?.tokens, hasError: snapshot?.tokenError != nil,
-                                   detail: usageDetail)
+                                   detail: usageDetail, quota: snapshot?.providerQuota,
+                                   canRefresh: state.canQuerySnapshot && state.connected, onRefresh: refreshSnapshot)
                         .frame(width: size.width, height: size.height)
                         .accessibilityIdentifier("panel-usage-card")
                         .cyberEntrance(delay: 0.05)
@@ -264,7 +266,7 @@ private struct HookPanelTile: View {
                             .clipped()
                     }.padding(padding)
                 }.buttonStyle(CyberPressStyle())
-                    .accessibilityLabel("\(hook.agent)，\(hook.behavior.label)，查看活动详情")
+                    .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)，查看活动详情")
             }.scrollIndicators(.visible)
         }
         .cyberSurface(tint: DisplayStyle.violet)
@@ -286,7 +288,7 @@ private struct HookPanelTile: View {
     }
 
     private var title: some View {
-        Text(hook.agent).font(grid ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+        Text(agentDisplayName(hook.agent)).font(grid ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
             .foregroundStyle(.primary)
     }
 
@@ -312,6 +314,9 @@ private struct UsagePanelCard: View {
     let tokens: WidgetTokens?
     let hasError: Bool
     let detail: UsageDetail
+    var quota: ProviderQuotaSnapshot? = nil
+    var canRefresh = false
+    var onRefresh: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var dynamicType
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.cyberMotionEnabled) private var motionEnabled
@@ -323,27 +328,35 @@ private struct UsagePanelCard: View {
 
     var body: some View {
         GeometryReader { card in
-            let padding: CGFloat = card.size.width < 280 || card.size.height < 220 ? 12 : 20
+            let padding: CGFloat = detail == .detailed || card.size.width < 280 || card.size.height < 220 ? 12 : 20
+            let hasQuota = quota?.providers.isEmpty == false
+            let availableHeight = max(0, card.size.height - padding * 2 - headerHeight - 10)
             let size = CGSize(width: max(1, card.size.width - padding * 2),
-                              height: max(0, card.size.height - padding * 2 - headerHeight - 10))
+                              height: hasQuota ? max(72, min(180, availableHeight * 0.42)) : availableHeight)
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: detail == .detailed ? 6 : 10) {
                     header.fixedSize(horizontal: false, vertical: true)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
                     VStack(spacing: rowSpacing(size)) {
                         if let tokens {
                             summary(tokens, size: size)
-                            if detail == .detailed { agents(tokens, size: size) }
                         } else {
                             Text("—").font(.system(size: numberSize(size), weight: .medium, design: .rounded))
                                 .foregroundStyle(DisplayStyle.accent)
-                            Text(hasError ? "暂不可用" : "等待同步")
+                            Text(hasError ? "Token 暂不可用" : hasQuota ? "Token 尚未同步" : "等待同步")
                                 .font(.caption).foregroundStyle(.white.opacity(0.65))
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    // Short content fills the viewport; tall content and its header remain scrollable.
-                    .frame(minHeight: size.height, alignment: detail == .compact ? .center : .top)
+                    // 明细紧跟总量，不为主数字预留整块空白挤走Agent行。
+                    .frame(minHeight: detail == .compact ? size.height : 0,
+                           alignment: detail == .compact ? .center : .top)
+                    if detail == .detailed, let tokens {
+                        agents(tokens, size: size)
+                    } else if let quota, !quota.providers.isEmpty {
+                        Divider().overlay(.white.opacity(0.12))
+                        ProviderQuotaRows(quota: quota, detailed: detail == .detailed, contentWidth: size.width)
+                    }
                 }.padding(padding)
             }.scrollIndicators(.visible)
         }
@@ -355,11 +368,13 @@ private struct UsagePanelCard: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 Text("Token 用量").font(.caption.weight(.medium)).fixedSize()
+                if canRefresh { Button("刷新", action: onRefresh).font(.caption).accessibilityIdentifier("quota-refresh") }
                 Spacer(minLength: 8)
                 if let tokens { Text(tokens.day.date).font(.caption2.monospacedDigit()).fixedSize() }
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Token 用量").font(.caption.weight(.medium))
+                if canRefresh { Button("刷新", action: onRefresh).font(.caption).accessibilityIdentifier("quota-refresh") }
                 if let tokens { Text(tokens.day.date).font(.caption2.monospacedDigit()) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.foregroundStyle(.white.opacity(0.6))
@@ -371,14 +386,14 @@ private struct UsagePanelCard: View {
 
     private func numberSize(_ size: CGSize) -> CGFloat {
         let compact = detail == .compact
-        let widthLimit = size.width * (compact ? 0.22 : 0.17)
-        let heightLimit = size.height * (compact ? 0.45 : 0.24)
-        let base = min(compact ? 160.0 : 88.0, max(compact ? 34.0 : 28.0, min(widthLimit, heightLimit)))
+        let widthLimit = size.width * (compact ? 0.22 : 0.14)
+        let heightLimit = size.height * (compact ? 0.45 : 0.20)
+        let base = min(compact ? 160.0 : 44.0, max(compact ? 34.0 : 26.0, min(widthLimit, heightLimit)))
         return base * numberScale
     }
 
     private func summary(_ tokens: WidgetTokens, size: CGSize) -> some View {
-        VStack(spacing: 5) {
+        VStack(spacing: detail == .detailed ? 2 : 5) {
             if dynamicType.isAccessibilitySize {
                 ScrollView(.horizontal) {
                     total(tokens, size: size).fixedSize(horizontal: true, vertical: false)
@@ -393,44 +408,107 @@ private struct UsagePanelCard: View {
     }
 
     private func agents(_ tokens: WidgetTokens, size: CGSize) -> some View {
-        let spacing = rowSpacing(size)
+        let spacing: CGFloat = dynamicType.isAccessibilitySize ? 8 : 6
         let columns = Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading),
                             count: size.width >= 600 && dynamicType < .xxxLarge ? 2 : 1)
+        let matchedKeys = Set(tokens.agents.compactMap { providerQuotaKey(for: $0.agent) })
+        let unmatched = quota.map { ProviderQuotaSnapshot(observedAtUnix: $0.observedAtUnix,
+            providers: $0.providers.filter { !matchedKeys.contains($0.provider) }) }
         return VStack(alignment: .leading, spacing: spacing) {
             Divider().overlay(.white.opacity(0.12))
-            Text(tokens.day.zone).font(.caption2).foregroundStyle(.white.opacity(0.5))
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 8) {
+                Text("设备时区").fixedSize(horizontal: true, vertical: false)
+                GeometryReader { geometry in
+                    ScrollView(.horizontal) {
+                        Text(tokens.day.zone).fixedSize(horizontal: true, vertical: false)
+                            .frame(minWidth: geometry.size.width, alignment: .trailing)
+                    }.scrollIndicators(.visible)
+                }.frame(height: exactLineHeight)
+            }.font(.caption2).foregroundStyle(.white.opacity(0.5))
             if tokens.agents.isEmpty {
                 Text("暂无明细").font(.caption).foregroundStyle(.white.opacity(0.6))
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
                 ForEach(tokens.agents, id: \.agent) { agent in
-                    VStack(alignment: .leading, spacing: 4) {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                agentName(agent, size: size).fixedSize(horizontal: true, vertical: false)
-                                Spacer(minLength: 0)
-                                agentTotal(agent, size: size).fixedSize(horizontal: true, vertical: false)
+                    let entry = providerQuotaKey(for: agent.agent).flatMap { key in
+                        quota?.providers.first { $0.provider == key }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        GeometryReader { geometry in
+                            ViewThatFits(in: .horizontal) {
+                                agentHeadline(agent, quota: entry, size: size)
+                                ScrollView(.horizontal) {
+                                    agentHeadline(agent, quota: entry, size: size)
+                                        .frame(minWidth: geometry.size.width)
+                                }.scrollIndicators(.visible)
                             }
-                            VStack(alignment: .leading, spacing: 4) {
-                                agentName(agent, size: size)
-                                GeometryReader { geometry in
-                                    ScrollView(.horizontal) {
-                                        agentTotal(agent, size: size).fixedSize(horizontal: true, vertical: false)
-                                            .frame(minWidth: geometry.size.width, alignment: .trailing)
-                                    }.scrollIndicators(.visible)
-                                }.frame(height: agentNumberSize(size) * 1.4)
-                            }
+                        }.frame(height: agentNumberSize(size) * 1.3)
+                        if entry != nil || agent.amount.hasNumericValue {
+                            agentDetailLine(agent.amount, quota: entry)
                         }
-                        amountNote(agent.amount)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+            if let unmatched, !unmatched.providers.isEmpty {
+                ProviderQuotaRows(quota: unmatched, detailed: true, contentWidth: size.width)
+            } else if let quota, !quota.providers.isEmpty {
+                quotaObservedTime(quota)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func agentHeadline(_ agent: WidgetTokens.Agent, quota: ProviderQuotaEntry?, size: CGSize) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            agentName(agent, size: size).fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel(quota?.plan.map { "\(agent.displayName)，\($0)" } ?? agent.displayName)
+            Spacer(minLength: 0)
+            agentTotal(agent, size: size).fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    /// 先按真实文字宽度缩短细条；极窄和大字只横滚本行，不截断完整整数。
+    private func agentDetailLine(_ amount: WidgetAmount, quota: ProviderQuotaEntry?) -> some View {
+        GeometryReader { geometry in
+            ViewThatFits(in: .horizontal) {
+                agentDetailContents(amount, quota: quota, barWidth: 44)
+                agentDetailContents(amount, quota: quota, barWidth: 28)
+                agentDetailContents(amount, quota: quota, barWidth: 18)
+                ScrollView(.horizontal) {
+                    agentDetailContents(amount, quota: quota, barWidth: 18)
+                        .frame(minWidth: geometry.size.width)
+                }.scrollIndicators(.visible)
+            }
+        }.frame(height: exactLineHeight)
+    }
+
+    private func agentDetailContents(_ amount: WidgetAmount, quota: ProviderQuotaEntry?, barWidth: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            if let quota { inlineQuota(quota, barWidth: barWidth) }
+            Spacer(minLength: 0)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if amount.hasNumericValue { exactText(amount) }
+            }.fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    private func inlineQuota(_ entry: ProviderQuotaEntry, barWidth: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            ForEach(entry.windows, id: \.kind) { window in
+                HStack(spacing: 2) {
+                    Text(window.label).foregroundStyle(.white.opacity(0.6))
+                    Text(window.percentText).fontWeight(.semibold).monospacedDigit()
+                    ProgressView(value: Double(window.remainingTenths), total: 1000)
+                        .tint(window.level == 0 ? .red : window.level == 1 ? .yellow : .green)
+                        .frame(width: barWidth).accessibilityHidden(true)
+                }.font(.caption2).fixedSize(horizontal: true, vertical: false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(entry.label)\(window.label)剩余\(window.percentText)\(window.resetDate.map { "，" + $0.formatted(.dateTime.month().day().hour().minute()) + "重置" } ?? "")")
+            }
+        }
+    }
+
     private func agentName(_ agent: WidgetTokens.Agent, size: CGSize) -> some View {
-        Text(agent.agent)
+        Text(agent.displayName)
             .font(.system(size: min(24, max(16, size.width * 0.04)) * rowScale, weight: .bold))
             .foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
     }
@@ -445,29 +523,20 @@ private struct UsagePanelCard: View {
             .accessibilityLabel(agent.amount.text)
     }
 
-    private func amountNote(_ amount: WidgetAmount, centered: Bool = false) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if amount.hasNumericValue { exactText(amount) }
-                if !amount.quality.isEmpty { quality(amount) }
-            }.fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: centered ? .center : .trailing, spacing: 4) {
-                if amount.hasNumericValue {
+    @ViewBuilder private func amountNote(_ amount: WidgetAmount, centered: Bool = false) -> some View {
+        if amount.hasNumericValue {
+            ViewThatFits(in: .horizontal) {
+                exactText(amount)
+                VStack(alignment: centered ? .center : .trailing, spacing: 0) {
                     GeometryReader { geometry in
                         ScrollView(.horizontal) {
                             exactText(amount).frame(minWidth: geometry.size.width, alignment: centered ? .center : .trailing)
                         }.scrollIndicators(.visible)
                     }.frame(height: exactLineHeight)
                 }
-                if !amount.quality.isEmpty { quality(amount) }
-            }
-        }.frame(maxWidth: .infinity, alignment: centered ? .center : .trailing)
-            .multilineTextAlignment(centered ? .center : .trailing)
-    }
-
-    private func quality(_ amount: WidgetAmount) -> some View {
-        Text(amount.quality).font(.caption2).foregroundStyle(DisplayStyle.violet)
-            .fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, alignment: centered ? .center : .trailing)
+                .multilineTextAlignment(centered ? .center : .trailing)
+        }
     }
 
     private func total(_ tokens: WidgetTokens, size: CGSize) -> some View {
@@ -485,4 +554,58 @@ private struct UsagePanelCard: View {
             .fixedSize(horizontal: true, vertical: false).textSelection(.enabled)
             .accessibilityLabel("完整用量 \(amount.text) Token")
     }
+}
+
+
+/// 额度独立于Token数值展示，缺失的窗口不生成占位；比例同时提供读屏文本。
+private struct ProviderQuotaRows: View {
+    let quota: ProviderQuotaSnapshot
+    let detailed: Bool
+    let contentWidth: CGFloat
+    @Environment(\.dynamicTypeSize) private var dynamicType
+    @ScaledMetric(relativeTo: .caption2) private var minimumWindowWidth = 140.0
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("账户剩余额度").font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.6))
+            ForEach(quota.providers, id: \.provider) { provider in
+                let windows = provider.windows
+                let columnCount = windows.count > 1 && !dynamicType.isAccessibilitySize
+                    && contentWidth >= minimumWindowWidth * 2 + 14 ? 2 : 1
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(provider.displayName).font(.caption.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .topLeading),
+                                             count: columnCount), spacing: 8) {
+                        ForEach(windows, id: \.kind) { window in
+                            row(window, label: window.label)
+                        }
+                    }
+                }.accessibilityIdentifier("quota-\(provider.provider)")
+            }
+            quotaObservedTime(quota)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func row(_ window: ProviderQuotaWindow, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(label).foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+                Text(window.percentText).fontWeight(.semibold).monospacedDigit()
+            }.font(.caption2)
+            ProgressView(value: Double(window.remainingTenths), total: 1000)
+                .tint(window.level == 0 ? .red : window.level == 1 ? .yellow : .green)
+                .accessibilityLabel(label).accessibilityValue(window.percentText)
+            if detailed, let reset = window.resetDate {
+                Text("\(reset.formatted(.dateTime.month().day().hour().minute())) 重置")
+                    .font(.caption2).foregroundStyle(.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private func quotaObservedTime(_ quota: ProviderQuotaSnapshot) -> some View {
+    Text("额度更新 \(quota.observedDate.formatted(.dateTime.month().day().hour().minute()))")
+        .font(.caption2).foregroundStyle(.white.opacity(0.5))
+        .accessibilityLabel("额度更新于 \(quota.observedDate.formatted(.dateTime.year().month().day().hour().minute()))")
 }

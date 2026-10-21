@@ -10,8 +10,8 @@ struct LokiMetrisWidgets: Widget {
                 .containerBackground(for: .widget) { WidgetCyberMaterial() }
                 .privacySensitive()
         }
-        .configurationDisplayName("诡秘神谕")
-        .description("上次同步的 Token 用量与 Hooks 摘要。")
+        .configurationDisplayName("app_display_name")
+        .description("上次同步的 Token 用量、剩余额度与 Hooks 摘要。")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -29,15 +29,7 @@ struct DisplayTimeline: TimelineProvider {
     /// 有凭据时先 HTTP 拉取并落盘，再按 `WidgetSnapshot.refreshInterval` 申请下次刷新。
     func getTimeline(in context: Context, completion: @escaping (Timeline<DisplayEntry>) -> Void) {
         Task {
-            if !context.isPreview, let store = try? WidgetContainer.store(),
-               let target = try? store.loadRefreshTarget() {
-                do {
-                    let snapshot = try await WidgetHTTPClient().fetch(target)
-                    _ = try store.saveFetchedSnapshot(snapshot, for: target)
-                } catch {
-                    // 局域网不可达或桌面离线时保留真实上次同步时间，之后继续申请刷新。
-                }
-            }
+            if !context.isPreview { _ = await WidgetContainer.refresh(origin: "timeline") }
             let entry = load()
             completion(Timeline(entries: [entry], policy: .after(Date(timeIntervalSinceNow: WidgetSnapshot.refreshInterval))))
         }
@@ -51,9 +43,14 @@ struct DisplayTimeline: TimelineProvider {
 /// 每种组件各自组织信息；锁屏保持系统单色，桌面使用高对比数字。
 struct DisplayWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     private let accent = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
     private let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
     let entry: DisplayEntry
+
+    private var appDisplayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LokiMetris"
+    }
 
     @ViewBuilder var body: some View {
         if let record = entry.snapshot {
@@ -82,26 +79,35 @@ struct DisplayWidgetView: View {
     }
 
     private func small(_ record: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
+        return VStack(alignment: .leading, spacing: hasQuota ? 2 : 4) {
             HStack {
-                Text("Token 用量").font(.system(size: 11, weight: .medium)).foregroundStyle(accent)
+                Text(hasQuota ? "Token" : "Token 用量")
+                    .font(.system(size: hasQuota ? 9 : 11, weight: .medium)).foregroundStyle(quotaAccent)
                 Spacer(minLength: 0)
-                Image(systemName: "square.grid.2x2.fill").font(.caption2).foregroundStyle(accent)
+                if !hasQuota { Image(systemName: "square.grid.2x2.fill").font(.caption2).foregroundStyle(accent) }
             }
-            tokenValue(record, size: 32)
-            quality(record.snapshot.tokens?.all)
+            tokenValue(record, size: hasQuota ? 24 : 32, exactSize: hasQuota ? 8 : 10)
+            if let quota = record.snapshot.providerQuota, !quota.providers.isEmpty {
+                quotaProviders(quota, compact: true)
+            }
             Spacer(minLength: 0)
-            if let tokens = record.snapshot.tokens {
-                Text(tokens.day.date).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
-                    .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
+            if hasQuota {
+                compactTimeSummary(record)
+            } else {
+                if let tokens = record.snapshot.tokens {
+                    Text(tokens.day.date).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
+                        .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
+                }
+                syncTime(record)
             }
-            syncTime(record)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func medium(_ record: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
+        return VStack(alignment: .leading, spacing: hasQuota ? 6 : 7) {
             HStack {
                 Text("Token 用量").font(.caption.weight(.medium)).foregroundStyle(accent)
                 Spacer(minLength: 0)
@@ -111,12 +117,13 @@ struct DisplayWidgetView: View {
                 }
             }
             HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    tokenValue(record, size: 34)
-                    quality(record.snapshot.tokens?.all)
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                tokenValue(record, size: 34).frame(maxWidth: .infinity, alignment: .leading)
                 Rectangle().fill(LinearGradient(colors: [accent.opacity(0.4), violet.opacity(0.1)], startPoint: .top, endPoint: .bottom)).frame(width: 0.5)
-                agents(record).frame(maxWidth: .infinity, alignment: .leading)
+                if let quota = record.snapshot.providerQuota, !quota.providers.isEmpty {
+                    quotaProviders(quota).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    agents(record).frame(maxWidth: .infinity, alignment: .leading)
+                }
             }.frame(maxHeight: .infinity, alignment: .top)
             HStack(alignment: .bottom, spacing: 8) {
                 hookSummary(record)
@@ -126,30 +133,100 @@ struct DisplayWidgetView: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// 待机使用的小尺寸也列出全部有效账户，每行并排呈现实际窗口，不用 +N 隐藏账户。
+    private func quotaProviders(_ quota: ProviderQuotaSnapshot, compact: Bool = false) -> some View {
+        let style = Date.FormatStyle.dateTime.locale(SyncTimeFormat.locale)
+        let stamp = Calendar.current.isDate(quota.observedDate, inSameDayAs: entry.date)
+            ? quota.observedDate.formatted(style.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+            : quota.observedDate.formatted(style.month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        return VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+            HStack(spacing: 3) {
+                Text("剩余额度")
+                Spacer(minLength: 0)
+                Text("更新 \(stamp)")
+            }
+            .font(.system(size: compact ? 7.5 : 8)).foregroundStyle(quotaSecondary)
+            .lineLimit(1).minimumScaleFactor(0.8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("额度更新于 \(quota.observedDate.formatted(SyncTimeFormat.full))")
+            ForEach(quota.providers, id: \.provider) { provider in
+                HStack(alignment: .center, spacing: 4) {
+                    // 套餐由读屏披露，固定账户列为两个真实窗口留足宽度。
+                    Text(provider.label).font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(quotaAccent).frame(width: compact ? 32 : 36, alignment: .leading)
+                    HStack(spacing: 5) {
+                        ForEach(provider.windows, id: \.kind) { window in quotaWindow(window, compact: compact) }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(quotaDescription(provider, quota: quota))
+            }
+        }
+    }
+
+    private var quotaAccent: Color { renderingMode == .fullColor ? accent : .white }
+    private var quotaSecondary: Color {
+        renderingMode == .vibrant ? Color(white: 0.8) : .white.opacity(0.65)
+    }
+    private var quotaTrack: Color {
+        renderingMode == .vibrant ? Color(white: 0.35) : .white.opacity(0.18)
+    }
+    private func quotaFill(_ window: ProviderQuotaWindow) -> Color {
+        guard renderingMode == .fullColor else { return .white }
+        return window.level == 0 ? .red : window.level == 1 ? .yellow : .green
+    }
+
+    /// 静态三点细条属于内容层，待机移除背景后仍存在；单色模式用不透明灰阶保留对比。
+    private func quotaWindow(_ window: ProviderQuotaWindow, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 1) {
+                Text(window.label).font(.system(size: compact ? 7.5 : 8))
+                Spacer(minLength: 0)
+                Text(window.percentText).font(.system(size: compact ? 8 : 9, weight: .medium)).monospacedDigit()
+            }
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(quotaTrack)
+                    Capsule().fill(quotaFill(window))
+                        .frame(width: geometry.size.width * CGFloat(window.remainingTenths) / 1000)
+                }
+            }
+            .frame(height: 3)
+            .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity)
+        .foregroundStyle(renderingMode == .vibrant ? Color.white : .white.opacity(0.85))
+        .lineLimit(1).minimumScaleFactor(0.8)
+    }
+
+    private func quotaDescription(_ provider: ProviderQuotaEntry, quota: ProviderQuotaSnapshot) -> String {
+        var parts = [provider.displayName]
+        for window in provider.windows { parts.append("\(window.label)剩余 \(window.percentText)") }
+        parts.append("额度更新于 \(quota.observedDate.formatted(SyncTimeFormat.full))")
+        return parts.joined(separator: "，")
+    }
+
     @ViewBuilder private func agents(_ record: WidgetSnapshot) -> some View {
         if let tokens = record.snapshot.tokens, !tokens.agents.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(tokens.agents.prefix(2)), id: \.agent) { agent in
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(agent.agent).font(.caption2).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+                            Text(agent.displayName).font(.caption2).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
                             Spacer(minLength: 0)
                             Text(agent.amount.compactText).font(.system(size: 14, weight: .semibold, design: .monospaced))
                                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
                                 .layoutPriority(1)
                         }
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            if agent.amount.hasNumericValue {
-                                Text(agent.amount.exactText).font(.system(size: 9, weight: .medium, design: .monospaced))
-                                    .monospacedDigit().foregroundStyle(.white.opacity(0.65))
-                                    .lineLimit(1).minimumScaleFactor(0.4)
-                            }
-                            Spacer(minLength: 0)
-                            quality(agent.amount, size: 9)
+                        if agent.amount.hasNumericValue {
+                            Text(agent.amount.exactText).font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .monospacedDigit().foregroundStyle(.white.opacity(0.65))
+                                .lineLimit(1).minimumScaleFactor(0.4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(agent.agent)，\(agent.amount.text)\(agent.amount.quality.isEmpty ? "" : "，" + agent.amount.quality)")
+                    .accessibilityLabel("\(agent.displayName)，\(agent.amount.text)\(agent.amount.quality.isEmpty ? "" : "，" + agent.amount.quality)")
                 }
                 if tokens.agents.count > 2 {
                     Text("另 \(tokens.agents.count - 2) 个 Agent").font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
@@ -168,20 +245,19 @@ struct DisplayWidgetView: View {
             Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(accent)
             Text(record.snapshot.hooksAvailable ? "上次 Hooks \(record.snapshot.hooks.count)" : "Hooks 未同步")
             if let hook = record.snapshot.hooks.sorted(by: { $0.slot < $1.slot }).first {
-                Text("· \(hook.agent) \(hook.behavior.label)").foregroundStyle(.white.opacity(0.65))
+                Text("· \(agentDisplayName(hook.agent)) \(hook.behavior.label)").foregroundStyle(.white.opacity(0.65))
             }
         }.font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
     }
 
     private func rectangular(_ record: WidgetSnapshot) -> some View {
-        let amountQuality = record.snapshot.tokens?.all.quality ?? ""
-        return VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Text("Token")
                 if let tokens = record.snapshot.tokens { Text(tokens.day.date) }
             }.font(.caption2).lineLimit(1).minimumScaleFactor(0.75)
             tokenValue(record, size: 20, exactSize: 9)
-            Text("上次同步 \(cacheStamp(record))\(amountQuality.isEmpty ? "" : " · " + amountQuality)")
+            Text("上次同步 \(cacheStamp(record))")
                 .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6)
         }
     }
@@ -205,20 +281,25 @@ struct DisplayWidgetView: View {
         .accessibilityLabel("总 Token，\(amount?.text ?? fallback)")
     }
 
-    @ViewBuilder private func quality(_ amount: WidgetAmount?, size: CGFloat = 10) -> some View {
-        if let amount, !amount.quality.isEmpty {
-            Text(amount.quality).font(.system(size: size, weight: .medium))
-                .foregroundStyle(violet)
-                .lineLimit(1).minimumScaleFactor(0.65)
-        }
-    }
-
     /// 标明最近同步时间，不从系统时间推断在线或今日用量。
-    private func syncTime(_ record: WidgetSnapshot) -> some View {
+    private func syncTime(_ record: WidgetSnapshot, size: CGFloat = 10) -> some View {
         Text("上次同步 \(cacheStamp(record))")
-            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
+            .font(.system(size: size)).foregroundStyle(.white.opacity(0.6))
             .lineLimit(1).minimumScaleFactor(0.7)
             .accessibilityLabel("上次同步于 \(cacheDescription(record))")
+    }
+
+    /// 有额度时合并日期与同步行，为最小组件的有效高度保留余量；旧日同步仍披露日期。
+    private func compactTimeSummary(_ record: WidgetSnapshot) -> some View {
+        let style = Date.FormatStyle.dateTime.locale(SyncTimeFormat.locale)
+        let stamp = Calendar.current.isDate(record.receivedDate, inSameDayAs: entry.date)
+            ? record.receivedDate.formatted(style.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+            : record.receivedDate.formatted(style.month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        return Text((record.snapshot.tokens.map { "\($0.day.date) · " } ?? "") + "同步 " + stamp)
+            .font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
+            .lineLimit(1).minimumScaleFactor(0.75)
+            .accessibilityLabel((record.snapshot.tokens.map { "统计日期 \($0.day.date)，\($0.day.zone)，" } ?? "")
+                + "上次同步于 \(cacheDescription(record))")
     }
 
     private func cacheStamp(_ record: WidgetSnapshot) -> String {
@@ -233,7 +314,7 @@ struct DisplayWidgetView: View {
     @ViewBuilder private var empty: some View {
         switch family {
         case .accessoryInline:
-            Text("LokiMetris · 尚未同步")
+            Text("\(appDisplayName) · 尚未同步")
         case .accessoryCircular:
             VStack(spacing: 2) {
                 Image(systemName: "square.grid.2x2")
@@ -241,7 +322,7 @@ struct DisplayWidgetView: View {
             }
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 3) {
-                Text("LokiMetris").font(.caption2)
+                Text(appDisplayName).font(.caption2)
                 Text("尚未同步").font(.headline)
             }
         default:

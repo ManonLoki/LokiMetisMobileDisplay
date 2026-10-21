@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/metris_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/metris_widget_background"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/metris_widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:autoSizeMaxTextSize="12sp"
+            android:autoSizeMinTextSize="9dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/metris_widget_title"
+            android:textColor="#DCEBF0" />
+
+        <TextView
+            android:id="@+id/metris_widget_amount"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:autoSizeMaxTextSize="30sp"
+            android:autoSizeMinTextSize="12dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/metris_widget_no_data"
+            android:textColor="#64E5E3" />
+
+        <TextView
+            android:id="@+id/metris_widget_synced"
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:autoSizeMaxTextSize="10sp"
+            android:autoSizeMinTextSize="8dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/metris_widget_never_synced"
+            android:textColor="#9BB1BC" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/metris_widget_side"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/metris_widget_quality"
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:autoSizeMaxTextSize="11sp"
+            android:autoSizeMinTextSize="8dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/metris_widget_open_to_pair"
+            android:textColor="#F4C675" />
+
+        <TextView
+            android:id="@+id/metris_widget_quota"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:autoSizeMaxTextSize="11sp"
+            android:autoSizeMinTextSize="8dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="#DCEBF0"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/metris_widget_hooks"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:autoSizeMaxTextSize="11sp"
+            android:autoSizeMinTextSize="9dp"
+            android:autoSizeStepGranularity="1dp"
+            android:autoSizeTextType="uniform"
+            android:gravity="center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:text="@string/metris_widget_waiting_hooks"
+            android:textColor="#DCEBF0" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/metris_widget_refresh"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/metris_widget_refresh_background"
+        android:contentDescription="@string/metris_widget_refresh"
+        android:padding="14dp"
+        android:src="@drawable/metris_widget_refresh" />
+</LinearLayout>

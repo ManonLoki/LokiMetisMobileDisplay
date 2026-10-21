@@ -11,6 +11,7 @@ class AndroidDeviceSettings(context: Context) {
     @Volatile var name: String; private set
     @Volatile var panel: PanelConfiguration; private set
     init {
+        AndroidPairingRecoveryStore.replayPending(context)
         val existing = preferences.getString("device_id", null)
         require(existing == null || MdnsProtocol.isCanonicalDeviceId(existing)) { "device_identity_invalid" }
         deviceId = existing ?: UUID.randomUUID().toString()

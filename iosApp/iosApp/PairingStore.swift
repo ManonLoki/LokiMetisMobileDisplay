@@ -5,8 +5,102 @@ import Security
 final class PairingStore {
     enum Failure: Error { case invalid; case storage }
     private let deviceId: String
-    private let service = (Bundle.main.bundleIdentifier ?? "com.manonloki.lokimetrisdisplay") + ".lan-pairing-v1"
+    private static var service: String { (Bundle.main.bundleIdentifier ?? "com.manonloki.lokimetrisdisplay") + ".lan-pairing-v1" }
+    private var service: String { Self.service }
     init(deviceId: String) { self.deviceId = deviceId }
+
+    /// 重装恢复只读取私有服务中的账户属性，不读取任何配对秘密或修改其双端绑定。
+    static func legacyIdentityAccounts() throws -> [String] {
+        let search: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrSynchronizable as String: false,
+            kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(search as CFDictionary, &item)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess else { throw DeviceIdentityFailure.keychainUnavailable }
+        guard let rows = item as? [[String: Any]], rows.count <= 64 else { throw DeviceIdentityFailure.invalidPairingIndex }
+        return try rows.map { row in
+            guard row[kSecAttrService as String] as? String == service,
+                  let account = row[kSecAttrAccount as String] as? String else { throw DeviceIdentityFailure.invalidPairingIndex }
+            return account
+        }
+    }
+
+    /// 导出的材料只交给加密恢复包，不进入界面投影、日志或共享组件容器。
+    func exportRecovery() throws -> PairingRecovery.Exported {
+        let materials = try clientIds().sorted().map { clientId -> [String: Any] in
+            guard let material = try load(clientId) else { throw DeviceIdentityFailure.recoveryConflict }
+            return material
+        }
+        return try PairingRecovery.export(deviceId: deviceId, materials: materials)
+    }
+
+    static func recoveryFingerprint(deviceId: String, materials: [[String: Any]]) throws -> String {
+        try PairingRecovery.validate(deviceId: deviceId, materials: materials)
+        let sorted = materials.sorted { ($0["clientId"] as! String) < ($1["clientId"] as! String) }
+        let data = try JSONSerialization.data(withJSONObject: ["deviceId": deviceId, "materials": sorted], options: [.sortedKeys])
+        return SharedValidation.sha256Hex(data)
+    }
+
+    /// 固定身份丢失且存在多组旧身份时，恢复包可显式选择完全匹配的一组。
+    /// 不增加、合并、改绑或删除任何配对；包内必须包含这一组的全部既存材料。
+    func verifyExistingRecoverySelection(materials: [[String: Any]]) throws {
+        try PairingRecovery.validate(deviceId: deviceId, materials: materials)
+        let accounts = try Self.legacyIdentityAccounts()
+        let stored = try clientIds().sorted().map { client -> [String: Any] in
+            guard let material = try load(client) else { throw DeviceIdentityFailure.recoveryConflict }
+            return material
+        }
+        try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: deviceId, materials: materials, accounts: accounts, storedMaterials: stored)
+    }
+
+    /// 首次恢复必须是整个服务空库；仅同一恢复日志允许继续此前精确匹配的部分写入。
+    func checkRecoveryDestination(materials: [[String: Any]], resuming: Bool) throws {
+        try PairingRecovery.validate(deviceId: deviceId, materials: materials)
+        let accounts = try Self.legacyIdentityAccounts()
+        if !resuming {
+            guard accounts.isEmpty else { throw DeviceIdentityFailure.recoveryConflict }
+            return
+        }
+        let expected = Dictionary(uniqueKeysWithValues: materials.map { ($0["clientId"] as! String, $0) })
+        for account in accounts {
+            let parts = account.split(separator: ".", omittingEmptySubsequences: false)
+            guard parts.count == 2, String(parts[1]) == deviceId,
+                  let material = expected[String(parts[0])],
+                  let stored = try load(String(parts[0])), try Self.sameMaterial(stored, material)
+            else { throw DeviceIdentityFailure.recoveryConflict }
+        }
+    }
+
+    func importRecoveryMaterials(_ materials: [[String: Any]]) throws {
+        try checkRecoveryDestination(materials: materials, resuming: true)
+        for material in materials {
+            let clientId = material["clientId"] as! String
+            if try load(clientId) == nil {
+                guard try save(material) else { throw DeviceIdentityFailure.recoveryWriteFailed }
+            }
+            guard let stored = try load(clientId), try Self.sameMaterial(stored, material)
+            else { throw DeviceIdentityFailure.recoveryWriteFailed }
+        }
+        try verifyRecovery(fingerprint: Self.recoveryFingerprint(deviceId: deviceId, materials: materials))
+    }
+
+    /// 提交身份前、以及崩溃后收尾时，都必须确认整包而非仅个别配对写入完成。
+    func verifyRecovery(fingerprint: String) throws {
+        let accounts = try Self.legacyIdentityAccounts()
+        let clients = try clientIds()
+        guard accounts.count == clients.count else { throw DeviceIdentityFailure.recoveryConflict }
+        let materials = try clients.sorted().map { clientId -> [String: Any] in
+            guard let material = try load(clientId) else { throw DeviceIdentityFailure.recoveryConflict }
+            return material
+        }
+        guard try Self.recoveryFingerprint(deviceId: deviceId, materials: materials) == fingerprint
+        else { throw DeviceIdentityFailure.recoveryConflict }
+    }
+
+    private static func sameMaterial(_ left: [String: Any], _ right: [String: Any]) throws -> Bool {
+        try JSONSerialization.data(withJSONObject: left, options: [.sortedKeys]) == JSONSerialization.data(withJSONObject: right, options: [.sortedKeys])
+    }
 
     private func query(_ clientId: String) throws -> [String: Any] {
         guard SharedValidation.isCanonicalUUID(clientId) else { throw Failure.invalid }

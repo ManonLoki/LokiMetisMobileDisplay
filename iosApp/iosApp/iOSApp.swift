@@ -5,6 +5,10 @@ struct iOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settings: DeviceSettings
     @StateObject private var link: LanLinkModel
+    #if DEBUG
+    /// 真机诊断直接运行组件的生产 HTTP 路径，期间不建立前台 LAN 连接。
+    private let widgetHTTPProbe = ProcessInfo.processInfo.arguments.contains("--widget-http-probe")
+    #endif
 
     /// 本机设置和网络owner固定为同一根实例，显示与多窗口共享应用身份。
     init() {
@@ -20,8 +24,16 @@ struct iOSApp: App {
         WindowGroup {
             ContentView(settings: settings, link: link)
                 .onChange(of: settings.deviceName) { _, _ in link.settingsChanged() }
+                .task {
+                    #if DEBUG
+                    if widgetHTTPProbe { _ = await WidgetContainer.refresh(origin: "appProbe") }
+                    #endif
+                }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
+            #if DEBUG
+            if widgetHTTPProbe { return }
+            #endif
             // App-level phase aggregates all windows, so iPad windows share one
             // advertisement and one inactive window cannot stop an active one.
             switch phase {

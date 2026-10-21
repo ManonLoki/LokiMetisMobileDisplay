@@ -8,11 +8,25 @@ final class LanLinkModel: ObservableObject {
     private let settings: DeviceSettings
     private var engine: LanLinkEngine?
     private var delivery: LanProjectionDelivery<LanLinkView>?
+    private var generation: UInt64 = 0
+    private var active = false
+    private var recovering = false
 
     /// 同一App根视图拥有一份连接owner，多窗口与切菜单不会创建第二条会话。
     init(settings: DeviceSettings) {
         self.settings = settings
-        let delivery = LanProjectionDelivery<LanLinkView> { [weak self] value in self?.state = value }
+        createEngine()
+    }
+    private func createEngine() {
+        generation &+= 1
+        guard settings.identityError == nil, SharedValidation.validId(settings.deviceId) else {
+            engine = nil; delivery = nil; return
+        }
+        let token = generation
+        let delivery = LanProjectionDelivery<LanLinkView> { [weak self] value in
+            guard let self, self.generation == token, !self.recovering else { return }
+            self.state = value
+        }
         self.delivery = delivery
         let formFactor: LanDeviceFormFactor?
         switch UIDevice.current.userInterfaceIdiom {
@@ -23,21 +37,51 @@ final class LanLinkModel: ObservableObject {
         engine = LanLinkEngine(deviceId: settings.deviceId, formFactor: formFactor) { value in delivery.submit(value) }
     }
 
+    func exportPairingRecovery(completion: @escaping (Result<PairingRecovery.Exported, Error>) -> Void) {
+        guard !recovering, let engine else { completion(.failure(WidgetSnapshotError.unavailable)); return }
+        engine.exportPairingRecovery(completion: completion)
+    }
+
+    /// 停止旧连接后在后台提交恢复事务；完成前不允许生命周期或后台任务重连。
+    func restorePairing(_ payload: PairingRecovery.Payload, completion: @escaping (Bool) -> Void) {
+        guard !recovering else { completion(false); return }
+        recovering = true; generation &+= 1
+        let originalId = settings.deviceId
+        let stopped = { [weak self] in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try DeviceIdentityStore().restoreAndVerify(payload: payload, currentDeviceId: originalId) }
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.engine = nil; self.delivery = nil
+                    self.settings.reloadIdentity()
+                    self.state = LanLinkView()
+                    self.recovering = false
+                    let restored = (try? result.get()) == payload.deviceId && self.settings.deviceId == payload.deviceId && self.settings.identityError == nil
+                    if restored { WidgetSnapshotPublisher.shared.invalidate(clearShared: true) }
+                    self.createEngine()
+                    self.engine?.setActive(self.active && self.settings.identityError == nil, name: self.settings.deviceName)
+                    completion(restored)
+                }
+            }
+        }
+        if let engine { engine.stopForRecovery(completion: stopped) } else { stopped() }
+    }
+
     /// 发现失败后重试，使用最近保存名称供下一次连接使用。
     func discover() {
-        guard settings.identityError == nil else { return }
+        guard !recovering, settings.identityError == nil else { return }
         engine?.discover(name: settings.deviceName)
     }
 
     /// 候选自身的语义按钮拥有连接动作，页面与周围区域不代理。
-    func select(_ id: String) { engine?.select(id, name: settings.deviceName) }
+    func select(_ id: String) { if !recovering { engine?.select(id, name: settings.deviceName) } }
     /// 忘记操作只影响用户明确选择的桌面身份。
-    func forget(_ id: String) { engine?.forget(id) }
+    func forget(_ id: String) { if !recovering { engine?.forget(id) } }
     /// 只有应用前后台变化驱动暂停，普通菜单切换没有生命周期副作用。
-    func setActive(_ active: Bool) { engine?.setActive(active && settings.identityError == nil, name: settings.deviceName) }
+    func setActive(_ active: Bool) { self.active = active; if !recovering { engine?.setActive(active && settings.identityError == nil, name: settings.deviceName) } }
     /// 完成回调固定返回主线程，系统任务不使用页面是否渲染来判断成功。
     func refreshInBackground(completion: @escaping (Bool) -> Void) {
-        guard settings.identityError == nil, let engine else { completion(false); return }
+        guard !recovering, settings.identityError == nil, let engine else { completion(false); return }
         engine.refreshInBackground(name: settings.deviceName) { success in
             DispatchQueue.main.async { completion(success) }
         }
@@ -47,8 +91,10 @@ final class LanLinkModel: ObservableObject {
         guard let engine else { completion(); return }
         engine.cancelBackgroundRefresh { DispatchQueue.main.async { completion() } }
     }
+    /// 手动获取当前桌面展示快照，不创建新的配对或提供商登录。
+    func requestSnapshot() { if !recovering { engine?.requestSnapshot() } }
     /// 明确重试配套同步，不改变当前桌面会话。
-    func retryWatch() { engine?.retryWatch() }
+    func retryWatch() { if !recovering { engine?.retryWatch() } }
     /// 名称保存通知只更新配置，现有连接继续原会话。
-    func settingsChanged() { engine?.updateName(settings.deviceName) }
+    func settingsChanged() { if !recovering { engine?.updateName(settings.deviceName) } }
 }

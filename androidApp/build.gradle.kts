@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -14,6 +15,9 @@ dependencies {
     implementation(project(":sharedUI"))
 
     implementation(libs.androidx.activity.compose)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.ui)
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
@@ -27,8 +31,19 @@ android {
         applicationId = "com.manonloki.lokimetrisdisplay"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+    // 固定使用项目内签名；缺失时不悄悄切换为另一台机器的默认 debug 证书。
+    val signingProperties = Properties().apply {
+        val source = rootProject.file("signing/signing.properties")
+        if (source.isFile) source.inputStream().use(::load)
+    }
+    val projectSigning = signingConfigs.create("projectLocal") {
+        storeFile = rootProject.file("signing/lokimetris.keystore")
+        storePassword = signingProperties.getProperty("storePassword")
+        keyAlias = signingProperties.getProperty("keyAlias", "lokimetris")
+        keyPassword = signingProperties.getProperty("keyPassword")
     }
     packaging {
         resources {
@@ -36,7 +51,9 @@ android {
         }
     }
     buildTypes {
+        debug { signingConfig = projectSigning }
         release {
+            signingConfig = projectSigning
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

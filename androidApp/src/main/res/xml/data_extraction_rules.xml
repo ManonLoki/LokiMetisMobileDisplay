@@ -2,8 +2,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="mdns_identity.xml" />
+        <exclude domain="sharedpref" path="lan_pairing.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="mdns_identity.xml" />
+        <exclude domain="sharedpref" path="lan_pairing.xml" />
     </device-transfer>
 </data-extraction-rules>

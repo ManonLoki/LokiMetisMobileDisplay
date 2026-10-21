@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="metris_widget_title">Token 用量</string>
+    <string name="metris_widget_name">@string/app_name</string>
+    <string name="metris_widget_description">显示最近同步的 Token 用量、统计日期和 Hooks 状态。点击打开应用，刷新按钮尝试获取最新数据。</string>
+    <string name="metris_widget_refresh">尝试同步最新数据</string>
+    <string name="metris_widget_no_data">—</string>
+    <string name="metris_widget_waiting_data">等待桌面数据</string>
+    <string name="metris_widget_open_to_pair">点击打开应用并配对</string>
+    <string name="metris_widget_waiting_day">统计日期待同步</string>
+    <string name="metris_widget_waiting_hooks">Hooks 待同步</string>
+    <string name="metris_widget_never_synced">尚未同步</string>
+</resources>

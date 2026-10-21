@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F10000000000000000000002 /* PairingRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* PairingRecovery.swift */; };
+		F10000000000000000000001 /* DeviceIdentityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* DeviceIdentityPolicy.swift */; };
+		E20000000000000000000005 /* WatchHTTPConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */; };
+		E20000000000000000000004 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
+		E20000000000000000000003 /* WidgetRefreshTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* WidgetRefreshTarget.swift */; };
+		E20000000000000000000002 /* WatchHTTPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WatchHTTPConfiguration.swift */; };
+		E20000000000000000000001 /* WatchHTTPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WatchHTTPConfiguration.swift */; };
 		C20000000000000000000101 /* WidgetRefreshTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* WidgetRefreshTarget.swift */; };
 		C20000000000000000000201 /* WidgetRefreshTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* WidgetRefreshTarget.swift */; };
 		C20000000000000000000102 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
@@ -42,6 +49,10 @@
 		B20000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */; };
 		B20000000000000000000011 /* LokiMetrisWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* LokiMetrisWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B20000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */; };
+		F90000000000000000000001 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F91000000000000000000001 /* InfoPlist.strings */; };
+		F90000000000000000000002 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F91000000000000000000001 /* InfoPlist.strings */; };
+		F90000000000000000000003 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F91000000000000000000001 /* InfoPlist.strings */; };
+		F90000000000000000000004 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F91000000000000000000002 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +98,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F20000000000000000000002 /* PairingRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/PairingRecovery.swift; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000001 /* DeviceIdentityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/DeviceIdentityPolicy.swift; sourceTree = SOURCE_ROOT; };
+		E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/WatchHTTPConfigurationStore.swift; sourceTree = SOURCE_ROOT; };
+		E10000000000000000000001 /* WatchHTTPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchHTTPConfiguration.swift; sourceTree = SOURCE_ROOT; };
 		C10000000000000000000001 /* WidgetRefreshTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetRefreshTarget.swift; sourceTree = SOURCE_ROOT; };
 		C10000000000000000000002 /* WidgetHTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WidgetHTTPClient.swift; sourceTree = SOURCE_ROOT; };
 		A80000000000000000000015 /* LanImageAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanImageAsset.swift; sourceTree = SOURCE_ROOT; };
@@ -111,6 +126,12 @@
 		B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/LokiMetrisWatchApp.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000006 /* LokiMetrisWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LokiMetrisWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LokiMetrisWatch/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		F92000000000000000000001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "en.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		F92000000000000000000002 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		F92000000000000000000003 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		F92000000000000000000004 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		F92000000000000000000005 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		F92000000000000000000006 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -177,6 +198,7 @@
 			isa = PBXGroup;
 			children = (
 				3096AD102E2186AB511AB800 /* Configuration */,
+				F93000000000000000000001 /* AppLocalization */,
 				B60000000000000000000001 /* Watch Sources */,
 				ED81279EE87F6414ED22543A /* iosApp */,
 				A60000000000000000000001 /* Apple Display Sources */,
@@ -197,6 +219,8 @@
 		A60000000000000000000001 /* Apple Display Sources */ = {
 			isa = PBXGroup;
 			children = (
+				F20000000000000000000002 /* PairingRecovery.swift */,
+				F20000000000000000000001 /* DeviceIdentityPolicy.swift */,
 				A80000000000000000000015 /* LanImageAsset.swift */,
 				A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */,
 				A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */,
@@ -217,6 +241,8 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000007 /* LokiMetrisWatch/Assets.xcassets */,
+				E10000000000000000000001 /* WatchHTTPConfiguration.swift */,
+				E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */,
 				B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */,
 				B10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift */,
 				B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */,
@@ -224,6 +250,15 @@
 				B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */,
 			);
 			name = "Watch Sources";
+			sourceTree = "<group>";
+		};
+		F93000000000000000000001 /* AppLocalization */ = {
+			isa = PBXGroup;
+			children = (
+				F91000000000000000000001 /* InfoPlist.strings */,
+				F91000000000000000000002 /* Localizable.strings */,
+			);
+			path = AppLocalization;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -335,6 +370,8 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 5832BB6D54B3B38D9449D897;
 			minimizedProjectReferenceProxies = 1;
@@ -355,6 +392,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F90000000000000000000001 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -362,6 +400,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F90000000000000000000002 /* InfoPlist.strings in Resources */,
+				F90000000000000000000004 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,11 +409,35 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F90000000000000000000003 /* InfoPlist.strings in Resources */,
 				B20000000000000000000012 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		F91000000000000000000001 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F92000000000000000000001 /* en */,
+				F92000000000000000000002 /* zh-Hans */,
+				F92000000000000000000003 /* zh-Hant */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		F91000000000000000000002 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F92000000000000000000004 /* en */,
+				F92000000000000000000005 /* zh-Hans */,
+				F92000000000000000000006 /* zh-Hant */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		6AE3F1CBB1DE3EE6A122E5F2 /* Compile Kotlin Framework */ = {
@@ -417,7 +481,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10000000000000000000002 /* PairingRecovery.swift in Sources */,
+				F10000000000000000000001 /* DeviceIdentityPolicy.swift in Sources */,
 				A80000000000000000000016 /* LanImageAsset.swift in Sources */,
+				E20000000000000000000001 /* WatchHTTPConfiguration.swift in Sources */,
 				B20000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */,
 				A10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
 				D10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift in Sources */,
@@ -453,6 +520,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E20000000000000000000002 /* WatchHTTPConfiguration.swift in Sources */,
+				E20000000000000000000003 /* WidgetRefreshTarget.swift in Sources */,
+				E20000000000000000000004 /* WidgetHTTPClient.swift in Sources */,
+				E20000000000000000000005 /* WatchHTTPConfigurationStore.swift in Sources */,
 				B20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */,
 				B20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift in Sources */,
 				B20000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift in Sources */,
@@ -492,7 +563,6 @@
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "诡秘神谕";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -516,7 +586,6 @@
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "诡秘神谕";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

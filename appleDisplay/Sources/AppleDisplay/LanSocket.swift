@@ -18,9 +18,15 @@ final class LanSocket {
 
     /// 系统完成Bonjour解析后实际连接的对端，仅供认证成功后记录服务地址。
     var connectedHost: String? {
-        guard !closed, case let .hostPort(host, _) = connection.currentPath?.remoteEndpoint else { return nil }
+        guard !closed else { return nil }
+        return Self.connectedHost(from: connection.currentPath?.remoteEndpoint)
+    }
+
+    /// Network 的 IPv4 描述可能附带 %en0；持久化纯地址，IPv6 则保留路由所需的作用域。
+    static func connectedHost(from endpoint: NWEndpoint?) -> String? {
+        guard case let .hostPort(host, _) = endpoint else { return nil }
         switch host {
-        case .ipv4(let address): return String(describing: address)
+        case .ipv4(let address): return address.rawValue.map { String($0) }.joined(separator: ".")
         case .ipv6(let address): return String(describing: address)
         case .name(let name, _): return name
         @unknown default: return nil

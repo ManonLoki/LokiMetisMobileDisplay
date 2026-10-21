@@ -1,7 +1,7 @@
 import BackgroundTasks
 import UIKit
 
-/// 系统按电量与使用情况决定实际唤醒时间；`WidgetSnapshot.refreshInterval`（5 分钟）只是下一次允许执行的最早时间。
+/// 系统决定实际唤醒时间；`WidgetSnapshot.refreshInterval`（15 分钟）只是下一次允许执行的最早时间。
 @MainActor
 final class BackgroundRefreshScheduler {
     static let shared = BackgroundRefreshScheduler()

@@ -31,6 +31,9 @@ fun App(state: TerminalLinkView, onSelect: (String) -> Unit, onForget: (String) 
         panelConfiguration: PanelConfiguration = PanelConfiguration(),
         onSavePanel: (PanelConfiguration) -> Boolean = { false },
         imageHashes: Set<String> = emptySet(),
+        applicationName: String = "LokiMetris",
+        platformSettings: @Composable () -> Unit = {},
+        onRefreshSnapshot: () -> Unit = {},
         image: @Composable (String, String, Int) -> Unit = { _, _, _ -> }) {
     var selected by rememberSaveable { mutableStateOf(DisplayMenu.PANEL.name) }
     var name by rememberSaveable(state.deviceId, state.deviceName) { mutableStateOf(state.deviceName) }
@@ -83,13 +86,13 @@ fun App(state: TerminalLinkView, onSelect: (String) -> Unit, onForget: (String) 
                                 key(menu.name) {
                                     when (menu) {
                                         DisplayMenu.PANEL -> PanelPage(state, panelConfiguration, imageHashes, image,
-                                            onSettings = { selected = DisplayMenu.SETTINGS.name })
+                                            onSettings = { selected = DisplayMenu.SETTINGS.name }, onRefresh = onRefreshSnapshot)
                                         DisplayMenu.SETTINGS -> SettingsPage(state, panelConfiguration, name, nameFeedback, panelError,
                                             onNameChange = { name = it; nameFeedback = null }, onSaveName = {
                                                 nameFeedback = if (onSaveName(name)) "已保存，下次连接生效" else "保存失败，请重试"
                                             }, onPanelChange = { value ->
                                                 panelError = if (onSavePanel(value)) null else "面板设置保存失败，请重试"
-                                            }, onRetry, onSelect, onForget)
+                                            }, onRetry, onSelect, onForget, platformSettings, applicationName)
                                     }
                                 }
                             }

@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -100,13 +101,15 @@ private fun SettingsIcon(symbol: SettingsSymbol) {
     }
 }
 
-/** 设置页：面板显示、桌面连接与本机信息；宽屏分两栏。 */
+/** 基础设置在宽屏分两栏，平台设置独占其下方整行；大字号回退单栏。 */
 @Composable
 internal fun SettingsPage(state: TerminalLinkView, panel: PanelConfiguration, name: String, nameFeedback: String?, panelError: String?,
                          onNameChange: (String) -> Unit, onSaveName: () -> Unit, onPanelChange: (PanelConfiguration) -> Unit,
-                         onRetry: () -> Unit, onSelect: (String) -> Unit, onForget: (String) -> Unit) {
-    BoxWithConstraints(Modifier.widthIn(max = 1100.dp).fillMaxSize()) {
-        val wide = maxWidth >= 720.dp
+                         onRetry: () -> Unit, onSelect: (String) -> Unit, onForget: (String) -> Unit,
+                         platformSettings: @Composable () -> Unit = {}, applicationName: String = "LokiMetris") {
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= 720.dp * fontScale
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = if (wide) 28.dp else 20.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -119,7 +122,7 @@ internal fun SettingsPage(state: TerminalLinkView, panel: PanelConfiguration, na
             }
             val deviceSections: @Composable () -> Unit = {
                 SettingsSection("桌面连接") { ConnectionSettings(state, onRetry, onSelect, onForget) }
-                SettingsSection("本机") { DeviceSettings(state, name, nameFeedback, onNameChange, onSaveName) }
+                SettingsSection("本机") { DeviceSettings(state, name, nameFeedback, onNameChange, onSaveName, applicationName) }
             }
             // 宽屏左右两栏，窄屏按同一顺序纵向排列。
             if (wide) Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
@@ -129,6 +132,7 @@ internal fun SettingsPage(state: TerminalLinkView, panel: PanelConfiguration, na
                 panelSection()
                 deviceSections()
             }
+            platformSettings()
         }
     }
 }
@@ -254,7 +258,8 @@ private fun SettingsMiniature(kind: Miniature, selected: Boolean) {
 
 /** 本机名称编辑与折叠的设备信息；名称改动后才显示保存按钮。 */
 @Composable
-private fun DeviceSettings(state: TerminalLinkView, name: String, feedback: String?, onNameChange: (String) -> Unit, onSaveName: () -> Unit) {
+private fun DeviceSettings(state: TerminalLinkView, name: String, feedback: String?, onNameChange: (String) -> Unit, onSaveName: () -> Unit,
+                           applicationName: String) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     SettingsCard(order = 2) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -282,7 +287,7 @@ private fun DeviceSettings(state: TerminalLinkView, name: String, feedback: Stri
         if (expanded) {
             Text("设备 ID", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SelectionContainer { Text(state.deviceId.ifEmpty { "身份暂不可用" }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
-            Text("LokiMetris Display", fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(applicationName, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

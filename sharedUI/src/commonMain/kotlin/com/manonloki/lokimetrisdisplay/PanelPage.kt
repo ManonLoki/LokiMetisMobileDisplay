@@ -31,11 +31,11 @@ import androidx.compose.ui.window.DialogProperties
 /** 展示台内容由两个模块等分，各自独立滚动。 */
 @Composable
 internal fun PanelPage(state: TerminalLinkView, panel: PanelConfiguration, imageHashes: Set<String>,
-                      image: @Composable (String, String, Int) -> Unit, onSettings: () -> Unit) {
+                      image: @Composable (String, String, Int) -> Unit, onSettings: () -> Unit, onRefresh: () -> Unit = {}) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val horizontal = maxWidth > maxHeight
         val padding = if (maxWidth >= 650.dp) 28.dp else 20.dp
-        val usage: @Composable () -> Unit = { UsageCard(state.snapshot, panel) }
+        val usage: @Composable () -> Unit = { UsageCard(state.snapshot, panel, state.canQuerySnapshot && state.connected, onRefresh) }
         val hooks: @Composable () -> Unit = { HooksPane(state, panel.hookLayout, imageHashes, image) }
         Box(Modifier.fillMaxSize().padding(horizontal = padding, vertical = 22.dp).testTag("panel-split")) {
             when {
@@ -136,13 +136,13 @@ private fun HookCard(hook: TerminalHook, connected: Boolean, imageHashes: Set<St
         val interaction = remember { MutableInteractionSource() }
         Surface(Modifier.fillMaxSize().testTag("hook-card-${hook.slot}").cyberArrival(2 + hook.slot.coerceAtMost(4))
             .cyberPressScale(interaction).clickable(interactionSource = interaction, indication = null, role = Role.Button,
-                onClickLabel = "查看 ${hook.agent} 的详情", onClick = onClick),
+                onClickLabel = "查看 ${agentDisplayName(hook.agent)} 的详情", onClick = onClick),
             shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.2f))) {
             Column(Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.spacedBy(spacing)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(if (small) 5.dp else 10.dp)) {
-                    Text(hook.agent, modifier = Modifier.weight(1f), fontSize = if (small) 13.sp else 18.sp,
+                    Text(agentDisplayName(hook.agent), modifier = Modifier.weight(1f), fontSize = if (small) 13.sp else 18.sp,
                         lineHeight = if (small) 18.sp else 24.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     HookStatus(hook, small)
@@ -168,7 +168,7 @@ private fun HookImageViewport(hook: TerminalHook, connected: Boolean, imageHashe
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 hash !in imageHashes -> Text(if (connected) "图片尚未缓存" else "图片不在本地缓存中",
                     Modifier.padding(6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else -> image(hash, "${hook.agent} 的 Hook 图片", hook.slot)
+                else -> image(hash, "${agentDisplayName(hook.agent)} 的 Hook 图片", hook.slot)
             }
         }
     }
@@ -193,7 +193,7 @@ private fun HookDetail(hook: TerminalHook, connected: Boolean, imageHashes: Set<
                     }
                     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(hook.agent, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        Text(agentDisplayName(hook.agent), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         HookStatus(hook)
                         if (hook.content.isNotEmpty()) SelectionContainer {
                             Text(hook.content, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)

@@ -52,6 +52,38 @@ final class LanSocketTests: XCTestCase {
         }, ended: { _ in XCTFail("valid socket unexpectedly closed"); expected.fulfill() })
     }
 
+    /// Bonjour 的 IPv4 可带接口限定；原描述会被目标校验拒绝，提取后可保存独立刷新凭据。
+    func test_scoped_ipv4_peer_produces_a_valid_widget_refresh_target() throws {
+        let address = try XCTUnwrap(IPv4Address("127.0.0.1%lo0"))
+        let scoped = String(describing: address)
+        XCTAssertTrue(scoped.contains("%"))
+        let endpoint = NWEndpoint.hostPort(host: .ipv4(address), port: 8123)
+        let host = try XCTUnwrap(LanSocket.connectedHost(from: endpoint))
+        XCTAssertEqual(host, "127.0.0.1")
+        let source = "12345678-1234-4234-8234-123456789abc"
+        let device = "22345678-1234-4234-8234-123456789abc"
+        let key = Data(repeating: 7, count: 32).base64EncodedString()
+        XCTAssertThrowsError(try WidgetRefreshTarget(sourceId: source, deviceId: device,
+                                                    host: scoped, port: 8123, key: key))
+        let target = try WidgetRefreshTarget(sourceId: source, deviceId: device,
+                                             host: host, port: 8123, key: key)
+        XCTAssertEqual(try target.requestURL().host, "127.0.0.1")
+    }
+
+    /// IPv6 链路本地的接口作用域参与实际路由，不能按 IPv4 规则移除。
+    func test_scoped_ipv6_peer_preserves_its_routing_scope() throws {
+        let address = try XCTUnwrap(IPv6Address("fe80::1%lo0"))
+        let scoped = String(describing: address)
+        XCTAssertTrue(scoped.contains("%"))
+        let endpoint = NWEndpoint.hostPort(host: .ipv6(address), port: 8123)
+        XCTAssertEqual(LanSocket.connectedHost(from: endpoint), scoped)
+        let target = try WidgetRefreshTarget(sourceId: "12345678-1234-4234-8234-123456789abc",
+                                             deviceId: "22345678-1234-4234-8234-123456789abc",
+                                             host: try XCTUnwrap(LanSocket.connectedHost(from: endpoint)),
+                                             port: 8123, key: Data(repeating: 7, count: 32).base64EncodedString())
+        XCTAssertTrue(try target.requestURL().absoluteString.contains("%25lo0"))
+    }
+
     /// 只发送过大头部而不发送载荷，接收器必须立即失败并关闭连接。
     func test_real_socket_rejects_oversized_header_without_waiting_for_body() throws {
         let expected = expectation(description: "bad header closed")

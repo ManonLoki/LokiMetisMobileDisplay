@@ -12,4 +12,11 @@ class CommittedRecords(initial: Map<String, String>) {
         records = next
         return true
     }
+    /** 恢复整包一次提交，失败不把部分恢复记录当作当前权威状态。 */
+    fun replaceAll(values: Map<String, String>, persist: (Map<String, String>) -> Boolean): Boolean {
+        val next = values.toMap()
+        if (!persist(next)) return false
+        records = next
+        return true
+    }
 }

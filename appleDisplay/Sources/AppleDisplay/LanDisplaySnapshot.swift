@@ -26,6 +26,7 @@ struct LanDisplaySnapshot: Codable, Equatable {
     let hooks: [Hook]
     let assets: [Asset]
     let catalogError: String?
+    var providerQuota: ProviderQuotaSnapshot? = nil
 
     /// 明文已经通过共享会话认证，此处只解析展示协议及宿主容量边界。
     static func decode(_ message: [String: Any]) throws -> Self {
@@ -48,7 +49,7 @@ struct LanDisplaySnapshot: Codable, Equatable {
             throw WidgetSnapshotError.invalid
         }
         let summary = WidgetDisplaySnapshot(version: value.version, tokens: value.tokens, tokenError: value.tokenError,
-            hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) })
+            hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) }, providerQuota: value.providerQuota)
         try summary.validate()
     }
 }

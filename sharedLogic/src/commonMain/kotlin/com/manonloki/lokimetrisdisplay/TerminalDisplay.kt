@@ -5,6 +5,7 @@ data class TerminalSnapshot(
     val version: Int, val tokens: TerminalTokens?, val tokenError: String?,
     val hooksAvailable: Boolean, val hooks: List<TerminalHook>,
     val assets: List<TerminalAsset>, val catalogError: String?,
+    val providerQuota: ProviderQuotaSnapshot? = null,
 ) {
     /** 网络消息共用语义校验，未来版本、重复槽位或缺值不能冒充有效数据。 */
     fun validate() {
@@ -15,7 +16,7 @@ data class TerminalSnapshot(
         require(tokenError == null || tokens == null)
         require(tokenError == null || tokenError.encodeToByteArray().size <= 512)
         require(catalogError == null || catalogError.encodeToByteArray().size <= 512)
-        tokens?.validate(); hooks.forEach { it.validate() }; assets.forEach { it.validate() }
+        providerQuota?.validate(); tokens?.validate(); hooks.forEach { it.validate() }; assets.forEach { it.validate() }
     }
 }
 
@@ -41,7 +42,39 @@ private val DAY_PATTERN = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 /** 桌面同轮统计日界；毫秒不替换为手机时区。 */
 data class TerminalDay(val date: String, val zone: String, val startMs: Long, val endMs: Long)
 /** 单个Agent组件与总量保留同一观测时刻。 */
-data class TerminalAgent(val agent: String, val amount: TerminalAmount)
+data class TerminalAgent(val agent: String, val amount: TerminalAmount) {
+    val displayName: String get() = agentDisplayName(agent)
+}
+
+/** 只规范展示名；认证标识、缓存键和自定义名称保持原样。 */
+fun agentDisplayName(raw: String): String = when (normalizedAgentName(raw)) {
+    "codex" -> "Codex"
+    "claude", "claudecode" -> "Claude Code"
+    "grok", "grokbuild" -> "Grok"
+    "workbuddy" -> "WorkBuddy"
+    "cursor" -> "Cursor"
+    "opencode" -> "OpenCode"
+    "hermes" -> "Hermes"
+    "openclaw" -> "OpenClaw"
+    "codebuddy" -> "CodeBuddy"
+    "qwencode" -> "Qwen Code"
+    "kimicode" -> "Kimi Code"
+    "qoder" -> "Qoder"
+    "gemini", "geminicli" -> "Gemini CLI"
+    "githubcopilot", "githubcopilotcli" -> "GitHub Copilot"
+    else -> raw
+}
+
+/** 仅把有真实额度接口的Agent关联到提供商，未知名称不猜测。 */
+fun providerQuotaKey(agent: String): String? = when (normalizedAgentName(agent)) {
+    "codex" -> "codex"
+    "claude", "claudecode" -> "claude"
+    "cursor" -> "cursor"
+    "grok", "grokbuild" -> "grok"
+    else -> null
+}
+
+private fun normalizedAgentName(raw: String): String = raw.lowercase().filterNot { it == '_' || it == '-' || it.isWhitespace() }
 /** 完整Token总量及分Agent投影。 */
 data class TerminalTokens(val day: TerminalDay, val observedMs: Long, val all: TerminalAmount, val agents: List<TerminalAgent>) {
     /** 日界、观测和唯一Agent来自同一快照，不在移动端重算日期或补零。 */
@@ -92,10 +125,11 @@ data class TerminalLinkView(
     val deviceId: String, val deviceName: String, val hosts: List<TerminalHost> = emptyList(),
     val selectedId: String? = null, val status: String = "正在发现桌面端…",
     val error: String? = null, val pairingCode: String? = null, val connected: Boolean = false,
+    val canQuerySnapshot: Boolean = false,
     val snapshot: TerminalSnapshot? = null, val receivedAtMs: Long? = null, val assetWarning: String? = null,
 )
 
 /** 连接失效立即丢弃全部展示内容，保留设备身份、配对选择及操作反馈。 */
 fun TerminalLinkView.withoutLiveDisplay(): TerminalLinkView = copy(
-    connected = false, snapshot = null, receivedAtMs = null, assetWarning = null,
+    connected = false, canQuerySnapshot = false, snapshot = null, receivedAtMs = null, assetWarning = null,
 )

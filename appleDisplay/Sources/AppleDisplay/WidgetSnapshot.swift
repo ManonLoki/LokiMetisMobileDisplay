@@ -11,8 +11,8 @@ struct WidgetSnapshot: Codable, Equatable {
     /// 仅当前认证连接可续期；租约到期后仍可作为最近同步摘要展示。
     var validUntilMs: Int64? = nil
     static let leaseMs: Int64 = 45_000
-    /// 后台定期拉取（BGAppRefresh 最早执行时间与 Timeline `.after`）统一申请间隔；实际唤醒仍由系统调度。
-    static let refreshInterval: TimeInterval = 5 * 60
+    /// BGAppRefresh 与 Timeline 统一申请 15 分钟间隔；实际唤醒仍由系统调度。
+    static let refreshInterval: TimeInterval = 15 * 60
 
     /// 仅由成功解密的snapshot消息创建；解析失败不能触发文件覆盖。
     static func authenticatedMessage(_ data: Data, sourceId: String, receivedAtMs: Int64) throws -> Self {
@@ -83,6 +83,7 @@ struct WidgetDisplaySnapshot: Codable, Equatable {
     let tokenError: String?
     let hooksAvailable: Bool
     let hooks: [WidgetHook]
+    var providerQuota: ProviderQuotaSnapshot? = nil
 
     /// 组件只接受当前版本、有界槽位以及一致的Token质量值。
     func validate() throws {
@@ -91,6 +92,7 @@ struct WidgetDisplaySnapshot: Codable, Equatable {
               hooks.allSatisfy({ (1...12).contains($0.slot) && $0.agent.utf8.count <= 64 && !$0.agent.isEmpty }),
               hooksAvailable || hooks.isEmpty, tokenError == nil || tokens == nil else { throw WidgetSnapshotError.invalid }
         try tokens?.validate()
+        try providerQuota?.validate()
     }
 
     /// 数量描述最近收到的摘要，不代表当前仍在线。
@@ -157,6 +159,7 @@ struct WidgetTokens: Codable, Equatable {
     struct Agent: Codable, Equatable {
         let agent: String
         let amount: WidgetAmount
+        var displayName: String { agentDisplayName(agent) }
     }
     let day: Day
     let observedMs: Int64
@@ -173,6 +176,42 @@ struct WidgetTokens: Codable, Equatable {
         try all.validate()
         try agents.forEach { try $0.amount.validate() }
     }
+}
+
+/// 只规范展示名；网络标识与自定义名称保持原样。
+func agentDisplayName(_ raw: String) -> String {
+    switch normalizedAgentName(raw) {
+    case "codex": "Codex"
+    case "claude", "claudecode": "Claude Code"
+    case "grok", "grokbuild": "Grok"
+    case "workbuddy": "WorkBuddy"
+    case "cursor": "Cursor"
+    case "opencode": "OpenCode"
+    case "hermes": "Hermes"
+    case "openclaw": "OpenClaw"
+    case "codebuddy": "CodeBuddy"
+    case "qwencode": "Qwen Code"
+    case "kimicode": "Kimi Code"
+    case "qoder": "Qoder"
+    case "gemini", "geminicli": "Gemini CLI"
+    case "githubcopilot", "githubcopilotcli": "GitHub Copilot"
+    default: raw
+    }
+}
+
+/// 缺少接口的Agent不匹配到其他账户的额度。
+func providerQuotaKey(for agent: String) -> String? {
+    switch normalizedAgentName(agent) {
+    case "codex": "codex"
+    case "claude", "claudecode": "claude"
+    case "cursor": "cursor"
+    case "grok", "grokbuild": "grok"
+    default: nil
+    }
+}
+
+private func normalizedAgentName(_ raw: String) -> String {
+    raw.lowercased().filter { !$0.isWhitespace && $0 != "_" && $0 != "-" }
 }
 
 /// 只共享Agent与四态，不共享可能含敏感信息的Hook正文和图片。
@@ -220,5 +259,61 @@ enum TokenNumber {
             else { fraction = "." + (hundredths < 10 ? "0" : "") + String(hundredths) }
             return String(whole) + fraction + suffixes[unit]
         }
+    }
+}
+
+
+/// 所有Apple终端接收同一份有界额度投影，不接收提供商登录材料。
+struct ProviderQuotaSnapshot: Codable, Equatable {
+    let observedAtUnix: Int64
+    let providers: [ProviderQuotaEntry]
+    /// 上游实际观测时间，与手机收到快照的时间分开显示。
+    var observedDate: Date { Date(timeIntervalSince1970: TimeInterval(observedAtUnix)) }
+    func validate() throws {
+        let order = ["codex", "claude", "cursor", "grok"]
+        guard observedAtUnix >= 0, providers.count <= order.count else { throw WidgetSnapshotError.invalid }
+        var previous = -1
+        for provider in providers {
+            guard let index = order.firstIndex(of: provider.provider), index > previous else { throw WidgetSnapshotError.invalid }
+            previous = index
+            try provider.validate()
+        }
+    }
+}
+
+/// 五小时、周与月额度独立缺省，周或月额度不能因缺少短窗而消失；月额度只由 Cursor 提供。
+struct ProviderQuotaEntry: Codable, Equatable {
+    let provider: String
+    let plan: String?
+    let fiveHour: ProviderQuotaWindow?
+    let weekly: ProviderQuotaWindow?
+    /// 旧快照没有此字段，解码为空。
+    var monthly: ProviderQuotaWindow? = nil
+    var label: String { switch provider { case "codex": "Codex"; case "claude": "Claude"; case "cursor": "Cursor"; default: "Grok" } }
+    /// 所有面板共用的展示顺序：每月、每周、5h，缺失窗口跳过。
+    var windows: [ProviderQuotaWindow] { [monthly, weekly, fiveHour].compactMap { $0 } }
+    var displayName: String { plan.map { "\(label) · \($0)" } ?? label }
+    func validate() throws {
+        guard !windows.isEmpty else { throw WidgetSnapshotError.invalid }
+        if let plan {
+            guard !plan.isEmpty, plan.utf8.count <= 24,
+                  plan.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [32, 95, 45, 46].contains($0) }) else { throw WidgetSnapshotError.invalid }
+        }
+        try fiveHour?.validate(kind: "fiveHour"); try weekly?.validate(kind: "weekly"); try monthly?.validate(kind: "monthly")
+    }
+}
+
+/// 以整数千分比保存上游已用比例，0%余额仍为有效数据。
+struct ProviderQuotaWindow: Codable, Equatable {
+    let kind: String
+    let usedTenths: Int
+    let resetAtUnix: Int64?
+    var label: String { switch kind { case "monthly": "每月"; case "weekly": "每周"; default: "5h" } }
+    var resetDate: Date? { resetAtUnix.map { Date(timeIntervalSince1970: TimeInterval($0)) } }
+    var remainingTenths: Int { 1000 - usedTenths }
+    var percentText: String { remainingTenths % 10 == 0 ? "\(remainingTenths / 10)%" : "\(remainingTenths / 10).\(remainingTenths % 10)%" }
+    var level: Int { remainingTenths <= 200 ? 0 : remainingTenths <= 500 ? 1 : 2 }
+    func validate(kind expected: String) throws {
+        guard kind == expected, (0...1000).contains(usedTenths), resetAtUnix.map({ $0 >= 0 }) ?? true else { throw WidgetSnapshotError.invalid }
     }
 }
