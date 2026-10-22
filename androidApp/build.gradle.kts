@@ -31,8 +31,8 @@ android {
         applicationId = "com.manonloki.lokimetrisdisplay"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 6
-        versionName = "1.0.4"
+        versionCode = 7
+        versionName = "1.0.5"
         // 配对桥仅提供这两种架构，避免依赖库让 APK 误报支持 32 位设备。
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")

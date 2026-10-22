@@ -48,7 +48,7 @@
 
 ## 安装与连接
 
-当前发布版本为 **1.0.4**：Android 构建号 **6**，iPhone／iPad、Watch 与 Widget 构建号 **12**。改动和验证结果见 [v1.0.4 发布说明](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/tag/v1.0.4)。
+当前发布版本为 **1.0.5**：Android 构建号 **7**，iPhone／iPad、Watch 与 Widget 构建号 **13**。改动和验证结果见 [v1.0.5 发布说明](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/tag/v1.0.5)。
 
 ### 直接安装
 
@@ -73,7 +73,7 @@ Watch 后台刷新以展示数据为主，缺失的新图片在手表回到前�
 
 ## 从源码启动调试
 
-以下命令在仓库根目录执行，以 macOS 为例。Apple 端当前只配置了 arm64 真机与模拟器构建，完整开发流程使用 **Apple Silicon Mac**。
+以下命令在仓库根目录执行，以 macOS 为例。iPhone／iPad 目标当前只配置了 arm64 真机与模拟器构建，完整开发流程使用 **Apple Silicon Mac**。
 
 ### 1. 准备工具和源码
 
