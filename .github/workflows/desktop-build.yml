@@ -1,0 +1,194 @@
+name: Build experimental desktop installers
+
+on:
+  push:
+    branches: ['codex/desktop-experimental']
+    paths:
+      - '.github/workflows/desktop-build.yml'
+      - 'desktopApp/**'
+      - 'sharedUI/**'
+      - 'sharedLogic/**'
+      - 'androidApp/src/main/c/**'
+      - 'branding/**'
+      - 'scripts/build_desktop_*.py'
+      - 'scripts/desktop_ci.py'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUSTUP_TOOLCHAIN: '1.98.1'
+  CARGO_BUILD_JOBS: '2'
+  CARGO_INCREMENTAL: '0'
+  SKIKO_RENDER_API: SOFTWARE
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/codex/desktop-experimental'
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            runner: windows-2025
+            format: msi
+          - name: linux-amd64
+            runner: ubuntu-22.04
+            format: deb
+    steps:
+      - name: Check out experimental display
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check out pinned complete Rust workspace
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ManonLoki/LokiMetis
+          ref: 0e326ceb745d7fa50119d61ab5a2ee59d868c9f6
+          path: .external/loki_metris
+          persist-credentials: false
+
+      - name: Set up Zulu JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Install declared Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+
+      - name: Configure Windows MSVC, WiX 3 and Python
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$install) { throw 'Visual Studio x64 C++ tools are missing' }
+          $devcmd = Join-Path $install 'Common7\Tools\VsDevCmd.bat'
+          cmd /c "`"$devcmd`" -arch=x64 -host_arch=x64 >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
+          }
+          foreach ($tool in @('cl.exe', 'link.exe', 'rc.exe')) {
+            $command = Get-Command $tool -ErrorAction Stop
+            $command | Select-Object Name, Source
+            Split-Path $command.Source | Add-Content $env:GITHUB_PATH
+          }
+          $linker = Join-Path (Split-Path (Get-Command cl.exe).Source) 'link.exe'
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" | Add-Content $env:GITHUB_ENV
+          foreach ($name in @('INCLUDE', 'LIB', 'LIBPATH', 'WindowsSdkDir', 'WindowsSDKVersion', 'VCINSTALLDIR', 'VCToolsInstallDir', 'UniversalCRTSdkDir', 'UCRTVersion')) {
+            "$name=$([Environment]::GetEnvironmentVariable($name, 'Process'))" | Add-Content $env:GITHUB_ENV
+          }
+          $wixCandidates = @()
+          if ($env:WIX) { $wixCandidates += Join-Path $env:WIX 'bin' }
+          $wixCandidates += Get-ChildItem -Path "${env:ProgramFiles(x86)}\WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'bin' }
+          $wixBin = $wixCandidates | Where-Object {
+            (Test-Path (Join-Path $_ 'candle.exe')) -and (Test-Path (Join-Path $_ 'light.exe'))
+          } | Select-Object -First 1
+          if (!$wixBin) { throw 'JDK 21 jpackage requires WiX 3 candle.exe and light.exe' }
+          $env:PATH = "$wixBin;$env:PATH"
+          $wixBin | Add-Content $env:GITHUB_PATH
+          Get-Command candle.exe, light.exe | Select-Object Name, Source
+          $candleVersion = & (Join-Path $wixBin 'candle.exe') '-?' 2>&1
+          if ($LASTEXITCODE -ne 0 -or ($candleVersion -join "`n") -notmatch 'version 3\.') { throw 'WiX 3 version verification failed' }
+          $candleVersion | Select-Object -First 2
+          $python = (Get-Command python.exe -ErrorAction Stop).Source
+          if ($python -like '*\WindowsApps\*') { throw 'A real Python installation is required' }
+          "LOKI_PYTHON=$python" | Add-Content $env:GITHUB_ENV
+          Get-Command python.exe | Select-Object Name, Source
+          & $python --version
+          if ($LASTEXITCODE -ne 0) { throw 'Python command verification failed' }
+
+      - name: Install Linux test and package prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential fakeroot dpkg-dev xvfb xauth fontconfig \
+            fonts-noto-cjk fonts-noto-color-emoji \
+            libx11-6 libxext6 libxrender1 libxtst6 libxi6 libxrandr2 \
+            libxinerama1 libxcursor1 libfontconfig1 libfreetype6 \
+            libgl1 libgl1-mesa-dri libegl1 libxkbcommon0 libasound2
+
+      - name: Verify affected toolchains and pinned Rust source
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python3 scripts/desktop_ci.py verify --desktop-root "$GITHUB_WORKSPACE/.external/loki_metris"
+
+      - name: Verify affected Windows toolchains and pinned Rust source
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & $env:LOKI_PYTHON scripts/desktop_ci.py verify --desktop-root (Join-Path $env:GITHUB_WORKSPACE '.external/loki_metris')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows toolchain verification failed' }
+
+      - name: Test and package Windows MSI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $desktopRoot = Join-Path $env:GITHUB_WORKSPACE '.external/loki_metris'
+          .\gradlew.bat :sharedLogic:desktopTest :desktopApp:desktopTest :desktopApp:packageMsi "-PlokiDesktopRoot=$desktopRoot" "-PlokiPython=$env:LOKI_PYTHON" --console=plain --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw 'Windows desktop tests or MSI packaging failed' }
+
+      - name: Test and package Linux DEB
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          chmod +x gradlew
+          xvfb-run -a -s '-screen 0 1920x1080x24' \
+            ./gradlew :sharedLogic:desktopTest :desktopApp:desktopTest :desktopApp:packageDeb \
+            "-PlokiDesktopRoot=$GITHUB_WORKSPACE/.external/loki_metris" --console=plain --no-daemon
+
+      - name: Collect installers and SHA-256 checksums
+        if: runner.os == 'Linux'
+        shell: bash
+        run: python3 scripts/desktop_ci.py collect --format '${{ matrix.format }}' --output 'build/desktop-ci/${{ matrix.name }}'
+
+      - name: Collect Windows installer and SHA-256 checksums
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & $env:LOKI_PYTHON scripts/desktop_ci.py collect --format '${{ matrix.format }}' --output 'build/desktop-ci/${{ matrix.name }}'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer collection failed' }
+
+      - name: Upload tested installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-${{ matrix.name }}
+          path: |
+            build/desktop-ci/${{ matrix.name }}/*.${{ matrix.format }}
+            build/desktop-ci/${{ matrix.name }}/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test reports and synthetic UI screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-tests-${{ matrix.name }}
+          path: |
+            sharedLogic/build/reports/tests/desktopTest/**
+            sharedLogic/build/test-results/desktopTest/*.xml
+            desktopApp/build/reports/tests/desktopTest/**
+            desktopApp/build/test-results/desktopTest/*.xml
+            desktopApp/build/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
