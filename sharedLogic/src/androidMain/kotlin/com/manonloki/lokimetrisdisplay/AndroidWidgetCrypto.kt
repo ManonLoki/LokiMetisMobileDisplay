@@ -12,18 +12,23 @@ internal object AndroidWidgetCrypto {
     private val responseDomain = "loki-widget-response-v1".toByteArray(Charsets.UTF_8)
     private val random = SecureRandom()
 
+    /** 每次请求生成新的 12 字节随机 nonce。 */
     fun nonce(): ByteArray = ByteArray(12).also(random::nextBytes)
+    /** 标准 Base64，与桌面端编码一致。 */
     fun encode(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+    /** 先限制长度再解码，并要求规范编码，拒绝可变形输入。 */
     fun decode(text: String, maxBytes: Int): ByteArray {
         require(text.length <= ((maxBytes + 2) / 3) * 4)
         return Base64.getDecoder().decode(text).also { require(it.size <= maxBytes && encode(it) == text) }
     }
 
+    /** 生成请求认证标签：以请求域为明文和附加数据加密。 */
     fun request(key: String, nonce: ByteArray): String {
         require(nonce.size == 12)
         return encode(cipher(Cipher.ENCRYPT_MODE, key, nonce, requestDomain).doFinal(requestDomain))
     }
 
+    /** 解密响应，附加数据绑定请求 nonce，旧响应无法通过认证。 */
     fun response(key: String, requestNonce: ByteArray, nonce: ByteArray, ciphertext: ByteArray): ByteArray {
         require(requestNonce.size == 12 && nonce.size == 12 && ciphertext.size in 16..AndroidWidgetSnapshot.MAX_BYTES + 16)
         return cipher(Cipher.DECRYPT_MODE, key, nonce, responseDomain + requestNonce).doFinal(ciphertext)

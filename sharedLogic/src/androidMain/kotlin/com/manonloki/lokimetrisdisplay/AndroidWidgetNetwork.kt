@@ -11,6 +11,7 @@ import java.net.URL
 
 /** LAN Wi-Fi 没有互联网时也按具体路由访问桌面，不改变进程或其他请求的默认网络。 */
 internal object AndroidWidgetNetwork {
+    /** 选择路由前缀最长的 Wi-Fi/以太网；找不到时退回默认网络，始终不走代理。 */
     fun open(context: Context, url: URL): HttpURLConnection {
         val selected = runCatching {
             val host = url.host.removePrefix("[").removeSuffix("]").substringBefore('%')

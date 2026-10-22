@@ -17,6 +17,7 @@ object AndroidRefreshScheduler {
     const val MANUAL_JOB = 0x4c4d02
     const val INTERVAL_MS = 15 * 60 * 1000L
 
+    /** 只有已配置且仍属当前配对的小组件目标才保留周期任务；参数未变时不重复提交。 */
     fun ensureScheduled(context: Context) {
         val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
         val owner = context.applicationContext as? DisplayApplication

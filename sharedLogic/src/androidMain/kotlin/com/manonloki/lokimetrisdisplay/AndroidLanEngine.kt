@@ -322,14 +322,14 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         else fail(error !is NativeLinkBridge.Failure && error !is IllegalArgumentException && error !is JSONException && error !is java.nio.charset.CharacterCodingException,
             if (error is NativeLinkBridge.Failure || error is IllegalArgumentException || error is JSONException || error is java.nio.charset.CharacterCodingException) "认证或消息校验失败，请重试或重新配对。" else "连接中断，正在等待桌面恢复…")
     }
-    /** 只睡到最近的期限；有待写数据时保持100ms检查写超时，空闲最长1秒，新命令随时可wakeup。 */
+    /** 只睡到最近的期限；有待写数据时保持100ms检查写超时。命令、发现和生命周期变化都会wakeup，空闲最长30秒兜底以减少唤醒耗电。 */
     private fun selectTimeoutMs(): Long {
         val now = now
-        var next = now + 1_000
+        var next = now + 30_000
         for (at in listOfNotNull(pairingDeadline, deadline, assetDeadline, retryAt,
             lastInbound.takeIf { phase == Phase.STREAMING }?.plus(45_000))) next = minOf(next, at)
         if (socket?.hasPendingWrites == true) next = minOf(next, now + 100)
-        return (next - now).coerceIn(1, 1_000)
+        return (next - now).coerceIn(1, 30_000)
     }
     /** 单调期限覆盖密码、首次快照、心跳及图片请求。 */
     private fun tick() {

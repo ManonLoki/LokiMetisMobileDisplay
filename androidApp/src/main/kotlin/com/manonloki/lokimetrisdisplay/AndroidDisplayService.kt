@@ -13,31 +13,16 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.Rect
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Point
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.Gravity
 import android.view.Display
-import android.view.MotionEvent
-import android.view.View
-import android.view.ViewConfiguration
-import android.view.WindowInsets
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
 import java.util.concurrent.CopyOnWriteArraySet
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /** 用户开启的常驻连接与悬浮窗状态；窗口隐藏不会关闭独立的后台连接。 */
 data class AndroidDisplayServiceState(
@@ -52,28 +37,21 @@ class AndroidDisplayService : Service() {
     private val owner: DisplayApplication get() = application as DisplayApplication
     private val main = Handler(Looper.getMainLooper())
     private lateinit var windowContext: Context
-    private val windows: WindowManager get() = windowContext.getSystemService(WindowManager::class.java)
     private var latest: TerminalLinkView? = null
     private var requested = false
-    private var collapsed = false
-    private var root: LinearLayout? = null
-    private var heading: TextView? = null
-    private var content: OverlayPageContent? = null
-    private var pageScroll: OverlaySwipeScrollView? = null
-    private var pageButtons: Map<OverlayPage, Button> = emptyMap()
-    private var page = OverlayPage.TOKEN
-    private var windowParams: WindowManager.LayoutParams? = null
+    private var overlay: AndroidOverlayWindow? = null
+    private var overlayPosition = Point()
+    private var notifiedConnected: Boolean? = null
     private var receiverRegistered = false
     private var observingOps = false
     private var connectionOwned = false
     private var shuttingDown = false
     private var terminalError: String? = null
-    private var windowX = 0
-    private var windowY = 0
     private val projectionListener: (AndroidLinkProjection) -> Unit = { projection ->
         latest = projection.view
-        renderContent()
-        if (state.running) updateNotification()
+        overlay?.render(latest)
+        // 通知只反映连接与否，逐次推送不重建通知，减少系统通知服务调用。
+        if (state.running && connected() != notifiedConnected) updateNotification()
     }
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -88,14 +66,6 @@ class AndroidDisplayService : Service() {
             main.post { if (!shuttingDown) reconcileOverlay() }
         }
     }
-    private val overlayGuard = object : Runnable {
-        override fun run() {
-            if (shuttingDown || !state.running || !requested) return
-            // OEM权限页不一定发送AppOps回调；也检查锁屏以覆盖非标准锁屏实现。
-            reconcileOverlay()
-            main.postDelayed(this, 1_500)
-        }
-    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -105,7 +75,6 @@ class AndroidDisplayService : Service() {
             getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null,
         )
-        page = OverlayPage.restore(getSharedPreferences(PRESENTATION_PREFERENCES, MODE_PRIVATE).getString(PAGE_KEY, null))
         latest = owner.link?.state?.view
         val channel = NotificationChannel(CHANNEL, "后台实时同步", NotificationManager.IMPORTANCE_LOW).apply {
             description = "保持与已配对局域网桌面的连接，并接收桌面状态推送。"
@@ -126,7 +95,7 @@ class AndroidDisplayService : Service() {
             )
             observingOps = true
         } catch (_: RuntimeException) {
-            // 撤权仍由窗口操作与短周期guard检查，不能因厂商AppOps实现崩溃。
+            // 撤权仍由窗口操作异常、亮屏解锁广播和配置变化兜底，不轮询以免持续唤醒。
         }
     }
 
@@ -162,8 +131,6 @@ class AndroidDisplayService : Service() {
         }
         reconcileOverlay()
         updateNotification()
-        main.removeCallbacks(overlayGuard)
-        if (requested) main.postDelayed(overlayGuard, 1_500)
         return START_NOT_STICKY
     }
 
@@ -207,203 +174,52 @@ class AndroidDisplayService : Service() {
             return
         }
         if (!mayShow()) { removeOverlay(); return }
-        if (root != null) return
+        if (overlay != null) return
         createOverlay()
     }
 
-    /** 仅显示当前已认证投影，连接失效后立即恢复等待态，避免把旧用量当作实时值。 */
-    private fun renderContent() {
-        val view = latest
-        val snapshot = view?.takeIf { it.connected && it.receivedAtMs != null }?.snapshot
-        val tokens = snapshot?.displayTokens
-        heading?.text = when {
-            collapsed && page == OverlayPage.TOKEN && tokens != null -> "Token ${tokens.all.text}"
-            collapsed -> page.label
-            else -> "${page.label} · ${page.ordinal + 1}/${OverlayPage.entries.size}"
-        }
-        heading?.contentDescription = "${page.label}页，拖动移动悬浮窗"
-        content?.render(page, view)
-        pageButtons.forEach { (value, button) ->
-            button.isSelected = value == page
-            button.stateDescription = if (value == page) "当前页" else ""
-            button.setTextColor(if (value == page) Color.rgb(100, 229, 227) else Color.rgb(155, 177, 188))
-            button.typeface = if (value == page) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        }
-        root?.post { constrainPosition() }
-    }
-
-    private fun turnPage(direction: Int): Boolean {
-        val next = page.adjacent(direction) ?: return false
-        selectPage(next)
-        return true
-    }
-
-    private fun selectPage(next: OverlayPage) {
-        if (next == page) return
-        page = next
-        getSharedPreferences(PRESENTATION_PREFERENCES, MODE_PRIVATE).edit().putString(PAGE_KEY, next.id).apply()
-        renderContent()
-        pageScroll?.post { pageScroll?.scrollTo(0, 0) }
-    }
+    private fun connected(): Boolean = latest?.let { it.connected && it.snapshot != null } == true
 
     private fun createOverlay() {
-        val safe = safeBounds()
-        val scale = resources.configuration.fontScale.coerceAtLeast(1f)
-        val width = minOf(safe.width(), dp((304 * scale).coerceAtMost(420f))).coerceAtLeast(1)
-        val container = BoundedLinearLayout(windowContext).apply {
-            maximumHeight = safe.height()
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12f), dp(8f), dp(12f), dp(12f))
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(18, 25, 33))
-                cornerRadius = dp(18f).toFloat()
-                setStroke(dp(1f), Color.rgb(56, 143, 158))
-            }
-            elevation = dp(8f).toFloat()
-        }
-        val header = LinearLayout(windowContext).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val title = TextView(windowContext).apply {
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            minHeight = dp(48f)
-            gravity = Gravity.CENTER_VERTICAL
-            contentDescription = "拖动移动悬浮窗"
-        }
-        header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val fold = button(if (collapsed) "+" else "−", if (collapsed) "展开悬浮窗" else "折叠悬浮窗") {
-            collapsed = !collapsed
-            removeOverlay()
-            reconcileOverlay()
-        }
-        header.addView(fold, LinearLayout.LayoutParams(dp(48f), dp(48f)))
-        header.addView(button("×", "关闭悬浮窗，继续后台同步") {
-            requested = false
-            removeOverlay()
-            publish(state.copy(overlayRequested = false, overlayVisible = false, error = null))
-            updateNotification()
-        }, LinearLayout.LayoutParams(dp(48f), dp(48f)))
-        container.addView(header)
-        val text = OverlayPageContent(windowContext)
-        val scroll = OverlaySwipeScrollView(windowContext, ::turnPage).apply {
-            maximumHeight = (minOf(safe.height(), dp((420 * scale).coerceAtMost(580f))) - dp(140f * scale)).coerceAtLeast(dp(48f))
-            minimumHeight = minOf(maximumHeight, dp(180f))
-            addView(text, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-            visibility = if (collapsed) View.GONE else View.VISIBLE
-        }
-        container.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        val navigation = LinearLayout(windowContext).apply {
-            orientation = LinearLayout.HORIZONTAL
-            visibility = if (collapsed) View.GONE else View.VISIBLE
-        }
-        pageButtons = OverlayPage.entries.associateWith { value ->
-            button(value.label, "切换到${value.label}页") { selectPage(value) }.apply {
-                textSize = 13f
-                navigation.addView(this, LinearLayout.LayoutParams(0, dp(48f), 1f))
-            }
-        }
-        container.addView(navigation, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        val params = WindowManager.LayoutParams(
-            width, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.LEFT
-            x = windowX.coerceIn(safe.left, maxOf(safe.left, safe.right - width))
-            y = windowY.coerceIn(safe.top, maxOf(safe.top, safe.bottom - dp(96f)))
-            setTitle("${getString(R.string.app_name)} 状态悬浮窗")
-            // 使用屏幕坐标和系统安全区自行约束位置，旋转后也不进入挖孔或系统栏。
-            setFitInsetsTypes(0)
-        }
-        root = container; heading = title; content = text; pageScroll = scroll; windowParams = params
-        attachDrag(title)
-        renderContent()
+        val window = AndroidOverlayWindow(windowContext, "${getString(R.string.app_name)} 状态悬浮窗", overlayPosition,
+            onClose = {
+                requested = false
+                removeOverlay()
+                publish(state.copy(overlayRequested = false, overlayVisible = false, error = null))
+                updateNotification()
+            },
+            onLost = { dropOverlay("悬浮窗已被系统关闭，后台同步继续运行。") },
+        )
+        overlay = window
+        window.render(latest)
         try {
             // 权限、锁屏状态在创建前再检查一次，避免广播和绘制之间的窗口。
             if (!Settings.canDrawOverlays(this) || !mayShow()) { removeOverlay(); return }
-            windows.addView(container, params)
+            window.show()
             publish(state.copy(overlayRequested = requested, overlayVisible = true, error = null))
-            container.post { constrainPosition() }
         } catch (_: RuntimeException) {
-            removeOverlay()
-            requested = false
-            publish(state.copy(overlayRequested = false, overlayVisible = false, error = "系统暂未允许显示悬浮窗，后台同步继续运行。"))
+            dropOverlay("系统暂未允许显示悬浮窗，后台同步继续运行。")
         }
     }
 
-    private fun button(label: String, description: String, click: () -> Unit): Button = Button(windowContext).apply {
-        text = label
-        textSize = 20f
-        setTextColor(Color.rgb(131, 224, 229))
-        contentDescription = description
-        minWidth = 0; minimumWidth = 0
-        minHeight = 0; minimumHeight = 0
-        setPadding(0, 0, 0, 0)
-        background = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = dp(12f).toFloat() }
-        setOnClickListener { click() }
-    }
-
-    private fun attachDrag(handle: View) {
-        var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
-        val slop = ViewConfiguration.get(this).scaledTouchSlop
-        handle.setOnTouchListener { view, event ->
-            val params = windowParams ?: return@setOnTouchListener false
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y; dragging = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downX; val dy = event.rawY - downY
-                    if (abs(dx) > slop || abs(dy) > slop) dragging = true
-                    if (dragging) { params.x = startX + dx.roundToInt(); params.y = startY + dy.roundToInt(); constrainPosition() }
-                    true
-                }
-                MotionEvent.ACTION_UP -> { if (!dragging) view.performClick(); true }
-                MotionEvent.ACTION_CANCEL -> true
-                else -> false
-            }
-        }
-    }
-
-    private fun safeBounds(): Rect {
-        val metrics = windows.currentWindowMetrics
-        val bounds = Rect(metrics.bounds)
-        val insets = metrics.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-        bounds.inset(insets.left + dp(8f), insets.top + dp(8f), insets.right + dp(8f), insets.bottom + dp(8f))
-        return bounds
-    }
-
-    private fun constrainPosition() {
-        val view = root ?: return
-        val params = windowParams ?: return
-        val safe = safeBounds()
-        params.x = params.x.coerceIn(safe.left, maxOf(safe.left, safe.right - view.width.coerceAtLeast(params.width)))
-        params.y = params.y.coerceIn(safe.top, maxOf(safe.top, safe.bottom - view.height.coerceAtLeast(dp(64f))))
-        windowX = params.x; windowY = params.y
-        if (!view.isAttachedToWindow) return
-        try { windows.updateViewLayout(view, params) }
-        catch (_: RuntimeException) {
-            requested = false
-            removeOverlay()
-            publish(state.copy(overlayRequested = false, overlayVisible = false, error = "悬浮窗已被系统关闭，后台同步继续运行。"))
-        }
+    /** 系统拒绝或移除窗口时放弃显示意图，后台连接不受影响。 */
+    private fun dropOverlay(message: String) {
+        requested = false
+        removeOverlay()
+        publish(state.copy(overlayRequested = false, overlayVisible = false, error = message))
     }
 
     private fun removeOverlay() {
-        val view = root
-        root = null; heading = null; content = null; pageScroll = null; pageButtons = emptyMap(); windowParams = null
-        if (view != null) {
-            view.visibility = View.GONE
-            try { windows.removeViewImmediate(view) } catch (_: RuntimeException) { /* 已被系统移除。 */ }
-        }
+        overlay?.let { overlayPosition = it.position; it.remove() }
+        overlay = null
         if (state.overlayVisible) publish(state.copy(overlayVisible = false))
     }
 
     private fun buildNotification(): Notification {
         val open = PendingIntent.getActivity(this, 100, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 101, Intent(this, AndroidDisplayService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val connected = latest?.let { it.connected && it.snapshot != null } == true
+        val connected = connected()
+        notifiedConnected = connected
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_sync_notification)
             .setContentTitle("${getString(R.string.app_name)} · 后台实时同步")
@@ -424,17 +240,6 @@ class AndroidDisplayService : Service() {
         catch (_: RuntimeException) { /* 通知权限变化不影响安全停止服务或隐藏窗口。 */ }
     }
 
-    private fun dp(value: Float): Int = (value * resources.displayMetrics.density).roundToInt()
-
-    private class BoundedLinearLayout(context: Context) : LinearLayout(context) {
-        var maximumHeight = Int.MAX_VALUE
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val supplied = View.MeasureSpec.getSize(heightMeasureSpec)
-            val limit = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED) maximumHeight else minOf(maximumHeight, supplied)
-            super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST))
-        }
-    }
-
     companion object {
         private const val CHANNEL = "loki.background.realtime"
         private const val NOTIFICATION_ID = 7401
@@ -442,8 +247,6 @@ class AndroidDisplayService : Service() {
         private const val ACTION_STOP = "com.manonloki.lokimetrisdisplay.REALTIME_STOP"
         private const val ACTION_HIDE = "com.manonloki.lokimetrisdisplay.OVERLAY_HIDE"
         private const val EXTRA_OVERLAY = "show_overlay"
-        private const val PRESENTATION_PREFERENCES = "overlay_presentation"
-        private const val PAGE_KEY = "page_id"
         private val listeners = CopyOnWriteArraySet<(AndroidDisplayServiceState) -> Unit>()
         @Volatile var state = AndroidDisplayServiceState(); private set
 
@@ -456,6 +259,7 @@ class AndroidDisplayService : Service() {
             }
         }
 
+        /** 停止服务；服务未在运行时也重置共享状态，避免界面停留在旧状态。 */
         fun stop(context: Context) {
             if (!context.stopService(Intent(context, AndroidDisplayService::class.java))) publish(AndroidDisplayServiceState())
         }
@@ -467,11 +271,13 @@ class AndroidDisplayService : Service() {
             catch (_: RuntimeException) { publish(state.copy(error = "暂时无法隐藏悬浮窗，请停止后台同步后重试。")) }
         }
 
+        /** 订阅服务状态，注册时立即回放当前值。 */
         fun addStateListener(listener: (AndroidDisplayServiceState) -> Unit) {
             listeners.add(listener)
             listener(state)
         }
 
+        /** 精确移除订阅，不影响其他界面。 */
         fun removeStateListener(listener: (AndroidDisplayServiceState) -> Unit) { listeners.remove(listener) }
 
         private fun publish(value: AndroidDisplayServiceState) {

@@ -137,6 +137,7 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
     @Suppress("DEPRECATION")
     private fun endpoint(info: NsdServiceInfo): AndroidLanEndpoint? = runCatching {
         val attributes = info.attributes
+        /** TXT 字段必须存在、有界且为合法 UTF-8。 */
         fun text(key: String): String {
             val bytes = requireNotNull(attributes[key]); require(bytes.size <= 256)
             return Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()

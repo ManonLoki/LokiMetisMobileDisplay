@@ -54,6 +54,7 @@ class DisplayApplication : Application(), Application.ActivityLifecycleCallbacks
         check(Looper.myLooper() == Looper.getMainLooper())
         projectionListeners.add(listener); link?.state?.let(listener)
     }
+    /** 精确移除单个消费者，其余订阅保持不变。 */
     fun removeProjectionListener(listener: (AndroidLinkProjection) -> Unit) { projectionListeners.remove(listener) }
     /** 只有已启动并显示通知的服务延长连接，生命周期结束立即归还。 */
     fun setBackgroundConnection(enabled: Boolean) {

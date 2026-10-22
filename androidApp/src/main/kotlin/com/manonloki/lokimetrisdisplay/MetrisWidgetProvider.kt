@@ -187,10 +187,9 @@ class MetrisWidgetProvider : AppWidgetProvider() {
         private fun quotaSummary(context: Context, quota: ProviderQuotaSnapshot?, providerLimit: Int, compact: Boolean, wide: Boolean): QuotaSummary? {
             val providers = quota?.providers.orEmpty().filter { it.windows.isNotEmpty() }
             if (providers.isEmpty()) return null
-            fun windows(provider: ProviderQuotaEntry) = provider.windows
             val visible = providers.take(providerLimit)
             val hiddenCount = providers.size - visible.size
-            val description = providers.flatMap { provider -> windows(provider).map { window ->
+            val description = providers.flatMap { provider -> provider.windows.map { window ->
                 "${provider.label}${provider.planLabel?.let { "，套餐 $it" }.orEmpty()} ${window.kindLabel}额度剩余 ${window.percentText}"
             } }.joinToString("；")
             val metrics = context.resources.displayMetrics
@@ -208,7 +207,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
                         val suffix = if (compact) {
                             if (hiddenCount > 0) " +$hiddenCount" else ""
                         } else {
-                            windows(provider).joinToString(" ", prefix = " ") { "${it.kindLabel}${it.percentText}" } +
+                            provider.windows.joinToString(" ", prefix = " ") { "${it.kindLabel}${it.percentText}" } +
                                 if (wide && index == visible.lastIndex && hiddenCount > 0) " +$hiddenCount" else ""
                         }
                         val plainWidth = paint.measureText(provider.label + " " + suffix)
@@ -225,7 +224,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
                     }
                     if (compact && hiddenCount > 0) append(" +$hiddenCount")
                     if (compact) append("\n") else append(" ")
-                    windows(provider).forEachIndexed { windowIndex, window ->
+                    provider.windows.forEachIndexed { windowIndex, window ->
                         if (windowIndex > 0) append(" ")
                         val start = length
                         append("${window.kindLabel}${window.percentText}")

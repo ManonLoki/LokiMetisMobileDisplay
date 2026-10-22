@@ -8,6 +8,7 @@ import java.util.UUID
 
 /** 小组件与悬浮摘要只保留用量和四态；正文、图片及长期配对秘密不进入持久化。 */
 data class AndroidWidgetSnapshot(val sourceId: String, val receivedAtMs: Long, val snapshot: TerminalSnapshot) {
+/** 校验摘要已裁剪：不含正文、图片或资源目录。 */
     fun validate() {
         require(MdnsProtocol.isCanonicalDeviceId(sourceId) && receivedAtMs >= 0)
         snapshot.validate()
@@ -40,6 +41,7 @@ data class AndroidWidgetTarget(
     /** 诊断或断言意外格式化目标时也不暴露读取密钥、地址或设备身份。 */
     override fun toString(): String = "AndroidWidgetTarget(version=$version, generation=$generation)"
 
+/** 校验版本、身份、数值主机和 32 字节读取密钥。 */
     fun validate() {
         require(version == 1 && MdnsProtocol.isCanonicalDeviceId(sourceId) && MdnsProtocol.isCanonicalDeviceId(deviceId))
         require(sourceId != deviceId && MdnsProtocol.isCanonicalDeviceId(generation) && port in 1..65535)
@@ -50,6 +52,7 @@ data class AndroidWidgetTarget(
         finally { bytes.fill(0) }
     }
 
+    /** 除代次外完全相同即视为同一连接，重复授予时沿用原代次而不撤销在途请求。 */
     internal fun sameConnection(other: AndroidWidgetTarget): Boolean =
         version == other.version && sourceId == other.sourceId && deviceId == other.deviceId &&
             host == other.host && port == other.port && key == other.key

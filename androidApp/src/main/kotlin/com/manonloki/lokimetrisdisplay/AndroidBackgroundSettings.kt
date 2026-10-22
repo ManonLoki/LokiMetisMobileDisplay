@@ -107,7 +107,7 @@ fun AndroidBackgroundSettings(
                 { modifier -> BackgroundSettingsCard("悬浮窗", modifier) {
                     Detail(when {
                         !overlayAllowed -> "需要系统的“显示在其他应用上层”权限。授权后可在其他应用上方查看实时状态。"
-                        service.overlayVisible -> "正在显示 · 拖动标题可移动，− 可折叠，× 关闭窗口并继续后台同步。"
+                        service.overlayVisible -> "正在显示 · 左右滑动或点击切换 Token 与 Hooks，拖动标题可移动，× 关闭窗口并继续后台同步。"
                         service.overlayRequested -> "锁屏期间已隐藏，解锁后恢复。"
                         else -> "已授权 · 显示时同步开启后台实时连接。锁屏隐藏，关闭窗口后可继续后台同步。"
                     })

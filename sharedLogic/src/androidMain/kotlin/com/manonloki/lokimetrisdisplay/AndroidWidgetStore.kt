@@ -149,6 +149,7 @@ class AndroidWidgetStore internal constructor(
 
 /** 独立别名避免把组件读取权限与长期配对记录混用；自读不会创建新密钥。 */
 private class AndroidWidgetKeystore {
+    /** 读取已有密钥；仅在写入路径允许创建，读取路径缺失时直接失败。 */
     fun key(create: Boolean): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getKey(ALIAS, null)

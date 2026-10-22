@@ -154,6 +154,7 @@ class AndroidWidgetHttpClient @JvmOverloads constructor(
         private val aborters = ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS, SynchronousQueue(),
             { task -> Thread(task, "loki-widget-close").apply { isDaemon = true } }, ThreadPoolExecutor.DiscardPolicy())
 
+        /** 逐块读取并在超出上限前失败；每块前调用 check 以响应取消。 */
         internal fun readBounded(stream: InputStream, max: Int, check: () -> Unit = {}): ByteArray {
             val output = ByteArrayOutputStream(minOf(max, 4096)); val buffer = ByteArray(4096)
             while (true) {

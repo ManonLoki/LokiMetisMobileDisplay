@@ -14,8 +14,10 @@ internal object AndroidWidgetCodec {
     private const val V3_MAGIC = 0x4c575333
     private const val MAGIC = 0x4c575334
     const val MAX_FILE_BYTES = AndroidWidgetSnapshot.MAX_BYTES + 8192
+    /** 解码结果：裁剪后的摘要及可选的加密读取目标。 */
     data class State(val snapshot: AndroidWidgetSnapshot, val encryptedTarget: ByteArray?)
 
+    /** 按当前版本写出，编码前后都校验字段边界。 */
     fun encode(state: State): ByteArray = output { out ->
         state.snapshot.validate()
         out.writeInt(MAGIC)
@@ -49,6 +51,7 @@ internal object AndroidWidgetCodec {
         }
     }.also { require(it.size <= MAX_FILE_BYTES) }
 
+    /** 兼容读取历史版本，缺失的月窗口和启用名单按旧语义补空。 */
     fun decode(bytes: ByteArray): State {
         require(bytes.size <= MAX_FILE_BYTES)
         return input(bytes) { data ->
@@ -73,12 +76,14 @@ internal object AndroidWidgetCodec {
         }
     }
 
+    /** 读取目标单独编码，交由密钥库加密后再落盘。 */
     fun encodeTarget(target: AndroidWidgetTarget): ByteArray = output { data ->
         target.validate()
         data.writeInt(target.version); data.text(target.sourceId, 36); data.text(target.deviceId, 36)
         data.text(target.host, 253); data.writeInt(target.port); data.text(target.key, 44); data.text(target.generation, 36)
     }
 
+    /** 解密后的目标逐字段校验，任何越界都拒绝使用。 */
     fun decodeTarget(bytes: ByteArray): AndroidWidgetTarget = input(bytes) { data ->
         val version = data.readInt(); val source = data.text(36); val device = data.text(36)
         val host = data.text(253); val port = data.readInt(); val key = data.text(44); val generation = data.text(36)

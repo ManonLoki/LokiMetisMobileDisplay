@@ -24,6 +24,7 @@ internal actual fun rememberCyberMotionEnabled(): Boolean {
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    /** 系统“动画时长缩放”为 0 时视为关闭动画。 */
     fun animationsAllowed() = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
     var allowed by remember(resolver) { mutableStateOf(animationsAllowed()) }
     var foreground by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
