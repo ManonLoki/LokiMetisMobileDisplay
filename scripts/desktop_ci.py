@@ -20,12 +20,35 @@ def output(command):
     return result.stdout.strip()
 
 
+def prepare_frozen_lock(source):
+    """外部仓库未跟踪锁文件；CI 仅补齐缺失锁，并拒绝覆盖不同的既有依赖解析。"""
+    frozen = ROOT / "desktopApp" / "native" / "Cargo.lock"
+    if not frozen.is_file() or frozen.is_symlink():
+        raise RuntimeError("The committed frozen Rust dependency lock is missing")
+    content = frozen.read_bytes()
+    expected = hashlib.sha256(content).hexdigest()
+    destination = source / "Cargo.lock"
+    if not destination.exists():
+        try:
+            # 独占创建避免另一进程刚写入的锁文件被静默替换。
+            with destination.open("xb") as stream:
+                stream.write(content)
+        except FileExistsError:
+            pass
+    if not destination.is_file() or destination.is_symlink():
+        raise RuntimeError("The external Rust dependency lock must be a regular file")
+    if hashlib.sha256(destination.read_bytes()).hexdigest() != expected:
+        raise RuntimeError("The existing external Cargo.lock differs from the committed frozen lock; it was not replaced")
+    print(f"Rust dependency lock SHA256: {expected}", flush=True)
+
+
 def verify(args):
     source = args.desktop_root.resolve(strict=True)
     commit = output(["git", "-C", source, "rev-parse", "HEAD"])
     if commit != DESKTOP_COMMIT:
         raise RuntimeError("Rust source does not match the pinned CI commit")
     print(f"Rust source: {commit}", flush=True)
+    prepare_frozen_lock(source)
     for required in (source / "vendor", source / "loki_metris_pairing" / "Cargo.toml",
                      source / "loki_metris_mobile_bridge" / "Cargo.toml", source / "Cargo.lock"):
         if not required.exists():

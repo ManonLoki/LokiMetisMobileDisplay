@@ -4,6 +4,7 @@ on:
   push:
     branches: ['codex/desktop-experimental']
     paths:
+      - '.gitattributes'
       - '.github/workflows/desktop-build.yml'
       - 'desktopApp/**'
       - 'sharedUI/**'
