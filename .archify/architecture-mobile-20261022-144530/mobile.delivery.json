@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "66b3f15e-e3d5-47f5-8c7e-41ca40c8d904",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+  "output": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+  "specification": {
+    "sha256": "dd35cc64fac6408c5a2e78d79cd1104d0217f5272f1610774176abcfa8034352",
+    "bytes": 14063
+  },
+  "artifact": {
+    "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+    "bytes": 784184
+  }
+}

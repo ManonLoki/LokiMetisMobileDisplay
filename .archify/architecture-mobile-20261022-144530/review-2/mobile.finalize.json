@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-22T06:51:29.482Z",
+  "specification": {
+    "path": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+    "sha256": "0a8c597035e8f87c2a138bf051ff4dead070cedba65fcefbd22d982889048fdd",
+    "bytes": 14064
+  },
+  "artifact": {
+    "path": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+    "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+    "bytes": 784184
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/opt/homebrew/Cellar/node/26.12.0/bin/node",
+        "/Users/manonloki/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "27d12695-36d6-454d-9613-374107f08a61",
+        "stage": "check",
+        "type": "architecture",
+        "input": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+        "output": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "error": "Final artifact check failed; the previous artifact was preserved.",
+        "diagnostics": [
+          {
+            "code": "composition/desktop-readability",
+            "severity": "error",
+            "message": "Final artifact failed composition/desktop-readability.",
+            "subject": {
+              "check": "composition"
+            },
+            "evidence": {
+              "owner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1570,
+              "scale": 0.5923566878980892,
+              "text": "选择 / 订阅",
+              "detail": "edge",
+              "sourceFontPx": 8,
+              "projectedFontPx": 4.738853503184713,
+              "minimumProjectedFontPx": 6
+            },
+            "supportedFixes": [
+              "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1570px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+            ]
+          }
+        ],
+        "provenance": "failed",
+        "checker": {
+          "ok": false,
+          "file": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+          "artifact": {
+            "sha256": "47aba7ff88859c2fb27b7f5e5fa7f04302ff808ffd4a638bb8c5c0b464ecdc5b",
+            "bytes": 783812
+          },
+          "checks": [
+            {
+              "name": "single_svg",
+              "ok": true,
+              "details": [
+                "found 1 <svg> block(s)"
+              ]
+            },
+            {
+              "name": "finite_svg",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "orthogonal_arrows",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "label_route_clearance",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_crossings",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_corridors",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "container_border_runs",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "route_rhythm",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "legend_clearance",
+              "ok": true,
+              "details": []
+            }
+          ],
+          "composition": {
+            "schemaVersion": 1,
+            "profile": "showcase",
+            "status": "fail",
+            "summary": {
+              "errors": 1,
+              "warnings": 0
+            },
+            "metrics": {
+              "properCrossings": 0,
+              "resolvedCrossovers": 0,
+              "ambiguousCorridors": 0,
+              "arrowheadCollisions": 0,
+              "containerBorderRuns": 0,
+              "labelRouteClearanceIssues": 0,
+              "labelCanvasOverflowIssues": 0,
+              "minLabelRouteClearance": 5.2,
+              "desktopReadabilityIssues": 1,
+              "viewportHeightIssues": 0,
+              "minProjectedNodeTextPx": 4.738853503184713,
+              "maxBends": 2,
+              "routesOverSuggestedBends": 0,
+              "maxStretch": 1,
+              "routesOverSuggestedStretch": 0,
+              "minSegmentPx": 24,
+              "minInteriorSegmentPx": 223,
+              "shortSegmentCount": 0,
+              "shortEndpointSegmentCount": 0,
+              "shortInteriorSegmentCount": 0,
+              "microSegmentCount": 0
+            },
+            "suggestedLimits": {
+              "bendsPerRelationship": 2,
+              "stretch": 1.35,
+              "segmentPx": 16,
+              "microSegmentPx": 8
+            },
+            "routeReview": {
+              "crossings": [],
+              "detours": []
+            },
+            "leadingSpace": {
+              "measured": true,
+              "emptyTopPx": 40,
+              "emptyTopRatio": 0.035,
+              "occupiedTop": 40,
+              "viewBoxTop": 0,
+              "canvasHeight": 1132,
+              "typicalNodeHeight": 84,
+              "reviewSuggested": false
+            },
+            "desktopReadability": {
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "availableDiagramWidth": 930,
+              "actualBudgetPx": 930,
+              "limit": "legacy",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "hardFloorPx": 6,
+              "hardFloorMet": false,
+              "minimumOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumSourceTextPx": 8,
+              "minimumProjectedTextPx": 4.738853503184713,
+              "semanticTextCount": 38
+            },
+            "issues": [
+              {
+                "severity": "error",
+                "code": "composition/desktop-readability",
+                "owner": {
+                  "kind": "edge",
+                  "id": "android-ui-control",
+                  "from": "android-ui",
+                  "to": "android-engine"
+                },
+                "viewportWidth": 1440,
+                "viewportHeight": 900,
+                "availableDiagramWidth": 930,
+                "budgetBasis": "legacy-930",
+                "readerContract": "declared-wide-v1",
+                "requestedTargetPx": 7.5,
+                "requestedTargetMet": false,
+                "budgetLimit": "legacy",
+                "viewBoxWidth": 1570,
+                "scale": 0.5923566878980892,
+                "text": "选择 / 订阅",
+                "detail": "edge",
+                "sourceFontPx": 8,
+                "projectedFontPx": 4.738853503184713,
+                "minimumProjectedFontPx": 6
+              }
+            ]
+          }
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "edge",
+          "id": "android-ui-control",
+          "from": "android-ui",
+          "to": "android-engine"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1570,
+        "scale": 0.5923566878980892,
+        "text": "选择 / 订阅",
+        "detail": "edge",
+        "sourceFontPx": 8,
+        "projectedFontPx": 4.738853503184713,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1570px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/review-2/mobile.finalize.json",
+    "summaryReceipt": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/review-2/mobile.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-10-22T06:51:30.146Z",
+  "durationMs": 664,
+  "update": {
+    "status": "update_available",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.2.0",
+    "releaseNotes": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0",
+    "severity": "normal",
+    "checkedAt": "2026-10-22T06:49:02.771Z",
+    "source": "cache",
+    "noticeRequired": true,
+    "noticeText": "Archify update: 3.0.1 → 3.2.0. A previous check at 2026-10-22T06:49:02.771Z found a newer release. Release notes: https://github.com/tt-a1i/archify/releases/tag/v3.2.0. The installed Skill has not changed; ask to snooze or ignore this reminder.",
+    "eventKey": "archify@sha256:70e210265c59f24dcbdf2a502ff671104b5454e7ee7d3554aecd86bad32384f5"
+  }
+}

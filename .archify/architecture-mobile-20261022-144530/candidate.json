@@ -1,0 +1,545 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "诡秘神谕 · 当前移动架构",
+    "locale": "zh-CN",
+    "output": ".archify/architecture-mobile-20261022-144530/mobile.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/ManonLoki/LokiMetisMobileDisplay.git",
+      "revision": "62ed15366be138f0fc0daf85154cb27083130d30",
+      "provider": "github",
+      "link_mode": "web"
+    }
+  },
+  "components": [
+    {
+      "id": "desktop",
+      "type": "external",
+      "label": "LokiMetris 桌面端",
+      "sublabel": "mDNS 发现 · 配对 TCP · 摘要 HTTP",
+      "pos": [
+        450,
+        40
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidLanBrowser.kt",
+          "line": 16,
+          "end_line": 79,
+          "label": "局域网发现"
+        },
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidLanEngine.kt",
+          "line": 214,
+          "end_line": 317,
+          "label": "配对与恢复认证"
+        },
+        {
+          "path": "appleDisplay/Sources/AppleDisplay/WidgetHTTPClient.swift",
+          "line": 4,
+          "end_line": 72,
+          "label": "独立只读 HTTP"
+        }
+      ]
+    },
+    {
+      "id": "android-ui",
+      "type": "frontend",
+      "label": "Android 展示台",
+      "sublabel": "MainActivity · Compose",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/MainActivity.kt",
+          "line": 47,
+          "end_line": 85,
+          "label": "投影订阅与用户动作"
+        },
+        {
+          "path": "sharedUI/src/commonMain/kotlin/com/manonloki/lokimetrisdisplay/App.kt",
+          "line": 29,
+          "end_line": 96,
+          "label": "页面与设置路由"
+        }
+      ]
+    },
+    {
+      "id": "apple-ui",
+      "type": "frontend",
+      "label": "iPhone / iPad 展示台",
+      "sublabel": "SwiftUI 多窗口 · 共享模型",
+      "pos": [
+        860,
+        40
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/iosApp/iOSApp.swift",
+          "line": 13,
+          "end_line": 47,
+          "label": "应用级共享 owner"
+        },
+        {
+          "path": "iosApp/iosApp/LanLinkModel.swift",
+          "line": 4,
+          "end_line": 56,
+          "label": "Published 展示投影"
+        }
+      ]
+    },
+    {
+      "id": "android-engine",
+      "type": "backend",
+      "label": "Android 应用连接 owner",
+      "sublabel": "Selector / TCP · JNI + Rust",
+      "pos": [
+        40,
+        280
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/DisplayApplication.kt",
+          "line": 12,
+          "end_line": 78,
+          "label": "唯一引擎与投影分发"
+        },
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidLanEngine.kt",
+          "line": 265,
+          "end_line": 317,
+          "label": "JNI 认证与解密"
+        },
+        {
+          "path": "androidApp/src/main/c/loki_metris_jni.c",
+          "line": 1,
+          "end_line": 58,
+          "label": "JNI 映射 C ABI"
+        }
+      ]
+    },
+    {
+      "id": "apple-engine",
+      "type": "backend",
+      "label": "Apple 应用连接 owner",
+      "sublabel": "串行 Network · C ABI + Rust",
+      "pos": [
+        860,
+        280
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/iosApp/LanLinkEngine.swift",
+          "line": 29,
+          "end_line": 98,
+          "label": "网络与解码队列 owner"
+        },
+        {
+          "path": "iosApp/iosApp/LanLinkEngine+Connection.swift",
+          "line": 70,
+          "end_line": 185,
+          "label": "TCP 与恢复配对"
+        },
+        {
+          "path": "iosApp/iosApp/NativeLinkBridge.swift",
+          "line": 3,
+          "end_line": 57,
+          "label": "Rust C ABI 包装"
+        }
+      ]
+    },
+    {
+      "id": "android-storage",
+      "type": "database",
+      "label": "Android 私有存储",
+      "sublabel": "Keystore · 原子摘要与图片缓存",
+      "pos": [
+        40,
+        520
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidPairingStore.kt",
+          "line": 14,
+          "end_line": 99,
+          "label": "加密配对记录"
+        },
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidWidgetStore.kt",
+          "line": 19,
+          "end_line": 115,
+          "label": "独立摘要与只读目标"
+        },
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidAssetCache.kt",
+          "line": 25,
+          "end_line": 62,
+          "label": "校验与原子图片提交"
+        }
+      ]
+    },
+    {
+      "id": "apple-storage",
+      "type": "database",
+      "label": "Apple 配对与共享缓存",
+      "sublabel": "Keychain · App Group · 私有图片",
+      "pos": [
+        860,
+        520
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/iosApp/PairingStore.swift",
+          "line": 29,
+          "end_line": 92,
+          "label": "Keychain 配对提交"
+        },
+        {
+          "path": "iosApp/iosApp/WidgetSnapshotPublisher.swift",
+          "line": 32,
+          "end_line": 141,
+          "label": "共享缓存发布"
+        },
+        {
+          "path": "iosApp/iosApp/IOSAssetCache.swift",
+          "line": 15,
+          "end_line": 78,
+          "label": "App 私有图片缓存"
+        }
+      ]
+    },
+    {
+      "id": "android-service",
+      "type": "backend",
+      "label": "Android 前台服务与悬浮窗",
+      "sublabel": "保活同一引擎 · 订阅当前投影",
+      "pos": [
+        450,
+        520
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/AndroidDisplayService.kt",
+          "line": 35,
+          "end_line": 55,
+          "label": "投影交悬浮窗"
+        },
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/AndroidDisplayService.kt",
+          "line": 102,
+          "end_line": 149,
+          "label": "持有后台资格"
+        },
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/AndroidOverlayWindow.kt",
+          "line": 93,
+          "end_line": 112,
+          "label": "渲染已有投影"
+        }
+      ]
+    },
+    {
+      "id": "android-widget",
+      "type": "frontend",
+      "label": "Android 小组件与刷新任务",
+      "sublabel": "JobScheduler · RemoteViews",
+      "pos": [
+        40,
+        760
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/AndroidRefreshScheduler.kt",
+          "line": 14,
+          "end_line": 109,
+          "label": "独立 HTTP 刷新"
+        },
+        {
+          "path": "sharedLogic/src/androidMain/kotlin/com/manonloki/lokimetrisdisplay/AndroidWidgetHttpClient.kt",
+          "line": 24,
+          "end_line": 86,
+          "label": "只读加密请求"
+        },
+        {
+          "path": "androidApp/src/main/kotlin/com/manonloki/lokimetrisdisplay/MetrisWidgetProvider.kt",
+          "line": 26,
+          "end_line": 99,
+          "label": "读取摘要渲染"
+        }
+      ]
+    },
+    {
+      "id": "apple-widget",
+      "type": "frontend",
+      "label": "iOS Widget 扩展",
+      "sublabel": "Timeline · 只读 HTTP",
+      "pos": [
+        860,
+        760
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/LokiMetrisWidgets/LokiMetrisWidgets.swift",
+          "line": 4,
+          "end_line": 45,
+          "label": "系统 Timeline 与尺寸"
+        },
+        {
+          "path": "iosApp/WidgetShared/WidgetContainer.swift",
+          "line": 3,
+          "end_line": 45,
+          "label": "App Group 与 HTTP 更新"
+        },
+        {
+          "path": "appleDisplay/Sources/AppleDisplay/WidgetSnapshotStore.swift",
+          "line": 44,
+          "end_line": 128,
+          "label": "来源与文件事务"
+        }
+      ]
+    },
+    {
+      "id": "watch",
+      "type": "frontend",
+      "label": "Apple Watch 独立应用",
+      "sublabel": "WatchConnectivity · HTTP 后备",
+      "pos": [
+        450,
+        760
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/iosApp/PhoneWatchBridge.swift",
+          "line": 128,
+          "end_line": 218,
+          "label": "手机缓存与完整图文下发"
+        },
+        {
+          "path": "iosApp/LokiMetrisWatch/WatchLinkEngine.swift",
+          "line": 177,
+          "end_line": 214,
+          "label": "优先手机再 HTTP"
+        },
+        {
+          "path": "iosApp/LokiMetrisWatch/WatchLinkEngine.swift",
+          "line": 285,
+          "end_line": 327,
+          "label": "本表摘要读取"
+        }
+      ]
+    },
+    {
+      "id": "watch-storage",
+      "type": "database",
+      "label": "Watch 私有缓存与凭据",
+      "sublabel": "不直接读取 iPhone App Group",
+      "pos": [
+        450,
+        1000
+      ],
+      "size": [
+        260,
+        84
+      ],
+      "sources": [
+        {
+          "path": "iosApp/LokiMetrisWatch/WatchHTTPConfigurationStore.swift",
+          "line": 4,
+          "end_line": 41,
+          "label": "本表 Keychain"
+        },
+        {
+          "path": "appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift",
+          "line": 58,
+          "end_line": 104,
+          "label": "持久展示缓存与后台策略"
+        },
+        {
+          "path": "iosApp/LokiMetrisWatch/WatchLinkEngine.swift",
+          "line": 330,
+          "end_line": 443,
+          "label": "上下文和图片接收"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "android-ui-control",
+      "from": "android-ui",
+      "to": "android-engine",
+      "label": "选择 / 订阅",
+      "variant": "emphasis"
+    },
+    {
+      "id": "apple-ui-control",
+      "from": "apple-ui",
+      "to": "apple-engine",
+      "label": "意图 / 展示模型",
+      "variant": "emphasis"
+    },
+    {
+      "id": "android-lan",
+      "from": "android-engine",
+      "to": "desktop",
+      "label": "发现与认证 TCP",
+      "variant": "security"
+    },
+    {
+      "id": "apple-lan",
+      "from": "apple-engine",
+      "to": "desktop",
+      "label": "发现与认证 TCP",
+      "variant": "security"
+    },
+    {
+      "id": "android-persist",
+      "from": "android-engine",
+      "to": "android-storage",
+      "label": "凭据 / 图片 / 摘要"
+    },
+    {
+      "id": "apple-persist",
+      "from": "apple-engine",
+      "to": "apple-storage",
+      "label": "凭据 / 缓存 / 图文"
+    },
+    {
+      "id": "android-background",
+      "from": "android-service",
+      "to": "android-engine",
+      "label": "保活与订阅"
+    },
+    {
+      "id": "android-widget-cache",
+      "from": "android-widget",
+      "to": "android-storage",
+      "label": "读取 / 更新摘要"
+    },
+    {
+      "id": "android-widget-http",
+      "from": "android-widget",
+      "to": "desktop",
+      "label": "只读 HTTP",
+      "variant": "dashed"
+    },
+    {
+      "id": "apple-widget-cache",
+      "from": "apple-widget",
+      "to": "apple-storage",
+      "label": "共享缓存事务"
+    },
+    {
+      "id": "apple-widget-http",
+      "from": "apple-widget",
+      "to": "desktop",
+      "label": "只读 HTTP",
+      "variant": "dashed"
+    },
+    {
+      "id": "phone-to-watch",
+      "from": "apple-engine",
+      "to": "watch",
+      "label": "WatchConnectivity"
+    },
+    {
+      "id": "watch-http",
+      "from": "watch",
+      "to": "desktop",
+      "label": "手机不可达时 HTTP",
+      "variant": "dashed"
+    },
+    {
+      "id": "watch-private",
+      "from": "watch",
+      "to": "watch-storage",
+      "label": "本表读写"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "共享协议，不共享运行时",
+      "items": [
+        "Rust 源码来自桌面仓库，构建时分别编入 Android 与 iPhone。",
+        "Android 经 JNI，iPhone 经 C ABI；socket 与存储仍属平台。",
+        "Watch / Widget 的只读 HTTP 使用原生加密客户端。"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "数据与缓存",
+      "items": [
+        "移动端只展示桌面当日快照，不重新核算总量。",
+        "Android 实时主面板只在内存；Widget 单独保存摘要。",
+        "Apple App / Widget 共用 App Group；Watch 自有私有缓存。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "前后台所有权",
+      "items": [
+        "Android 前台服务与悬浮窗复用同一应用连接。",
+        "Android JobService 独立读摘要，不新建常驻实时引擎。",
+        "Apple 普通后台关闭长连，系统可调度短时摘要刷新。"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "配对与权限",
+      "items": [
+        "发现电脑不代表授信；首次四位码配对后保存平台凭据。",
+        "Watch 配对经 iPhone；正文图片经手机，摘要可独立刷新。",
+        "只读摘要不包含正文图片，后台间隔是申请而非保证。"
+      ]
+    }
+  ]
+}

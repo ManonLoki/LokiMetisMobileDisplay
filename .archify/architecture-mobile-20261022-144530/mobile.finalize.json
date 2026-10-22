@@ -1,0 +1,1157 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-22T06:49:02.596Z",
+  "specification": {
+    "path": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+    "sha256": "dd35cc64fac6408c5a2e78d79cd1104d0217f5272f1610774176abcfa8034352",
+    "bytes": 14063
+  },
+  "artifact": {
+    "path": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+    "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+    "bytes": 784184
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/opt/homebrew/Cellar/node/26.12.0/bin/node",
+        "/Users/manonloki/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "dd35cc64fac6408c5a2e78d79cd1104d0217f5272f1610774176abcfa8034352",
+          "bytes": 14063
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 641,
+      "command": [
+        "/opt/homebrew/Cellar/node/26.12.0/bin/node",
+        "/Users/manonloki/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "06249292-1814-41c6-852b-a57303b7d2c5",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/candidate.json",
+        "output": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "specification": {
+          "sha256": "dd35cc64fac6408c5a2e78d79cd1104d0217f5272f1610774176abcfa8034352",
+          "bytes": 14063
+        },
+        "artifact": {
+          "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+          "bytes": 784184
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "https://github.com/ManonLoki/LokiMetisMobileDisplay",
+          "revision": "62ed15366be138f0fc0daf85154cb27083130d30",
+          "references": 34
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 301,
+      "command": [
+        "/opt/homebrew/Cellar/node/26.12.0/bin/node",
+        "/Users/manonloki/.agents/skills/archify/bin/archify.mjs",
+        "check",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "artifact": {
+          "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+          "bytes": 784184
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 5,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 5.2,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.413793103448276,
+            "maxBends": 4,
+            "routesOverSuggestedBends": 2,
+            "maxStretch": 1.065,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 24,
+            "minInteriorSegmentPx": 153.8,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [
+              {
+                "left": {
+                  "id": "apple-lan",
+                  "from": "apple-engine",
+                  "to": "desktop",
+                  "label": "发现与认证 TCP",
+                  "collectionIndex": 3,
+                  "artifactIndex": 4
+                },
+                "right": {
+                  "id": "phone-to-watch",
+                  "from": "apple-engine",
+                  "to": "watch",
+                  "label": "WatchConnectivity",
+                  "collectionIndex": 11,
+                  "artifactIndex": 12
+                },
+                "point": [
+                  836,
+                  308
+                ],
+                "sharedNode": "apple-engine"
+              },
+              {
+                "left": {
+                  "id": "apple-lan",
+                  "from": "apple-engine",
+                  "to": "desktop",
+                  "label": "发现与认证 TCP",
+                  "collectionIndex": 3,
+                  "artifactIndex": 4
+                },
+                "right": {
+                  "id": "watch-http",
+                  "from": "watch",
+                  "to": "desktop",
+                  "label": "手机不可达时 HTTP",
+                  "collectionIndex": 12,
+                  "artifactIndex": 13
+                },
+                "point": [
+                  734,
+                  82
+                ],
+                "sharedNode": "desktop"
+              },
+              {
+                "left": {
+                  "id": "apple-widget-http",
+                  "from": "apple-widget",
+                  "to": "desktop",
+                  "label": "只读 HTTP",
+                  "collectionIndex": 10,
+                  "artifactIndex": 11
+                },
+                "right": {
+                  "id": "phone-to-watch",
+                  "from": "apple-engine",
+                  "to": "watch",
+                  "label": "WatchConnectivity",
+                  "collectionIndex": 11,
+                  "artifactIndex": 12
+                },
+                "point": [
+                  829.2000000000002,
+                  308
+                ]
+              },
+              {
+                "left": {
+                  "id": "apple-widget-http",
+                  "from": "apple-widget",
+                  "to": "desktop",
+                  "label": "只读 HTTP",
+                  "collectionIndex": 10,
+                  "artifactIndex": 11
+                },
+                "right": {
+                  "id": "watch-http",
+                  "from": "watch",
+                  "to": "desktop",
+                  "label": "手机不可达时 HTTP",
+                  "collectionIndex": 12,
+                  "artifactIndex": 13
+                },
+                "point": [
+                  734,
+                  148
+                ],
+                "sharedNode": "desktop"
+              },
+              {
+                "left": {
+                  "id": "phone-to-watch",
+                  "from": "apple-engine",
+                  "to": "watch",
+                  "label": "WatchConnectivity",
+                  "collectionIndex": 11,
+                  "artifactIndex": 12
+                },
+                "right": {
+                  "id": "watch-http",
+                  "from": "watch",
+                  "to": "desktop",
+                  "label": "手机不可达时 HTTP",
+                  "collectionIndex": 12,
+                  "artifactIndex": 13
+                },
+                "point": [
+                  734,
+                  788
+                ],
+                "sharedNode": "watch"
+              }
+            ],
+            "detours": [
+              {
+                "relationship": {
+                  "id": "android-widget-http",
+                  "from": "android-widget",
+                  "to": "desktop",
+                  "label": "只读 HTTP",
+                  "collectionIndex": 8,
+                  "artifactIndex": 9
+                },
+                "bends": 4,
+                "stretch": 1
+              },
+              {
+                "relationship": {
+                  "id": "apple-widget-http",
+                  "from": "apple-widget",
+                  "to": "desktop",
+                  "label": "只读 HTTP",
+                  "collectionIndex": 10,
+                  "artifactIndex": 11
+                },
+                "bends": 4,
+                "stretch": 1
+              }
+            ]
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 40,
+            "emptyTopRatio": 0.035,
+            "occupiedTop": 40,
+            "viewBoxTop": 0,
+            "canvasHeight": 1152,
+            "typicalNodeHeight": 84,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "edge",
+              "id": "android-ui-control",
+              "from": "android-ui",
+              "to": "android-engine"
+            },
+            "minimumSourceTextPx": 8,
+            "minimumProjectedTextPx": 6.413793103448276,
+            "semanticTextCount": 38
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "06249292-1814-41c6-852b-a57303b7d2c5"
+      }
+    },
+    "browser-check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 1298,
+      "command": [
+        "/opt/homebrew/Cellar/node/26.12.0/bin/node",
+        "/Users/manonloki/.agents/skills/archify/bin/archify.mjs",
+        "browser-check",
+        "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "pass",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "06249292-1814-41c6-852b-a57303b7d2c5",
+        "artifact": {
+          "path": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.html",
+          "sha256": "45bc30839d6d043ba25f53997c14169b180342331697c8edad406f42cc99bae9",
+          "bytes": 784184
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        },
+        "diagnostics": [],
+        "containment": {
+          "status": "pass",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1103,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1140,
+              "diagramWidth": 1090,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 1082,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 7.517241379310345,
+              "minimumProjectedNonEdgeTextPx": 8.456896551724139,
+              "minimumProjectedEdgeTextPx": 7.517241379310345,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "themeStates": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "light",
+              "resolvedTheme": "light",
+              "ok": true
+            },
+            {
+              "width": 1440,
+              "height": 900,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "requestedTheme": "dark",
+              "resolvedTheme": "dark",
+              "ok": true
+            }
+          ]
+        },
+        "readability": {
+          "status": "pass",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1103,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1140,
+              "diagramWidth": 1090,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 1082,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 7.517241379310345,
+              "minimumProjectedNonEdgeTextPx": 8.456896551724139,
+              "minimumProjectedEdgeTextPx": 7.517241379310345,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "viewerChrome": {
+          "status": "pass",
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900,
+              "theme": "light",
+              "innerWidth": 1440,
+              "innerHeight": 900,
+              "scrollWidth": 1440,
+              "scrollHeight": 1103,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 12,
+                "headerPx": 52,
+                "diagramChromePx": 78,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1600,
+              "height": 1000,
+              "theme": "light",
+              "innerWidth": 1600,
+              "innerHeight": 1000,
+              "scrollWidth": 1600,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "theme": "light",
+              "innerWidth": 1920,
+              "innerHeight": 1080,
+              "scrollWidth": 1920,
+              "scrollHeight": 1169,
+              "overflowX": false,
+              "overflowY": true,
+              "verticalScrollAccepted": true,
+              "overflowDisposition": "readable-vertical-scroll",
+              "readerLayout": "adaptive",
+              "readerOverflow": "authored",
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 997,
+              "diagramWidth": 967,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 60,
+                "diagramChromePx": 84,
+                "svgPx": 960,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 6.6689655172413795,
+              "minimumProjectedNonEdgeTextPx": 7.502586206896552,
+              "minimumProjectedEdgeTextPx": 6.6689655172413795,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 54,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            },
+            {
+              "width": 2048,
+              "height": 1320,
+              "theme": "light",
+              "innerWidth": 2048,
+              "innerHeight": 1320,
+              "scrollWidth": 2048,
+              "scrollHeight": 1320,
+              "overflowX": false,
+              "overflowY": false,
+              "verticalScrollAccepted": false,
+              "overflowDisposition": "contained",
+              "readerLayout": "adaptive",
+              "readerOverflow": null,
+              "readerFit": "intrinsic-height",
+              "ok": true,
+              "readerWidth": 1140,
+              "diagramWidth": 1090,
+              "pageComposition": {
+                "bodyPaddingPx": 64,
+                "headerPx": 68,
+                "diagramChromePx": 94,
+                "svgPx": 1082,
+                "cardsPx": 0,
+                "viewBoxHeight": 1152
+              },
+              "viewBoxWidth": 1160,
+              "minimumProjectedNodeTextPx": 7.517241379310345,
+              "minimumProjectedNonEdgeTextPx": 8.456896551724139,
+              "minimumProjectedEdgeTextPx": 7.517241379310345,
+              "minimumProjectedNodeText": "选择 / 订阅",
+              "minimumProjectedNodeTextDetail": "edge",
+              "minimumProjectedNodeTextOwner": {
+                "kind": "edge",
+                "id": "android-ui-control",
+                "from": "android-ui",
+                "to": "android-engine"
+              },
+              "minimumRequiredNodeTextPx": 6,
+              "readabilityOk": true,
+              "hasLegend": true,
+              "hasNavigationDock": true,
+              "legendDockIntersectionArea": 0,
+              "dockStageIntersectionArea": 0,
+              "dockStageGap": 10,
+              "requiredDockStageGap": 10,
+              "viewerChromeStageOk": true,
+              "viewerChromeReserve": 44,
+              "viewerChromeActive": true,
+              "viewerChromeOk": true,
+              "resolvedTheme": "light"
+            }
+          ]
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "mobile.browser-check.json",
+          "files": []
+        }
+      }
+    }
+  },
+  "diagnostics": [],
+  "evidence": {
+    "receipt": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.finalize.json",
+    "summaryReceipt": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.finalize-summary.json",
+    "browserCheckReceipt": "/Users/manonloki/Documents/study/kmp/LokiMetrisDisplay/.archify/architecture-mobile-20261022-144530/mobile.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "finishedAt": "2026-10-22T06:49:05.044Z",
+  "durationMs": 2448,
+  "update": {
+    "status": "update_available",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.2.0",
+    "releaseNotes": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0",
+    "severity": "normal",
+    "checkedAt": "2026-10-22T06:49:02.771Z",
+    "source": "network",
+    "noticeRequired": true,
+    "noticeText": "Archify update: 3.0.1 → 3.2.0. A newer release is available. Release notes: https://github.com/tt-a1i/archify/releases/tag/v3.2.0. The installed Skill has not changed; ask to snooze or ignore this reminder.",
+    "eventKey": "archify@sha256:70e210265c59f24dcbdf2a502ff671104b5454e7ee7d3554aecd86bad32384f5"
+  }
+}
