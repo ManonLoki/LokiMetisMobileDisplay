@@ -2,6 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -34,7 +37,7 @@ private val UsageMuted = Color(0xFF9BB0C9)
 
 /** 卡片实际宽高决定字号；精简款居中，明细超出时从顶部独立滚动。 */
 @Composable
-internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, canRefresh: Boolean = false, onRefresh: () -> Unit = {}) {
+internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration) {
     Surface(modifier = Modifier.fillMaxSize().testTag("usage-card").cyberArrival(0),
         shape = RoundedCornerShape(18.dp), color = UsageBackground, contentColor = UsageForeground,
         border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f))) {
@@ -47,11 +50,16 @@ internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, c
             val detailSize = (12f * scale).sp
             val contentWidth = (maxWidth - padding * 2).coerceAtLeast(1.dp)
             val contentHeight = (maxHeight - padding * 2).coerceAtLeast(0.dp)
-            val tokens = snapshot?.tokens
-            val compact = panel.usageDetail == UsageDetail.COMPACT || tokens == null
+            val detailBarWidth = when {
+                contentWidth.value / density.fontScale >= 440f -> 44.dp
+                contentWidth.value / density.fontScale >= 280f -> 28.dp
+                else -> 18.dp
+            }
+            val tokens = snapshot?.displayTokens
+            val compact = panel.usageDetail == UsageDetail.COMPACT
             var headerHeight by remember { mutableIntStateOf(0) }
             var detailsHeight by remember(tokens?.all?.total != null) { mutableIntStateOf(0) }
-            val quotas = snapshot?.providerQuota?.providers.orEmpty()
+            val quotas = snapshot?.displayProviderQuota?.providers.orEmpty()
             val summaryHeight = (contentHeight - with(density) { headerHeight.toDp() } - spacing).coerceAtLeast(0.dp)
             val numberHeight = if (compact) {
                 // 额度不会反向压缩主数字；卡片变窄时向下滚动查看其余内容。
@@ -67,7 +75,6 @@ internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, c
                     Text("Token 用量", fontSize = (13f * scale).sp, lineHeight = (18f * scale).sp,
                         fontWeight = FontWeight.Medium, color = UsageMuted)
                     tokens?.let { Text(it.day.date, fontSize = detailSize, lineHeight = detailSize * 1.4f, color = UsageMuted) }
-                    if (canRefresh) TextButton(onClick = onRefresh, modifier = Modifier.testTag("quota-refresh")) { Text("刷新") }
                 }
                 if (compact) {
                     // 最小高度只补足空白；内容变高后自然撑开，避免居中溢出到滚动起点上方。
@@ -83,43 +90,42 @@ internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration, c
                                 modifier = Modifier.onSizeChanged { detailsHeight = it.height })
                         }
                     }
-                    snapshot?.providerQuota?.takeIf { it.providers.isNotEmpty() }?.let {
-                        ProviderQuotaRows(it, detailed = panel.usageDetail != UsageDetail.COMPACT)
+                    snapshot?.displayProviderQuota?.takeIf { it.providers.isNotEmpty() }?.let {
+                        ProviderQuotaRows(it)
                     }
                 } else {
-                    UsageTotal(tokens.all, numberSize)
-                    UsageAmountDetails(tokens.all, detailSize, alignment = Alignment.CenterHorizontally)
-                    HorizontalDivider(color = UsageMuted.copy(alpha = 0.2f))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text("设备时区", fontSize = detailSize, color = UsageMuted)
-                        Text(tokens.day.zone, modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()).testTag("usage-timezone"),
-                            fontSize = detailSize, lineHeight = detailSize * 1.4f, color = UsageMuted,
-                            textAlign = TextAlign.End, maxLines = 1, softWrap = false)
+                    if (tokens != null) {
+                        UsageTotal(tokens.all, numberSize)
+                        UsageAmountDetails(tokens.all, detailSize, alignment = Alignment.CenterHorizontally)
+                        HorizontalDivider(color = UsageMuted.copy(alpha = 0.2f))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("设备时区", fontSize = detailSize, color = UsageMuted)
+                            Text(tokens.day.zone, modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()).testTag("usage-timezone"),
+                                fontSize = detailSize, lineHeight = detailSize * 1.4f, color = UsageMuted,
+                                textAlign = TextAlign.End, maxLines = 1, softWrap = false)
+                        }
+                    } else {
+                        Text(if (snapshot?.tokenError != null) "暂不可用" else "等待同步",
+                            style = MaterialTheme.typography.bodyMedium, color = UsageMuted)
                     }
-                    val rows = snapshot.displayUsageRows
+                    val rows = snapshot?.displayUsageRows.orEmpty()
                     if (rows.isEmpty()) Text("暂无明细", fontSize = (13f * scale).sp,
                         lineHeight = (18f * scale).sp, color = UsageMuted)
                     val agentValueWidth = (contentWidth * 0.55f).coerceAtLeast(1.dp)
                     rows.forEach { row ->
-                        val agent = row.tokenAgent
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp * scale)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                UsageAgentName(row.displayName, scale, Modifier.weight(1f))
+                                ProviderTitle(row.displayName, row.quota?.planLabel,
+                                    TextStyle(fontSize = (18f * scale).sp, lineHeight = (25f * scale).sp,
+                                        fontWeight = FontWeight.Bold), Modifier.weight(1f))
                                 row.tokenText?.let { UsageAgentTotal(it, (18f * scale).sp, Modifier.widthIn(max = agentValueWidth)) }
                             }
-                            if (agent != null) {
-                                UsageAgentDetails(agent, row.quota, detailSize)
-                            } else {
-                                row.quota?.let { provider ->
-                                    provider.plan?.let { Text(it, color = UsageMuted, style = MaterialTheme.typography.labelSmall) }
-                                    ProviderQuotaWindows(provider, detailed = true)
-                                }
-                            }
+                            UsageRowDetails(row, detailSize, detailBarWidth)
                         }
                     }
-                    snapshot.providerQuota?.takeIf { it.providers.isNotEmpty() }?.let {
+                    snapshot?.displayProviderQuota?.takeIf { it.providers.isNotEmpty() }?.let {
                         QuotaObservedAt(it)
                     }
                 }
@@ -164,56 +170,50 @@ private fun UsageTotal(amount: TerminalAmount, size: TextUnit) {
     }
 }
 
-/** Agent 名称单行加粗，过长时横向滚动而不截断。 */
+/** 名称与套餐标识底部对齐并整体横向滚动，不占用数字或额度的宽度。 */
 @Composable
-private fun UsageAgentName(name: String, scale: Float, modifier: Modifier) {
-    Text(name, modifier = modifier.horizontalScroll(rememberScrollState()),
-        fontSize = (18f * scale).sp, lineHeight = (25f * scale).sp,
-        fontWeight = FontWeight.Bold, color = UsageForeground, maxLines = 1, softWrap = false)
+private fun ProviderTitle(name: String, planLabel: String?, nameStyle: TextStyle, modifier: Modifier = Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Bottom) {
+        Text(name, style = nameStyle, color = UsageForeground, maxLines = 1, softWrap = false)
+        planLabel?.let { label ->
+            Surface(shape = RoundedCornerShape(4.dp), color = CyberCyan.copy(alpha = 0.08f),
+                contentColor = CyberCyan, border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.3f))) {
+                Text(label, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 14.sp,
+                        fontWeight = FontWeight.Medium), maxLines = 1, softWrap = false)
+            }
+        }
+    }
 }
 
-/** 每月、每周、5h 额度与精确整数共用一行；先给完整数字留宽，极窄时整行横向查看。 */
+/** 所有明细共用卡片确定的短条宽度；完整整数不缩小，极窄时整行横向查看。 */
 @Composable
-private fun UsageAgentDetails(agent: TerminalAgent, provider: ProviderQuotaEntry?, size: TextUnit) {
-    val windows = provider?.windows.orEmpty()
-    if (windows.isEmpty()) {
-        UsageAmountDetails(agent.amount, size, alignment = Alignment.End)
-        return
-    }
+private fun UsageRowDetails(row: TerminalUsageRow, size: TextUnit, barWidth: Dp) {
+    val windows = row.quota?.windows.orEmpty()
+    val exact = row.tokenText?.takeIf { row.tokenAgent?.amount?.hasNumericValue == true || it == "0" }?.let(::exactTokenAmount)
+    if (windows.isEmpty() && exact == null) return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val density = LocalDensity.current
-        val measurer = rememberTextMeasurer()
-        val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = size, lineHeight = size * 1.4f,
-            fontWeight = FontWeight.Medium)
+        val labelStyle = quotaCaptionStyle(size)
+        val percentStyle = labelStyle.copy(fontFamily = FontFamily.Monospace)
         val exactStyle = labelStyle.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal)
-        val exact = if (agent.amount.total != null) exactTokenAmount(agent.amount.text) else null
-        val labels = windows.map { "${it.kindLabel} ${it.percentText}" }
-        val fixedTextWidth = labels.sumOf { measurer.measure(it, style = labelStyle, softWrap = false).size.width } +
-            (exact?.let { measurer.measure(it, style = exactStyle, softWrap = false).size.width } ?: 0)
-        val exactCount = if (exact == null) 0 else 1
-        val gaps = with(density) { (windows.size * 3 + (windows.size + exactCount) * 6).dp.roundToPx() }
-        val barWidth = with(density) { ((maxWidth.roundToPx() - fixedTextWidth - gaps) / windows.size).toDp() }
-            .coerceIn(18.dp, 44.dp)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).widthIn(min = maxWidth)
-            .testTag("usage-agent-detail-${agent.agent}"), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .testTag("usage-agent-detail-${row.tokenAgent?.agent ?: row.quota?.provider ?: "cursor"}"), horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            windows.forEachIndexed { index, window ->
-                val color = when (window.level) { 0 -> Color(0xFFFA5252); 1 -> Color(0xFFF5C542); else -> Color(0xFF40C057) }
-                val label = window.kindLabel
-                val reset = window.resetAtUnix?.let { "，重置 ${formatQuotaTimestamp(it)}" }.orEmpty()
+            windows.forEach { window ->
+                val color = quotaRemainingColor(window)
                 Row(Modifier.clearAndSetSemantics {
-                    contentDescription = "${agent.displayName}，$label 额度剩余 ${window.percentText}$reset"
+                    contentDescription = quotaAccessibilityText(row.displayName, window)
                 }, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(labels[index], style = labelStyle, color = color, maxLines = 1, softWrap = false)
-                    LinearProgressIndicator(progress = { window.remainingTenths / 1000f },
-                        modifier = Modifier.width(barWidth).height(3.dp).testTag("quota-inline-${provider?.provider}-${window.kind}"),
-                        color = color, trackColor = UsageMuted.copy(alpha = 0.15f))
+                    Text(window.kindLabel, style = labelStyle, color = UsageMuted, maxLines = 1, softWrap = false)
+                    Text(window.percentText, style = percentStyle, color = color, maxLines = 1, softWrap = false)
+                    QuotaBalanceBar(window, Modifier.width(barWidth).testTag("quota-inline-${row.quota?.provider}-${window.kind}"))
                 }
             }
             Spacer(Modifier.weight(1f))
             exact?.let {
                 SelectionContainer {
-                    Text(it, modifier = Modifier.semantics { contentDescription = tokenAccessibilityText(agent.amount) },
+                    Text(it, modifier = Modifier.semantics { contentDescription = usageRowTokenAccessibilityText(row) },
                         style = exactStyle, color = UsageMuted, maxLines = 1, softWrap = false)
                 }
             }
@@ -254,10 +254,41 @@ private fun UsageAmountDetails(amount: TerminalAmount, size: TextUnit, alignment
 private fun tokenAccessibilityText(amount: TerminalAmount): String =
     "Token ${amount.text}" + amount.quality.takeIf { it.isNotEmpty() }?.let { "，$it" }.orEmpty()
 
+private fun usageRowTokenAccessibilityText(row: TerminalUsageRow): String {
+    val amount = row.tokenAgent?.amount
+    return "Token ${row.tokenText}" + amount?.takeIf { !it.hasNumericValue }?.let { "，${it.text}" }.orEmpty() +
+        amount?.quality?.takeIf { it.isNotEmpty() }?.let { "，$it" }.orEmpty()
+}
+
+@Composable
+private fun quotaCaptionStyle(size: TextUnit = MaterialTheme.typography.labelSmall.fontSize): TextStyle =
+    MaterialTheme.typography.labelSmall.copy(fontSize = size, lineHeight = size * 1.4f, fontWeight = FontWeight.Medium)
+
+private fun quotaRemainingColor(window: ProviderQuotaWindow): Color = when (window.level) {
+    0 -> Color(0xFFFA5252); 1 -> Color(0xFFF5C542); else -> Color(0xFF40C057)
+}
+
+/** 所有额度使用连续余额条，不添加末端圆点或活动轨间隙。 */
+@Composable
+private fun QuotaBalanceBar(window: ProviderQuotaWindow, modifier: Modifier = Modifier) {
+    val color = quotaRemainingColor(window)
+    Canvas(modifier.height(3.dp)) {
+        val radius = CornerRadius(size.height / 2f)
+        drawRoundRect(UsageMuted.copy(alpha = 0.15f), cornerRadius = radius)
+        if (window.remainingTenths > 0) {
+            drawRoundRect(color, size = Size(size.width * window.remainingTenths / 1000f, size.height), cornerRadius = radius)
+        }
+    }
+}
+
+private fun quotaAccessibilityText(name: String, window: ProviderQuotaWindow): String =
+    "$name，${window.kindLabel} 额度剩余 ${window.percentText}" +
+        window.resetAtUnix?.let { "，重置 ${formatQuotaTimestamp(it)}" }.orEmpty()
+
 
 /** 额度紧随主数字；缺失窗口不造零，明细时间使用上游观察时间。 */
 @Composable
-private fun ProviderQuotaRows(quota: ProviderQuotaSnapshot, detailed: Boolean, modifier: Modifier = Modifier, showObservedAt: Boolean = true) {
+private fun ProviderQuotaRows(quota: ProviderQuotaSnapshot, modifier: Modifier = Modifier, showObservedAt: Boolean = true) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HorizontalDivider(color = UsageMuted.copy(alpha = 0.2f))
         Text("额度剩余", style = MaterialTheme.typography.labelMedium, color = UsageMuted)
@@ -267,12 +298,12 @@ private fun ProviderQuotaRows(quota: ProviderQuotaSnapshot, detailed: Boolean, m
                 if (inlineTitle) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
                         ProviderQuotaTitle(provider, Modifier.weight(0.8f))
-                        ProviderQuotaWindows(provider, detailed, Modifier.weight(2f))
+                        ProviderQuotaWindows(provider, Modifier.weight(2f))
                     }
                 } else {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         ProviderQuotaTitle(provider)
-                        ProviderQuotaWindows(provider, detailed)
+                        ProviderQuotaWindows(provider)
                     }
                 }
             }
@@ -289,45 +320,39 @@ private fun QuotaObservedAt(quota: ProviderQuotaSnapshot) {
 
 @Composable
 private fun ProviderQuotaTitle(provider: ProviderQuotaEntry, modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(provider.label, color = UsageForeground, style = MaterialTheme.typography.labelLarge)
-        provider.plan?.let { Text(it, color = UsageMuted, style = MaterialTheme.typography.labelSmall) }
-    }
+    ProviderTitle(provider.label, provider.planLabel, MaterialTheme.typography.labelLarge, modifier)
 }
 
 @Composable
-private fun ProviderQuotaWindows(provider: ProviderQuotaEntry, detailed: Boolean, modifier: Modifier = Modifier) {
+private fun ProviderQuotaWindows(provider: ProviderQuotaEntry, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val windows = provider.windows
         if (maxWidth < (240f * LocalDensity.current.fontScale).dp) {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                windows.forEach { ProviderQuotaWindowRow(provider, it, detailed) }
+                windows.forEach { ProviderQuotaWindowRow(provider, it) }
             }
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                windows.forEach { ProviderQuotaWindowRow(provider, it, detailed, Modifier.weight(1f)) }
+                windows.forEach { ProviderQuotaWindowRow(provider, it, Modifier.weight(1f)) }
             }
         }
     }
 }
 
 @Composable
-private fun ProviderQuotaWindowRow(provider: ProviderQuotaEntry, window: ProviderQuotaWindow, detailed: Boolean,
+private fun ProviderQuotaWindowRow(provider: ProviderQuotaEntry, window: ProviderQuotaWindow,
                                    modifier: Modifier = Modifier) {
-    val color = when (window.level) { 0 -> Color(0xFFFA5252); 1 -> Color(0xFFF5C542); else -> Color(0xFF40C057) }
+    val color = quotaRemainingColor(window)
     val label = window.kindLabel
-    val reset = if (detailed) window.resetAtUnix?.let { "重置 ${formatQuotaTimestamp(it)}" } else null
+    val captionStyle = quotaCaptionStyle()
     Column(modifier.fillMaxWidth().clearAndSetSemantics {
-        contentDescription = "${provider.label}，$label 额度剩余 ${window.percentText}" + (reset?.let { "，$it" } ?: "")
+        contentDescription = quotaAccessibilityText(provider.label, window)
     }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = UsageMuted, modifier = Modifier.weight(1f))
-            Text(window.percentText, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.SemiBold)
+            Text(label, style = captionStyle, color = UsageMuted, modifier = Modifier.weight(1f))
+            Text(window.percentText, style = captionStyle.copy(fontFamily = FontFamily.Monospace), color = color)
         }
-        LinearProgressIndicator(progress = { window.remainingTenths / 1000f },
-            modifier = Modifier.fillMaxWidth().height(4.dp).testTag("quota-${provider.provider}-${window.kind}"),
-            color = color, trackColor = UsageMuted.copy(alpha = 0.15f))
-        reset?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = UsageMuted) }
+        QuotaBalanceBar(window, Modifier.fillMaxWidth().testTag("quota-${provider.provider}-${window.kind}"))
     }
 }
 

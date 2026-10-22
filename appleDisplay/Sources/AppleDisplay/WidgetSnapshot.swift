@@ -84,6 +84,11 @@ struct WidgetDisplaySnapshot: Codable, Equatable {
     let hooksAvailable: Bool
     let hooks: [WidgetHook]
     var providerQuota: ProviderQuotaSnapshot? = nil
+    /// nil 为旧桌面未声明；空数组表示明确停用所有 Agent。
+    var enabledAgents: [String]? = nil
+    var displayTokens: WidgetTokens? { tokens?.forDisplay(enabledAgents: enabledAgents) }
+    var displayProviderQuota: ProviderQuotaSnapshot? { providerQuota?.forDisplay(enabledAgents: enabledAgents) }
+    var displayUsageRows: [WidgetUsageRow] { WidgetUsageRow.project(tokens: tokens, quota: providerQuota, enabledAgents: enabledAgents) }
 
     /// 组件只接受当前版本、有界槽位以及一致的Token质量值。
     func validate() throws {
@@ -93,6 +98,7 @@ struct WidgetDisplaySnapshot: Codable, Equatable {
               hooksAvailable || hooks.isEmpty, tokenError == nil || tokens == nil else { throw WidgetSnapshotError.invalid }
         try tokens?.validate()
         try providerQuota?.validate()
+        try AgentDisplayPolicy.validate(enabledAgents)
     }
 
     /// 数量描述最近收到的摘要，不代表当前仍在线。
@@ -167,20 +173,15 @@ struct WidgetTokens: Codable, Equatable {
     let agents: [Agent]
 
     /// 额度独立存在时仍参与排序；Cursor 缺值只在 UI 行中显示 0，不改变统计快照。
-    func displayRows(quota: ProviderQuotaSnapshot?) -> [WidgetUsageRow] {
-        let matchedKeys = Set(agents.compactMap { providerQuotaKey(for: $0.agent) })
-        let tokenRows: [WidgetUsageRow] = agents.map { agent in
-            let entry = providerQuotaKey(for: agent.agent).flatMap { key in
-                quota?.providers.first { $0.provider == key }
-            }
-            return .agent(agent, quota: entry)
-        }
-        let quotaRows: [WidgetUsageRow] = (quota?.providers ?? [])
-            .filter { !matchedKeys.contains($0.provider) }
-            .map { .quota($0) }
-        let rows = tokenRows + quotaRows
-        let cursorRow: [WidgetUsageRow] = rows.contains(where: \.isZeroDefaultProvider) ? [] : [.cursorDefault]
-        return orderedAgentsForDisplay(rows + cursorRow, name: { $0.sourceName })
+    func displayRows(quota: ProviderQuotaSnapshot?, enabledAgents: [String]? = nil) -> [WidgetUsageRow] {
+        WidgetUsageRow.project(tokens: self, quota: quota, enabledAgents: enabledAgents)
+    }
+
+    /// 只读行投影；总量、统计日期和质量沿用桌面原值，不按可见分量重新求和。
+    func forDisplay(enabledAgents: [String]?) -> Self {
+        guard enabledAgents != nil else { return self }
+        return Self(day: day, observedMs: observedMs, all: all,
+                    agents: agents.filter { AgentDisplayPolicy.isEnabled($0.agent, enabledAgents: enabledAgents) })
     }
 
     /// 非法日界、重复Agent或未知质量不进入组件；不重算桌面统计口径。
@@ -201,6 +202,24 @@ enum WidgetUsageRow: Equatable, Identifiable {
     case quota(ProviderQuotaEntry)
     /// 缺少任何Cursor数据时的占位行。
     case cursorDefault
+
+    /// 独立于可选 Token 统计生成行；不为缺失统计伪造总量或质量。
+    static func project(tokens: WidgetTokens?, quota: ProviderQuotaSnapshot?, enabledAgents: [String]?) -> [Self] {
+        let visibleAgents = tokens?.forDisplay(enabledAgents: enabledAgents).agents ?? []
+        let quota = quota?.forDisplay(enabledAgents: enabledAgents)
+        let matchedKeys = Set(visibleAgents.compactMap { providerQuotaKey(for: $0.agent) })
+        let tokenRows: [Self] = visibleAgents.map { agent in
+            let entry = providerQuotaKey(for: agent.agent).flatMap { key in quota?.providers.first { $0.provider == key } }
+            return .agent(agent, quota: entry)
+        }
+        let quotaRows: [Self] = (quota?.providers ?? [])
+            .filter { !matchedKeys.contains($0.provider) }.map { .quota($0) }
+        let rows = tokenRows + quotaRows
+        let mayDefaultCursor = (tokens != nil || enabledAgents != nil)
+            && AgentDisplayPolicy.isEnabled(zeroDefaultProvider, enabledAgents: enabledAgents)
+        let cursorRow: [Self] = mayDefaultCursor && !rows.contains(where: \.isZeroDefaultProvider) ? [.cursorDefault] : []
+        return orderedAgentsForDisplay(rows + cursorRow, name: { $0.sourceName })
+    }
 
     var id: String {
         switch self {
@@ -317,6 +336,35 @@ func providerQuotaKey(for agent: String) -> String? {
     }
 }
 
+/// 桌面启用名单是独立事实；Token 分量缺失不能被解释成停用，额度也不能使停用项复活。
+enum AgentDisplayPolicy {
+    static func validate(_ enabledAgents: [String]?) throws {
+        guard let enabledAgents else { return }
+        guard enabledAgents.count <= 14,
+              Set(enabledAgents).count == enabledAgents.count,
+              enabledAgents.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 64 && !canonicalName($0).isEmpty }),
+              Set(enabledAgents.map(canonicalName)).count == enabledAgents.count
+        else { throw WidgetSnapshotError.invalid }
+    }
+
+    static func isEnabled(_ agent: String, enabledAgents: [String]?) -> Bool {
+        guard let enabledAgents else { return true }
+        let name = canonicalName(agent)
+        return enabledAgents.contains { canonicalName($0) == name }
+    }
+
+    /// serde camelCase、统计别名和额度提供方共用一个显示身份；协议原文不变。
+    private static func canonicalName(_ raw: String) -> String {
+        switch normalizedAgentName(raw) {
+        case "claude", "claudecode": "claudecode"
+        case "grok", "grokbuild": "grok"
+        case "gemini", "geminicli": "geminicli"
+        case "githubcopilot", "githubcopilotcli": "githubcopilot"
+        default: normalizedAgentName(raw)
+        }
+    }
+}
+
 private func normalizedAgentName(_ raw: String) -> String {
     raw.lowercased().filter { !$0.isWhitespace && $0 != "_" && $0 != "-" }
 }
@@ -376,6 +424,12 @@ struct ProviderQuotaSnapshot: Codable, Equatable {
     let providers: [ProviderQuotaEntry]
     /// 上游实际观测时间，与手机收到快照的时间分开显示。
     var observedDate: Date { Date(timeIntervalSince1970: TimeInterval(observedAtUnix)) }
+    /// 只过滤显示账户；缺失 Token 不影响额度资格，观测时间保持原值。
+    func forDisplay(enabledAgents: [String]?) -> Self {
+        guard enabledAgents != nil else { return self }
+        return Self(observedAtUnix: observedAtUnix,
+                    providers: providers.filter { AgentDisplayPolicy.isEnabled($0.provider, enabledAgents: enabledAgents) })
+    }
     func validate() throws {
         let order = ["codex", "claude", "cursor", "grok"]
         guard observedAtUnix >= 0, providers.count <= order.count else { throw WidgetSnapshotError.invalid }
@@ -399,7 +453,13 @@ struct ProviderQuotaEntry: Codable, Equatable {
     var label: String { switch provider { case "codex": "Codex"; case "claude": "Claude"; case "cursor": "Cursor"; default: "Grok" } }
     /// 所有面板共用的展示顺序：每月、每周、5h，缺失窗口跳过。
     var windows: [ProviderQuotaWindow] { [monthly, weekly, fiveHour].compactMap { $0 } }
-    var displayName: String { plan.map { "\(label) · \($0)" } ?? label }
+    /// 套餐只调整显示首字符，原始协议值与后续字母大小写保持不变。
+    var planLabel: String? {
+        guard let plan, let first = plan.first else { return nil }
+        return String(first).uppercased() + String(plan.dropFirst())
+    }
+    /// 名称与套餐的完整读屏描述；可见界面用独立 Tag 显示套餐。
+    var displayName: String { planLabel.map { "\(label)，套餐 \($0)" } ?? label }
     func validate() throws {
         guard !windows.isEmpty else { throw WidgetSnapshotError.invalid }
         if let plan {

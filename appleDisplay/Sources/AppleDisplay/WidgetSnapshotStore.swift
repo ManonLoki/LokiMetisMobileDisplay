@@ -30,7 +30,7 @@ struct PhoneDisplayCache: Codable, Equatable {
             hooks: value.snapshot.hooks.map {
                 LanDisplaySnapshot.Hook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior,
                     content: "", contentTruncated: false, image: nil)
-            }, assets: [], catalogError: nil, providerQuota: value.snapshot.providerQuota)
+            }, assets: [], catalogError: nil, providerQuota: value.snapshot.providerQuota, enabledAgents: value.snapshot.enabledAgents)
         let envelope = try WatchSnapshotEnvelope(version: 1, phoneId: phoneId,
             sourceId: value.sourceId, phoneReceivedAtMs: value.receivedAtMs, snapshot: snapshot)
             .preservingCachedHookImages(from: previous?.envelope, previousSummaryOnly: previous?.summaryOnly ?? true)

@@ -28,7 +28,6 @@ extension LanLinkEngine {
         let supportsWatch = try WatchCompanionFacts.hostSupports(message)
         if let report = try deviceType.afterAuthenticatedSnapshot(message) { try sendSecure(report) }
         watchCapability = supportsWatch
-        view.canQuerySnapshot = (message["capabilities"] as? [String])?.contains("snapshotQueryV1") == true
         if let id = view.selectedId { WidgetSnapshotPublisher.shared.enqueue(message, sourceId: id, phoneId: deviceId, receivedAtMs: receivedAt.epochMs, refreshTarget: refreshTarget) }
         view.snapshot = snapshot; view.receivedDate = receivedAt; view.connected = true; view.status = "已连接，正在同步"; view.error = nil
         if let id = view.selectedId, let endpoint = endpoints[id], case let .service(service, type, domain, _) = endpoint {
@@ -214,9 +213,8 @@ extension LanLinkEngine {
         } catch { /* 缓存缺失或设备尚未解锁时继续发现，不把历史数据错误投影为在线。 */ }
     }
 
-    /// 断线只撤销实时查询资格；同源旧画面继续显示，显式换源/忘记才移除。
+    /// 断线撤销小组件实时状态；同源旧画面继续显示，显式换源/忘记才移除。
     func clearLiveDisplay(clearCached: Bool = false) {
-        view.canQuerySnapshot = false; lastSnapshotQueryAt = nil
         if clearCached {
             view.snapshot = nil; view.receivedDate = nil; view.images = [:]; view.assetWarning = nil
             assetPaths = [:]

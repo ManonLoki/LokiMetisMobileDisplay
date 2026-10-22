@@ -86,7 +86,7 @@ struct DisplayWidgetView: View {
 
     /// 小尺寸：总 Token；有额度时附各账户剩余额度，并压缩日期与同步时间为一行。
     private func small(_ record: WidgetSnapshot) -> some View {
-        let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
+        let hasQuota = record.snapshot.displayProviderQuota?.providers.isEmpty == false
         return VStack(alignment: .leading, spacing: hasQuota ? 2 : 4) {
             HStack {
                 Text(hasQuota ? "Token" : "Token 用量")
@@ -95,14 +95,14 @@ struct DisplayWidgetView: View {
                 if !hasQuota { Image(systemName: "square.grid.2x2.fill").font(.caption2).foregroundStyle(accent) }
             }
             tokenValue(record, size: hasQuota ? 24 : 32, exactSize: hasQuota ? 8 : 10)
-            if let quota = record.snapshot.providerQuota, !quota.providers.isEmpty {
+            if let quota = record.snapshot.displayProviderQuota, !quota.providers.isEmpty {
                 quotaProviders(quota, compact: true)
             }
             Spacer(minLength: 0)
             if hasQuota {
                 compactTimeSummary(record)
             } else {
-                if let tokens = record.snapshot.tokens {
+                if let tokens = record.snapshot.displayTokens {
                     Text(tokens.day.date).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
                         .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
                 }
@@ -114,12 +114,12 @@ struct DisplayWidgetView: View {
 
     /// 中尺寸：左侧总量，右侧额度（无额度时为前两个 Agent），底部 Hooks 摘要与同步时间。
     private func medium(_ record: WidgetSnapshot) -> some View {
-        let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
+        let hasQuota = record.snapshot.displayProviderQuota?.providers.isEmpty == false
         return VStack(alignment: .leading, spacing: hasQuota ? 6 : 7) {
             HStack {
                 Text("Token 用量").font(.caption.weight(.medium)).foregroundStyle(accent)
                 Spacer(minLength: 0)
-                if let tokens = record.snapshot.tokens {
+                if let tokens = record.snapshot.displayTokens {
                     Text(tokens.day.date).font(.caption2).foregroundStyle(.white.opacity(0.6))
                         .accessibilityLabel("统计日期 \(tokens.day.date)，\(tokens.day.zone)")
                 }
@@ -127,7 +127,7 @@ struct DisplayWidgetView: View {
             HStack(alignment: .top, spacing: 14) {
                 tokenValue(record, size: 34).frame(maxWidth: .infinity, alignment: .leading)
                 Rectangle().fill(LinearGradient(colors: [accent.opacity(0.4), violet.opacity(0.1)], startPoint: .top, endPoint: .bottom)).frame(width: 0.5)
-                if let quota = record.snapshot.providerQuota, !quota.providers.isEmpty {
+                if let quota = record.snapshot.displayProviderQuota, !quota.providers.isEmpty {
                     quotaProviders(quota).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     agents(record).frame(maxWidth: .infinity, alignment: .leading)
@@ -159,12 +159,12 @@ struct DisplayWidgetView: View {
             .accessibilityLabel("额度更新于 \(quota.observedDate.formatted(SyncTimeFormat.full))")
             ForEach(quota.providers, id: \.provider) { provider in
                 HStack(alignment: .center, spacing: 4) {
-                    // 套餐由读屏披露，固定账户列为两个真实窗口留足宽度。
-                    Text(provider.label).font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(quotaAccent).frame(width: compact ? 32 : 36, alignment: .leading)
+                    ProviderQuotaTitle(name: provider.label, plan: provider.planLabel,
+                                       font: .system(size: 9, weight: .semibold), compact: true)
+                        .foregroundStyle(quotaAccent).frame(width: 59, alignment: .leading)
                     HStack(spacing: 5) {
                         ForEach(provider.windows, id: \.kind) { window in quotaWindow(window, compact: compact) }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(quotaDescription(provider, quota: quota))
@@ -192,6 +192,7 @@ struct DisplayWidgetView: View {
                 Text(window.label).font(.system(size: compact ? 7.5 : 8))
                 Spacer(minLength: 0)
                 Text(window.percentText).font(.system(size: compact ? 8 : 9, weight: .medium)).monospacedDigit()
+                    .fixedSize(horizontal: true, vertical: false).layoutPriority(1)
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -217,35 +218,44 @@ struct DisplayWidgetView: View {
     }
 
     @ViewBuilder private func agents(_ record: WidgetSnapshot) -> some View {
-        if let tokens = record.snapshot.tokens, !tokens.agents.isEmpty {
+        let rows = record.snapshot.displayUsageRows.filter { row in
+            // 旧桌面组件沿用真实分项；只有明确启用名单才新增缺统计的 Cursor 占位。
+            if record.snapshot.enabledAgents == nil, case .cursorDefault = row { return false }
+            return true
+        }
+        if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(tokens.agents.prefix(2)), id: \.agent) { agent in
+                ForEach(Array(rows.prefix(2))) { row in
+                    let tokenText = record.snapshot.enabledAgents == nil
+                        ? row.tokenAmount?.text ?? row.tokenText ?? "—" : row.tokenText ?? "—"
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(agent.displayName).font(.caption2).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+                            ProviderQuotaTitle(name: row.displayName, plan: row.quotaEntry?.planLabel,
+                                               font: .caption2, compact: true)
+                                .foregroundStyle(.white.opacity(0.65))
                             Spacer(minLength: 0)
-                            Text(agent.amount.compactText).font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            Text(TokenNumber.compact(tokenText)).font(.system(size: 14, weight: .semibold, design: .monospaced))
                                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
                                 .layoutPriority(1)
                         }
-                        if agent.amount.hasNumericValue {
-                            Text(agent.amount.exactText).font(.system(size: 9, weight: .medium, design: .monospaced))
+                        if let amount = row.tokenAmount, amount.hasNumericValue {
+                            Text(amount.exactText).font(.system(size: 9, weight: .medium, design: .monospaced))
                                 .monospacedDigit().foregroundStyle(.white.opacity(0.65))
                                 .lineLimit(1).minimumScaleFactor(0.4)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(agent.displayName)，\(agent.amount.text)\(agent.amount.quality.isEmpty ? "" : "，" + agent.amount.quality)")
+                    .accessibilityLabel("\(row.displayName)，\(tokenText)\(row.tokenAmount.map { $0.quality.isEmpty ? "" : "，" + $0.quality } ?? "")")
                 }
-                if tokens.agents.count > 2 {
-                    Text("另 \(tokens.agents.count - 2) 个 Agent").font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
+                if rows.count > 2 {
+                    Text("另 \(rows.count - 2) 个 Agent").font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
                 }
             }
         } else {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Agent").font(.caption2).foregroundStyle(.white.opacity(0.65))
-                Text(record.snapshot.tokens == nil ? (record.snapshot.tokenError == nil ? "尚未同步" : "暂不可用") : "无分项记录").font(.caption)
+                Text(record.snapshot.displayTokens == nil ? (record.snapshot.tokenError == nil ? "尚未同步" : "暂不可用") : "无分项记录").font(.caption)
             }
         }
     }
@@ -266,7 +276,7 @@ struct DisplayWidgetView: View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Text("Token")
-                if let tokens = record.snapshot.tokens { Text(tokens.day.date) }
+                if let tokens = record.snapshot.displayTokens { Text(tokens.day.date) }
             }.font(.caption2).lineLimit(1).minimumScaleFactor(0.75)
             tokenValue(record, size: 20, exactSize: 9)
             Text("上次同步 \(cacheStamp(record))")
@@ -276,7 +286,7 @@ struct DisplayWidgetView: View {
 
     /// 缩略值仅用于大字扫读，下方完整整数不经过浮点转换。
     private func tokenValue(_ record: WidgetSnapshot, size: CGFloat, exactSize: CGFloat = 10) -> some View {
-        let amount = record.snapshot.tokens?.all
+        let amount = record.snapshot.displayTokens?.all
         let fallback = record.snapshot.tokenError == nil ? "未同步" : "不可用"
         return VStack(alignment: .leading, spacing: 2) {
             Text(amount?.compactText ?? fallback)
@@ -307,10 +317,10 @@ struct DisplayWidgetView: View {
         let stamp = Calendar.current.isDate(record.receivedDate, inSameDayAs: entry.date)
             ? record.receivedDate.formatted(style.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
             : record.receivedDate.formatted(style.month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-        return Text((record.snapshot.tokens.map { "\($0.day.date) · " } ?? "") + "同步 " + stamp)
+        return Text((record.snapshot.displayTokens.map { "\($0.day.date) · " } ?? "") + "同步 " + stamp)
             .font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
             .lineLimit(1).minimumScaleFactor(0.75)
-            .accessibilityLabel((record.snapshot.tokens.map { "统计日期 \($0.day.date)，\($0.day.zone)，" } ?? "")
+            .accessibilityLabel((record.snapshot.displayTokens.map { "统计日期 \($0.day.date)，\($0.day.zone)，" } ?? "")
                 + "上次同步于 \(cacheDescription(record))")
     }
 

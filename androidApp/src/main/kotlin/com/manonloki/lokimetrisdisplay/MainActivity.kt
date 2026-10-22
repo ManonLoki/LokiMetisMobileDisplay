@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 /** Activity只映射应用投影、系统权限与Compose，不拥有密码窗口或socket。 */
 class MainActivity : ComponentActivity() {
     private val owner: DisplayApplication get() = application as DisplayApplication
-    private val recovery by lazy { AndroidPairingRecoveryController(this, owner) }
     private var projection by mutableStateOf(AndroidLinkProjection(TerminalLinkView("", "Android 显示端", error = "设备身份暂不可用，请重新打开应用。")))
     private val listener: (AndroidLinkProjection) -> Unit = { projection = it }
     private var panel by mutableStateOf(PanelConfiguration())
@@ -54,11 +53,10 @@ class MainActivity : ComponentActivity() {
         notificationAttempted = savedInstanceState?.getBoolean("background.notification_attempted") ?: false
         awaitingOverlay = savedInstanceState?.getBoolean("background.overlay_pending") ?: false
         panel = owner.settings?.panel ?: PanelConfiguration()
-        recovery // 在Activity进入STARTED前注册系统文件选择器。
         owner.addProjectionListener(listener)
         setContent {
             App(state = projection.view, onSelect = { owner.link?.select(it) }, onForget = { owner.link?.forget(it) },
-                onRetry = ::retryConnection, onRefreshSnapshot = { owner.link?.requestSnapshot() }, panelConfiguration = panel,
+                onRetry = ::retryConnection, panelConfiguration = panel,
                 onSavePanel = { value ->
                     val saved = owner.settings?.savePanel(value) == true
                     if (saved) panel = value
@@ -70,7 +68,6 @@ class MainActivity : ComponentActivity() {
                     saved
                 }, imageHashes = projection.images.keys, applicationName = getString(R.string.app_name),
                 platformSettings = {
-                    AndroidPairingRecoverySettings(recovery)
                     AndroidBackgroundSettings(owner, onRequestOverlay = ::requestOverlay,
                         onStartRealtime = ::startRealtime,
                         onStopRealtime = { AndroidDisplayService.stop(this); backgroundFeedback = "后台实时同步已关闭，小组件继续按系统周期刷新。" },
@@ -120,7 +117,7 @@ class MainActivity : ComponentActivity() {
         else { permissionAttempted = true; permissionPending = true; permission.launch(DisplayApplication.LOCAL_NETWORK_PERMISSION) }
     }
     /** 精确清除旧视图订阅，连接继续归Application持有。 */
-    override fun onDestroy() { recovery.close(); owner.removeProjectionListener(listener); super.onDestroy() }
+    override fun onDestroy() { owner.removeProjectionListener(listener); super.onDestroy() }
     /** 系统权限对话框正在进行时旋转不再次申请。 */
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("lan.permission_pending", permissionPending)

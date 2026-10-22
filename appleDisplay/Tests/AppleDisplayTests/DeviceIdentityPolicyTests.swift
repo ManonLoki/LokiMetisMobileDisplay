@@ -67,7 +67,7 @@ final class DeviceIdentityPolicyTests: XCTestCase {
         }
     }
 
-    func test_unsaved_recovery_does_not_report_an_active_identity() {
+    func test_failed_identity_write_does_not_report_an_active_identity() {
         XCTAssertThrowsError(try DeviceIdentityPolicy.load(readIdentity: { nil },
             pairingAccounts: { [self.desktop + "." + self.phone] }, saveIdentity: { _ in throw DeviceIdentityFailure.keychainWriteFailed })) {
             XCTAssertEqual($0 as? DeviceIdentityFailure, .keychainWriteFailed)
@@ -84,46 +84,5 @@ final class DeviceIdentityPolicyTests: XCTestCase {
                 XCTAssertEqual($0 as? DeviceIdentityFailure, .invalidPairingIndex)
             }
         }
-    }
-
-    func test_pending_recovery_can_only_resume_same_package_before_or_after_identity_commit() throws {
-        let digest = String(repeating: "a", count: 64)
-        let pending = try DeviceIdentityRecovery(previousId: phone, targetId: otherPhone, fingerprint: digest)
-        XCTAssertNoThrow(try pending.accepts(currentId: phone, targetId: otherPhone, fingerprint: digest))
-        XCTAssertNoThrow(try pending.accepts(currentId: otherPhone, targetId: otherPhone, fingerprint: digest))
-        for current in [nil, desktop] as [String?] {
-            XCTAssertThrowsError(try pending.accepts(currentId: current, targetId: otherPhone, fingerprint: digest))
-        }
-        XCTAssertThrowsError(try pending.accepts(currentId: phone, targetId: desktop, fingerprint: digest))
-        XCTAssertThrowsError(try pending.accepts(currentId: phone, targetId: otherPhone, fingerprint: String(repeating: "b", count: 64)))
-        let encoded = try JSONEncoder().encode(pending)
-        let decoded = try JSONDecoder().decode(DeviceIdentityRecovery.self, from: encoded)
-        XCTAssertEqual(decoded, pending)
-        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("secret"))
-        XCTAssertThrowsError(try DeviceIdentityRecovery(previousId: phone, targetId: SharedValidation.zeroId, fingerprint: digest))
-        XCTAssertThrowsError(try DeviceIdentityRecovery(previousId: phone, targetId: otherPhone, fingerprint: "bad"))
-    }
-
-    func test_recovery_package_explicitly_selects_only_a_complete_exact_existing_identity_group() throws {
-        let first: [String: Any] = ["clientId": desktop, "deviceId": phone, "name": "桌面一",
-            "secret": Data(repeating: 1, count: 32).base64EncodedString()]
-        let second: [String: Any] = ["clientId": otherDesktop, "deviceId": phone, "name": "桌面二",
-            "secret": Data(repeating: 2, count: 32).base64EncodedString()]
-        let accounts = [desktop + "." + phone, otherDesktop + "." + phone, desktop + "." + otherPhone]
-        XCTAssertThrowsError(try DeviceIdentityPolicy.uniquePairedIdentity(accounts: accounts))
-        XCTAssertNoThrow(try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: phone, materials: [first, second],
-            accounts: accounts, storedMaterials: [second, first]))
-        // 所选组遗漏一条、未知身份、或名称/secret发生变化，都不能以选择为由改写存量材料。
-        XCTAssertThrowsError(try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: phone, materials: [first],
-            accounts: accounts, storedMaterials: [first, second]))
-        XCTAssertThrowsError(try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: phone, materials: [first, second],
-            accounts: accounts, storedMaterials: [first]))
-        for (key, value) in [("name", "另一个名称"), ("secret", Data(repeating: 3, count: 32).base64EncodedString())] {
-            var changed = second; changed[key] = value
-            XCTAssertThrowsError(try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: phone, materials: [first, changed],
-                accounts: accounts, storedMaterials: [first, second]))
-        }
-        XCTAssertThrowsError(try DeviceIdentityPolicy.verifyRecoverySelection(deviceId: phone, materials: [first, second],
-            accounts: [desktop + "." + otherPhone], storedMaterials: [first, second]))
     }
 }

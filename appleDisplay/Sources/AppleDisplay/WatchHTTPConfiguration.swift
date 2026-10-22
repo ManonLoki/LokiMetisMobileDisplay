@@ -81,7 +81,7 @@ extension WatchSnapshotEnvelope {
             hooks: summary.snapshot.hooks.map {
                 LanDisplaySnapshot.Hook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior,
                     content: "", contentTruncated: false, image: nil)
-            }, assets: [], catalogError: nil, providerQuota: summary.snapshot.providerQuota)
+            }, assets: [], catalogError: nil, providerQuota: summary.snapshot.providerQuota, enabledAgents: summary.snapshot.enabledAgents)
         let value = Self(version: 1, phoneId: configuration.phoneId, sourceId: summary.sourceId,
             phoneReceivedAtMs: summary.receivedAtMs, snapshot: snapshot)
         try value.validate()

@@ -24,6 +24,8 @@ data class ProviderQuotaEntry(val provider: String, val plan: String?, val fiveH
         fiveHour?.validate("fiveHour"); weekly?.validate("weekly"); monthly?.validate("monthly")
     }
     val label: String get() = when (provider) { "codex" -> "Codex"; "claude" -> "Claude"; "cursor" -> "Cursor"; else -> "Grok" }
+    /** 仅用于显示，协议中的套餐标识保持原值。 */
+    val planLabel: String? get() = plan?.replaceFirstChar { it.uppercaseChar() }
     /** 所有面板共用的展示顺序：每月、每周、5h，缺失窗口跳过。 */
     val windows: List<ProviderQuotaWindow> get() = listOfNotNull(monthly, weekly, fiveHour)
 }

@@ -62,6 +62,26 @@ class AndroidWidgetDataTest {
     }
 
     @Test
+    fun enabledListIsCopiedAndExplicitlyDisabledAgentsStayHiddenAcrossStoreInstances() = isolated { _, first, second ->
+        val enabled = mutableListOf("codex", "cursor")
+        val original = full().copy(enabledAgents = enabled)
+        val record = AndroidWidgetSnapshot.fromLive(source, 1_000, original)
+        enabled.clear()
+        assertEquals(listOf("codex", "cursor"), record.snapshot.enabledAgents)
+        assertEquals(listOf("Cursor"), record.snapshot.displayUsageRows.map { it.displayName })
+        assertTrue(first.acceptLive(record, target()))
+        assertEquals(listOf("codex", "cursor"), second.read()?.snapshot?.enabledAgents)
+
+        val disabled = AndroidWidgetSnapshot.fromLive(source, 2_000, full().copy(enabledAgents = emptyList()))
+        assertTrue(second.acceptLive(disabled, target()))
+        val restarted = assertNotNull(first.read()).snapshot
+        assertEquals(emptyList(), restarted.enabledAgents)
+        assertTrue(restarted.displayUsageRows.isEmpty())
+        assertEquals("18446744073709551615", restarted.displayTokens?.all?.total)
+        assertEquals("部分 · 估算", restarted.displayTokens?.all?.quality)
+    }
+
+    @Test
     fun targetAllowsOnlyNumericLocalPeersAndCanonicalCredentials() {
         for (host in listOf("192.168.1.10", "10.0.0.1", "172.16.0.1", "169.254.1.1", "127.0.0.1",
                 "::1", "fd00::1", "fe80::1%wlan0", "::ffff:192.168.1.1")) target(host).validate()

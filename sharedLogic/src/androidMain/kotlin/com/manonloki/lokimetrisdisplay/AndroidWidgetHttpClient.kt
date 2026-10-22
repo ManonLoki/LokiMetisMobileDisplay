@@ -141,6 +141,7 @@ class AndroidWidgetHttpClient @JvmOverloads constructor(
             .put("tokenError", source.optionalString("tokenError") ?: JSONObject.NULL)
             .put("hooksAvailable", source.bool("hooksAvailable")).put("hooks", hooks).put("assets", JSONArray())
             .put("catalogError", JSONObject.NULL).put("providerQuota", source.optionalObject("providerQuota") ?: JSONObject.NULL)
+            .put("enabledAgents", source.optionalStringArray("enabledAgents", 14)?.let { JSONArray(it) } ?: JSONObject.NULL)
         return AndroidDisplayJson.snapshot(JSONObject().put("type", "snapshot").put("snapshot", reduced))
     }
 

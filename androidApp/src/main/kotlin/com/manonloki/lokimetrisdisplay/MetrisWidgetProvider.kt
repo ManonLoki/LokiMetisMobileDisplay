@@ -9,7 +9,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextPaint
+import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
 import android.util.SizeF
 import android.util.TypedValue
 import android.view.View
@@ -61,6 +64,8 @@ class MetrisWidgetProvider : AppWidgetProvider() {
         private const val COLOR_AMBER = 0xFFF4C675.toInt()
         private const val COLOR_ERROR = 0xFFFF8D99.toInt()
         private const val COLOR_QUOTA_GREEN = 0xFF40C057.toInt()
+        private const val COLOR_PLAN_BACKGROUND = 0x3364E5E3
+        private const val PLAN_TEXT_SCALE = 0.9f
 
         /** App、后台轮询或前台推送收到快照后统一刷新所有实例。 */
         fun updateAll(context: Context) {
@@ -116,7 +121,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
             if (compact) views.setViewVisibility(R.id.metris_widget_side, if (wide) View.VISIBLE else View.GONE)
 
             val snapshot = cached?.snapshot
-            val tokens = snapshot?.tokens
+            val tokens = snapshot?.displayTokens
             val amount = tokens?.all
             val precise = amount?.text ?: context.getString(R.string.metris_widget_waiting_data)
             val amountText = amount?.let { compactAmount(it.text) } ?: if (snapshot != null) "不可用" else "—"
@@ -129,7 +134,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
             }
             val hooks = hookSummary(context, snapshot)
             val status = if (snapshot == null) context.getString(R.string.metris_widget_open_to_pair) else null
-            val quota = if (!compact || wide) quotaSummary(snapshot?.providerQuota, quotaProviderLimit, compact, wide) else null
+            val quota = if (!compact || wide) quotaSummary(context, snapshot?.displayProviderQuota, quotaProviderLimit, compact, wide) else null
             val syncTime = cached?.let { dateTime(it.receivedAtMs) }
             val syncText = cached?.let {
                 if (compact || quota != null) compactSyncTime(it.receivedAtMs) else "上次同步 $syncTime"
@@ -179,19 +184,45 @@ class MetrisWidgetProvider : AppWidgetProvider() {
         private data class QuotaSummary(val text: CharSequence, val description: String, val rows: Int)
 
         /** 按尺寸限制可见账户数；每个可见账户始终保留真实的每周、5h 两种窗口。 */
-        private fun quotaSummary(quota: ProviderQuotaSnapshot?, providerLimit: Int, compact: Boolean, wide: Boolean): QuotaSummary? {
+        private fun quotaSummary(context: Context, quota: ProviderQuotaSnapshot?, providerLimit: Int, compact: Boolean, wide: Boolean): QuotaSummary? {
             val providers = quota?.providers.orEmpty().filter { it.windows.isNotEmpty() }
             if (providers.isEmpty()) return null
             fun windows(provider: ProviderQuotaEntry) = provider.windows
             val visible = providers.take(providerLimit)
             val hiddenCount = providers.size - visible.size
             val description = providers.flatMap { provider -> windows(provider).map { window ->
-                "${provider.label} ${window.kindLabel}额度剩余 ${window.percentText}"
+                "${provider.label}${provider.planLabel?.let { "，套餐 $it" }.orEmpty()} ${window.kindLabel}额度剩余 ${window.percentText}"
             } }.joinToString("；")
+            val metrics = context.resources.displayMetrics
+            val paint = TextPaint().apply {
+                textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11f, metrics)
+            }
+            // 使用各响应式布局的最小可用宽度；只有完整行在常规字号下放得下才补充套餐。
+            val availableWidth = (if (compact) 80f else if (wide) 216f else 106f) * metrics.density
             val text = SpannableStringBuilder().apply {
                 visible.forEachIndexed { index, provider ->
                     if (index > 0) append("\n")
                     append(provider.label)
+                    provider.planLabel?.let { plan ->
+                        val tag = "\u00a0$plan\u00a0"
+                        val suffix = if (compact) {
+                            if (hiddenCount > 0) " +$hiddenCount" else ""
+                        } else {
+                            windows(provider).joinToString(" ", prefix = " ") { "${it.kindLabel}${it.percentText}" } +
+                                if (wide && index == visible.lastIndex && hiddenCount > 0) " +$hiddenCount" else ""
+                        }
+                        val plainWidth = paint.measureText(provider.label + " " + suffix)
+                        val tagWidth = paint.measureText(tag) * PLAN_TEXT_SCALE
+                        if (plainWidth + tagWidth <= availableWidth) {
+                            append(" ")
+                            val start = length
+                            append(tag)
+                            // RemoteViews 仅携带 Android 系统 spans，启动器无需加载应用内自定义类。
+                            setSpan(BackgroundColorSpan(COLOR_PLAN_BACKGROUND), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            setSpan(ForegroundColorSpan(COLOR_CYAN), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            setSpan(RelativeSizeSpan(PLAN_TEXT_SCALE), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                    }
                     if (compact && hiddenCount > 0) append(" +$hiddenCount")
                     if (compact) append("\n") else append(" ")
                     windows(provider).forEachIndexed { windowIndex, window ->

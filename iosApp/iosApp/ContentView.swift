@@ -77,7 +77,6 @@ struct ContentView: View {
                 usageDetail: UsageDetail(rawValue: usageDetail) ?? .compact,
                 hookLayout: HookLayout(rawValue: hookLayout) ?? .single,
                 openSettings: { selected = .settings },
-                refreshSnapshot: { link.requestSnapshot() },
                 motionEnabled: selected == .panel)
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
@@ -135,17 +134,6 @@ struct ContentView: View {
                     .accessibilityIdentifier("settings-panel")
                 }
                 deviceSettings
-                settingsSection("配对备份与恢复") {
-                    NavigationLink { PairingRecoveryView(settings: settings, link: link) } label: {
-                        SettingsCard {
-                            HStack(spacing: 12) {
-                                SettingsLabel(title: "备份与恢复配对", subtitle: "保存加密文件与恢复码，重装后恢复", symbol: "key.fill")
-                                Spacer(minLength: 0)
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                            }
-                        }
-                    }.buttonStyle(CyberPressStyle()).foregroundStyle(.primary)
-                }
                 extensionSettings
             }
             .frame(maxWidth: 680)

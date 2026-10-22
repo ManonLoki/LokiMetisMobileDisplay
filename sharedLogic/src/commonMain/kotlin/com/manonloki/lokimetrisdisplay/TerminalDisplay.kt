@@ -6,16 +6,29 @@ data class TerminalSnapshot(
     val hooksAvailable: Boolean, val hooks: List<TerminalHook>,
     val assets: List<TerminalAsset>, val catalogError: String?,
     val providerQuota: ProviderQuotaSnapshot? = null,
+    val enabledAgents: List<String>? = null,
 ) {
-    /** 合并真实Token明细和独立额度；Cursor缺值只补UI行，不改变统计快照。 */
+    /** 名单缺省时兼容旧桌面；只筛选明细，保留桌面总量、统计质量和原始快照。 */
+    val displayTokens: TerminalTokens? get() = tokens?.let { value ->
+        if (enabledAgents == null) value else value.copy(agents = value.agents.filter { agentEnabled(it.agent) })
+    }
+    /** 独立额度与Token明细使用相同启用集合，空名单明确撤下所有提供商。 */
+    val displayProviderQuota: ProviderQuotaSnapshot? get() = providerQuota?.let { value ->
+        if (enabledAgents == null) value else value.copy(providers = value.providers.filter { agentEnabled(it.provider) })
+    }
+
+    private fun agentEnabled(name: String): Boolean = enabledAgents?.any { canonicalAgentKey(it) == canonicalAgentKey(name) } ?: true
+
+    /** 合并可见明细和额度；有明确名单时仅启用Cursor才补零，不改变统计快照。 */
     val displayUsageRows: List<TerminalUsageRow> get() {
-        val agents = tokens?.agents.orEmpty()
-        val quotas = providerQuota?.providers.orEmpty()
+        val agents = displayTokens?.agents.orEmpty()
+        val quotas = displayProviderQuota?.providers.orEmpty()
         val matchedKeys = agents.mapNotNull { providerQuotaKey(it.agent) }.toSet()
         val rows = agents.map { agent ->
             TerminalUsageRow(agent, quotas.firstOrNull { it.provider == providerQuotaKey(agent.agent) })
         } + quotas.filterNot { it.provider in matchedKeys }.map { TerminalUsageRow(null, it) }
-        val cursorRow = if (tokens != null && rows.none { it.isZeroDefaultProvider })
+        val showDefaultCursor = if (enabledAgents == null) tokens != null else agentEnabled(ZERO_DEFAULT_PROVIDER)
+        val cursorRow = if (showDefaultCursor && rows.none { it.isZeroDefaultProvider })
             listOf(TerminalUsageRow(null, null)) else emptyList()
         return (rows + cursorRow).sortedBy { displayAgentOrder(it.sourceName) }
     }
@@ -29,6 +42,10 @@ data class TerminalSnapshot(
         require(tokenError == null || tokens == null)
         require(tokenError == null || tokenError.encodeToByteArray().size <= 512)
         require(catalogError == null || catalogError.encodeToByteArray().size <= 512)
+        enabledAgents?.let { names ->
+            require(names.size <= 14 && names.all { validAgent(it) && canonicalAgentKey(it).isNotEmpty() })
+            require(names.distinct().size == names.size && names.map(::canonicalAgentKey).distinct().size == names.size)
+        }
         providerQuota?.validate(); tokens?.validate(); hooks.forEach { it.validate() }; assets.forEach { it.validate() }
     }
 }
@@ -61,10 +78,10 @@ data class TerminalAgent(val agent: String, val amount: TerminalAmount) {
 }
 
 /** 只规范展示名；认证标识、缓存键和自定义名称保持原样。 */
-fun agentDisplayName(raw: String): String = when (normalizedAgentName(raw)) {
+fun agentDisplayName(raw: String): String = when (canonicalAgentKey(raw)) {
     "codex" -> "Codex"
-    "claude", "claudecode" -> "Claude Code"
-    "grok", "grokbuild" -> "Grok"
+    "claude" -> "Claude Code"
+    "grok" -> "Grok"
     "workbuddy" -> "WorkBuddy"
     "cursor" -> "Cursor"
     "opencode" -> "OpenCode"
@@ -74,28 +91,37 @@ fun agentDisplayName(raw: String): String = when (normalizedAgentName(raw)) {
     "qwencode" -> "Qwen Code"
     "kimicode" -> "Kimi Code"
     "qoder" -> "Qoder"
-    "gemini", "geminicli" -> "Gemini CLI"
-    "githubcopilot", "githubcopilotcli" -> "GitHub Copilot"
+    "gemini" -> "Gemini CLI"
+    "githubcopilot" -> "GitHub Copilot"
     else -> raw
 }
 
 /** 仅把有真实额度接口的Agent关联到提供商，未知名称不猜测。 */
-fun providerQuotaKey(agent: String): String? = when (normalizedAgentName(agent)) {
+fun providerQuotaKey(agent: String): String? = when (canonicalAgentKey(agent)) {
     "codex" -> "codex"
-    "claude", "claudecode" -> "claude"
+    "claude" -> "claude"
     "cursor" -> "cursor"
-    "grok", "grokbuild" -> "grok"
+    "grok" -> "grok"
     else -> null
 }
 
 private fun normalizedAgentName(raw: String): String = raw.lowercase().filterNot { it == '_' || it == '-' || it.isWhitespace() }
 
+/** 桌面camelCase枚举、历史协议名与展示名共用同一匹配键，不改原始标识。 */
+internal fun canonicalAgentKey(raw: String): String = when (val key = normalizedAgentName(raw)) {
+    "claude", "claudecode" -> "claude"
+    "grok", "grokbuild" -> "grok"
+    "gemini", "geminicli" -> "gemini"
+    "githubcopilot", "githubcopilotcli" -> "githubcopilot"
+    else -> key
+}
+
 /** 只改变展示顺序；未指定的Agent保持相对次序，WorkBuddy留到最后。 */
-private fun displayAgentOrder(raw: String): Int = when (normalizedAgentName(raw)) {
+private fun displayAgentOrder(raw: String): Int = when (canonicalAgentKey(raw)) {
     "codex" -> 0
-    "claude", "claudecode" -> 1
+    "claude" -> 1
     "cursor" -> 2
-    "grok", "grokbuild" -> 3
+    "grok" -> 3
     "workbuddy" -> 5
     else -> 4
 }
@@ -166,11 +192,10 @@ data class TerminalLinkView(
     val deviceId: String, val deviceName: String, val hosts: List<TerminalHost> = emptyList(),
     val selectedId: String? = null, val status: String = "正在发现桌面端…",
     val error: String? = null, val pairingCode: String? = null, val connected: Boolean = false,
-    val canQuerySnapshot: Boolean = false,
     val snapshot: TerminalSnapshot? = null, val receivedAtMs: Long? = null, val assetWarning: String? = null,
 )
 
 /** 连接失效立即丢弃全部展示内容，保留设备身份、配对选择及操作反馈。 */
 fun TerminalLinkView.withoutLiveDisplay(): TerminalLinkView = copy(
-    connected = false, canQuerySnapshot = false, snapshot = null, receivedAtMs = null, assetWarning = null,
+    connected = false, snapshot = null, receivedAtMs = null, assetWarning = null,
 )

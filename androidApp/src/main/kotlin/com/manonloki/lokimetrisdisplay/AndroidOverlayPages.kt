@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -50,8 +52,8 @@ internal class OverlayPageContent(context: Context) : LinearLayout(context) {
             return
         }
         when (page) {
-            OverlayPage.TOKEN -> tokens(snapshot.tokens)
-            OverlayPage.QUOTA -> quota(snapshot.providerQuota)
+            OverlayPage.TOKEN -> tokens(snapshot.displayTokens)
+            OverlayPage.QUOTA -> quota(snapshot.displayProviderQuota)
             OverlayPage.HOOKS -> hooks(snapshot)
         }
         text("同步于 " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
@@ -86,7 +88,7 @@ internal class OverlayPageContent(context: Context) : LinearLayout(context) {
             return
         }
         quota.providers.forEach { provider ->
-            text(provider.label + (provider.plan?.let { " · $it" } ?: ""), size = 15f, bold = true)
+            quotaHeading(provider)
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
             provider.windows.forEach { window ->
                 val column = LinearLayout(context).apply {
@@ -113,6 +115,36 @@ internal class OverlayPageContent(context: Context) : LinearLayout(context) {
             addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
         text("额度更新 ${quotaTime(quota.observedAtUnix)}", size = 11f, color = MUTED)
+    }
+
+    private fun quotaHeading(provider: ProviderQuotaEntry) {
+        val heading = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.BOTTOM
+            isBaselineAligned = false
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        heading.addView(label(provider.label, size = 15f, color = FOREGROUND, bold = true).apply {
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+        },
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        provider.planLabel?.let { plan ->
+            heading.addView(label(plan, size = 11f, color = CYAN, bold = true).apply {
+                includeFontPadding = false
+                setPadding(dp(6), dp(2), dp(6), dp(2))
+                background = GradientDrawable().apply {
+                    setColor(Color.argb(24, 100, 229, 227))
+                    setStroke(dp(1), Color.argb(77, 100, 229, 227))
+                    cornerRadius = dp(4).toFloat()
+                }
+                // 标题独占一行，长套餐允许换行；下方额度窗口不参与这一行的宽度分配。
+                contentDescription = "套餐 $plan"
+            }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(6)
+            })
+        }
+        addView(heading, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
     private fun hooks(snapshot: TerminalSnapshot) {

@@ -22,7 +22,6 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     private var cacheSyncRequested = false
     private var latestSummaryOnly = false
     private var mayTransfer: Bool { parentActive || cacheSyncRequested }
-    private var retiredForRecovery = false
     private var parentGeneration: UInt64 = 0
     private var httpConfiguration: WatchHTTPConfiguration?
     private var httpRevisionFloor: UInt64 = 0
@@ -77,22 +76,10 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             self.timer = WatchProtocol.heartbeat(on: self.queue) { [weak owner = self] in owner?.tick() }
         }
     }
-    /// 排空旧 owner 的队列后永久退役；不撤销已授权配置，恢复被拒绝时仍可沿用。
-    /// 旧系统终态回调不得在新 owner 建立后再次发布配置或重启传输。
-    func retireForRecovery(completion: @escaping () -> Void) { queue.async {
-        self.retiredForRecovery = true; self.parentActive = false; self.epoch = UUID()
-        self.cancelJob(); self.pendingPause = nil; self.watchLease.deactivate()
-        self.latestData = nil; self.latestHash = nil; self.latestSnapshot = nil; self.paths = [:]
-        self.timer?.cancel(); self.timer = nil; self.timeout?.cancel(); self.timeout = nil
-        if let session = self.session, session.delegate === self { session.delegate = nil }
-        self.session = nil
-        completion()
-    } }
     /// 连接中断保留配置；换桌面、忘记配对或失去 HTTP 能力时显式传 nil 撤销。
     func configureHTTP(_ target: WidgetRefreshTarget?) { queue.async { self.configureHTTPNow(target) } }
     /// 生成新修订号的 HTTP 配置并推送；目标未变时不重复发布。
     private func configureHTTPNow(_ target: WidgetRefreshTarget?, forceRevision: Bool = false) {
-        guard !retiredForRecovery else { return }
         do {
             let stable: WidgetRefreshTarget?
             if let target, let previous = httpConfiguration?.target, previous.sameConnection(as: target) { stable = previous }
@@ -140,7 +127,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     } }
     /// 通过应用上下文下发配置与缓存；超出容量只发配置，内容未变不重复提交。
     private func publishHTTPConfiguration() {
-        guard !retiredForRecovery, let session, session.activationState == .activated, session.isPaired,
+        guard let session, session.activationState == .activated, session.isPaired,
               session.isWatchAppInstalled, let httpConfiguration else { return }
         do {
             var context: [String: Any] = ["watchHTTPConfiguration": try httpConfiguration.encoded()]
@@ -198,7 +185,6 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     }
     /// 已认证新数据立即推送最新值；持久写入由共享发布器完成。
     func cache(_ snapshot: LanDisplaySnapshot, sourceId: String, receivedAtMs: Int64) { queue.async {
-        guard !self.retiredForRecovery else { return }
         let envelope = WatchSnapshotEnvelope(version: 1, phoneId: self.phoneId, sourceId: sourceId,
             phoneReceivedAtMs: receivedAtMs, snapshot: snapshot)
         let record = PhoneDisplayCache(envelope: envelope, summaryOnly: false)
@@ -218,12 +204,11 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         self.publishHTTPConfiguration()
     } }
     /// 只有当前iPhone认证连接可供实时同步，后台或断线撤销所有前台证明。
-    func setParent(active: Bool, generation: UInt64) { queue.async { guard !self.retiredForRecovery else { return }; self.setParentNow(active: active, generation: generation); self.publish() } }
+    func setParent(active: Bool, generation: UInt64) { queue.async { self.setParentNow(active: active, generation: generation); self.publish() } }
     /// 引擎只在完整验证snapshot后调用，图片URL也仅来自已验证私有缓存。
     func update(_ snapshot: LanDisplaySnapshot, sourceId: String, receivedAtMs: Int64, generation: UInt64, paths: [String: URL]) {
         cache(snapshot, sourceId: sourceId, receivedAtMs: receivedAtMs)
         queue.async {
-            guard !self.retiredForRecovery else { return }
             do {
                 self.setParentNow(active: true, generation: generation)
                 let preferred = self.cachedDisplay.flatMap { cached -> PhoneDisplayCache? in
@@ -257,7 +242,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
                     let pending = LanDisplaySnapshot(version: chosenSnapshot.version, tokens: chosenSnapshot.tokens,
                         tokenError: chosenSnapshot.tokenError, hooksAvailable: chosenSnapshot.hooksAvailable,
                         hooks: chosenSnapshot.hooks, assets: missing, catalogError: chosenSnapshot.catalogError,
-                        providerQuota: chosenSnapshot.providerQuota)
+                        providerQuota: chosenSnapshot.providerQuota, enabledAgents: chosenSnapshot.enabledAgents)
                     let cached = (try? IOSDisplayCache.assetPaths(for: pending)) ?? [:]
                     resolved.merge(cached) { verified, _ in verified }
                 }
@@ -267,7 +252,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         }
     }
     /// 用户显式重试可以重试失败资源，不改变桌面密码窗口或信任。
-    func retry() { queue.async { guard !self.retiredForRecovery else { return }; self.failedAssets = []; self.startSync() } }
+    func retry() { queue.async { self.failedAssets = []; self.startSync() } }
     /// 切代撤销逻辑请求，物理RPC仍等其终态，不能因超时另排无限系统请求。
     private func setParentNow(active: Bool, generation: UInt64) {
         if parentGeneration != generation || parentActive != active {
@@ -282,7 +267,6 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     }
     /// 真实Watch前台回复才续租，未响应或本地时钟倒退视作不可同步。
     private func tick() {
-        guard !retiredForRecovery else { return }
         if watchSession != nil && !watchLease.reachable(now: now) { view.reachable = false; publish() }
         if parentActive && view.info != nil { publish() }
         startSync()
@@ -290,7 +274,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     /// WC可达只是发送前提，probe还必须取到Watch当前前台代次和身份。
     private func startSync() {
         if flushPendingPause() { return }
-        guard !retiredForRecovery, mayTransfer, job == nil, physicalRPC == nil, let session,
+        guard mayTransfer, job == nil, physicalRPC == nil, let session,
               session.activationState == .activated, session.isPaired, session.isWatchAppInstalled, session.isReachable else { return }
         var request = WatchRPC("probe"); let challenge = UUID().uuidString.lowercased(); request.id = challenge
         rpc(request) { [weak self] reply in
@@ -423,7 +407,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         let id = UUID(), token = epoch
         physicalRPC = id; expiredRPC = false
         let timeout = DispatchWorkItem { [weak self] in
-            guard let self, !self.retiredForRecovery, self.physicalRPC == id else { return }
+            guard let self, self.physicalRPC == id else { return }
             self.expiredRPC = true; self.cancelJob(); self.view.reachable = false
             self.view.error = "手表响应超时，等待系统结束上次请求后重试。"; self.publish()
         }
@@ -438,7 +422,6 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     private func finished(id: UUID, epoch: UUID, data: Data?, allowInactive: Bool, completed: (WatchRPCReply) -> Void) {
         guard physicalRPC == id else { return }
         physicalRPC = nil; timeout?.cancel(); timeout = nil
-        guard !retiredForRecovery else { return }
         let valid = !expiredRPC && self.epoch == epoch && (mayTransfer || allowInactive); expiredRPC = false
         if flushPendingPause() { return }
         guard valid else { if mayTransfer { startSync() }; return }
@@ -446,19 +429,18 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         completed(reply)
     }
     /// 激活成功只允许尝试probe，不能直接产生Watch在线状态。
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) { queue.async { guard !self.retiredForRecovery else { return }; if error != nil { self.view.error = "Watch配套会话暂不可用。"; self.publish() }; self.publishHTTPConfiguration(); self.startSync() } }
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) { queue.async { if error != nil { self.view.error = "Watch配套会话暂不可用。"; self.publish() }; self.publishHTTPConfiguration(); self.startSync() } }
     /// 可达变化只作为通信触发或撤销提示，不能代替Watch前台回复。
-    func sessionReachabilityDidChange(_ session: WCSession) { queue.async { guard !self.retiredForRecovery else { return }; if !session.isReachable { self.view.reachable = false; self.publish() }; self.startSync() } }
+    func sessionReachabilityDidChange(_ session: WCSession) { queue.async { if !session.isReachable { self.view.reachable = false; self.publish() }; self.startSync() } }
     /// 系统安装清单或配套状态变化后重新探测；安装成功本身不能产生在线证明。
-    func sessionWatchStateDidChange(_ session: WCSession) { queue.async { guard !self.retiredForRecovery else { return }; self.publishHTTPConfiguration(); self.startSync() } }
+    func sessionWatchStateDidChange(_ session: WCSession) { queue.async { self.publishHTTPConfiguration(); self.startSync() } }
     /// 换表中间态立即撤销旧表证明，不对新表复用任何缓存ACK。
-    func sessionDidBecomeInactive(_ session: WCSession) { queue.async { guard !self.retiredForRecovery else { return }; self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.view.reachable = false; self.publish() } }
+    func sessionDidBecomeInactive(_ session: WCSession) { queue.async { self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.view.reachable = false; self.publish() } }
     /// 系统切换到新配对Watch后重新激活，旧请求结果仍受epoch守卫。
-    func sessionDidDeactivate(_ session: WCSession) { queue.async { guard !self.retiredForRecovery else { return }; self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.acknowledgedSnapshot = nil; self.acknowledgedManifest = nil; self.acknowledgedAssets = []; self.view = PhoneWatchView(); self.facts.clear(); self.lastContextHash = nil; self.publish(); session.activate() } }
+    func sessionDidDeactivate(_ session: WCSession) { queue.async { self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.acknowledgedSnapshot = nil; self.acknowledgedManifest = nil; self.acknowledgedAssets = []; self.view = PhoneWatchView(); self.facts.clear(); self.lastContextHash = nil; self.publish(); session.activate() } }
     /// 手表先读取手机最新持久缓存，手机后台也能答复；大快照由应用上下文补送。
     func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
         queue.async {
-            guard !self.retiredForRecovery else { replyHandler((try? WatchProtocol.encode(WatchRPCReply("paused"))) ?? Data()); return }
             guard let request = try? WatchProtocol.request(data) else { replyHandler((try? WatchProtocol.encode(WatchRPCReply("invalid"))) ?? Data()); return }
             guard ["requestSync", "pause"].contains(request.op) else {
                 replyHandler((try? WatchProtocol.encode(WatchRPCReply("invalid"))) ?? Data()); return
@@ -512,7 +494,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         }
     }
     /// 只有有界元信息进入页面，不发布传输正文、文件URL或秘密；事实随同交给引擎上报桌面。
-    private func publish() { guard !retiredForRecovery else { return }; changed(view, facts, parentGeneration) }
+    private func publish() { changed(view, facts, parentGeneration) }
     /// 所有前台通信租约使用本机单调时间。
     private var now: UInt64 { DispatchTime.now().uptimeNanoseconds }
     deinit { timer?.cancel(); timeout?.cancel(); try? jobFile?.close() }

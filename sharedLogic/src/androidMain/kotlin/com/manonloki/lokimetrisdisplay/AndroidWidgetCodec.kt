@@ -9,9 +9,10 @@ import java.nio.ByteBuffer
 /** 固定版本的有界私有格式；字段由裁剪模型逐项编码，无法意外序列化完整 Hook。 */
 internal object AndroidWidgetCodec {
     private const val LEGACY_MAGIC = 0x4c575331
-    /** v2 只有三个提供商及 5h/周窗口；v3 增加 Claude 与月窗口。 */
+    /** v2 只有三个提供商及 5h/周窗口；v3 增加 Claude 与月窗口；v4 保留可空启用名单。 */
     private const val V2_MAGIC = 0x4c575332
-    private const val MAGIC = 0x4c575333
+    private const val V3_MAGIC = 0x4c575333
+    private const val MAGIC = 0x4c575334
     const val MAX_FILE_BYTES = AndroidWidgetSnapshot.MAX_BYTES + 8192
     data class State(val snapshot: AndroidWidgetSnapshot, val encryptedTarget: ByteArray?)
 
@@ -42,12 +43,17 @@ internal object AndroidWidgetCodec {
                 out.quotaWindow(item.fiveHour); out.quotaWindow(item.weekly); out.quotaWindow(item.monthly)
             }
         }
+        out.writeBoolean(snapshot.enabledAgents != null)
+        snapshot.enabledAgents?.let { agents ->
+            out.writeInt(agents.size); agents.forEach { out.text(it, 64) }
+        }
     }.also { require(it.size <= MAX_FILE_BYTES) }
 
     fun decode(bytes: ByteArray): State {
         require(bytes.size <= MAX_FILE_BYTES)
         return input(bytes) { data ->
-            val magic = data.readInt(); require(magic == MAGIC || magic == V2_MAGIC || magic == LEGACY_MAGIC)
+            val magic = data.readInt(); require(magic == MAGIC || magic == V3_MAGIC || magic == V2_MAGIC || magic == LEGACY_MAGIC)
+            val monthly = magic == MAGIC || magic == V3_MAGIC
             val source = data.text(36); val received = data.readLong(); val version = data.readInt()
             val tokens = if (data.flag()) {
                 val day = TerminalDay(data.text(10), data.text(256), data.readLong(), data.readLong())
@@ -58,11 +64,12 @@ internal object AndroidWidgetCodec {
             val hooks = List(data.count(12)) { TerminalHook(data.text(64), data.readInt(), data.text(16), "", false, null) }
             val target = data.count(4096).let { count -> if (count == 0) null else ByteArray(count).also(data::readFully) }
             val quota = if (magic != LEGACY_MAGIC && data.flag()) ProviderQuotaSnapshot(data.readLong(),
-                List(data.count(if (magic == MAGIC) 4 else 3)) {
-                    ProviderQuotaEntry(data.text(16), data.optionalText(24), data.quotaWindow(), data.quotaWindow(), if (magic == MAGIC) data.quotaWindow() else null)
+                List(data.count(if (monthly) 4 else 3)) {
+                    ProviderQuotaEntry(data.text(16), data.optionalText(24), data.quotaWindow(), data.quotaWindow(), if (monthly) data.quotaWindow() else null)
                 }) else null
+            val enabledAgents = if (magic == MAGIC && data.flag()) List(data.count(14)) { data.text(64) } else null
             State(AndroidWidgetSnapshot(source, received,
-                TerminalSnapshot(version, tokens, tokenError, hooksAvailable, hooks, emptyList(), null, quota)).also { it.validate() }, target)
+                TerminalSnapshot(version, tokens, tokenError, hooksAvailable, hooks, emptyList(), null, quota, enabledAgents)).also { it.validate() }, target)
         }
     }
 

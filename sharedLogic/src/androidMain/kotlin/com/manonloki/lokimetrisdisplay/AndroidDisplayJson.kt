@@ -14,13 +14,14 @@ object AndroidDisplayJson {
                 TerminalHook(item.string("agent"), item.int("slot"), item.string("behavior"), item.string("content"),
                     item.bool("contentTruncated"), item.optionalString("image"))
             }, value.array("assets", 64).map { TerminalAsset(it.string("hash"), it.string("mime"), it.long("length")) },
-            value.optionalString("catalogError"), value.optionalObject("providerQuota")?.let(::providerQuota))
+            value.optionalString("catalogError"), value.optionalObject("providerQuota")?.let(::providerQuota),
+            value.optionalStringArray("enabledAgents", 14))
         result.validate()
         return result
     }
     /** 额度JSON只做严格类型映射，值域与排序交由共享领域模型。 */
     private fun providerQuota(value: JSONObject): ProviderQuotaSnapshot = ProviderQuotaSnapshot(
-        value.long("observedAtUnix"), value.array("providers", 3).map { item ->
+        value.long("observedAtUnix"), value.array("providers", 4).map { item ->
             ProviderQuotaEntry(item.string("provider"), item.optionalString("plan"),
                 item.optionalObject("fiveHour")?.let(::quotaWindow), item.optionalObject("weekly")?.let(::quotaWindow),
                 item.optionalObject("monthly")?.let(::quotaWindow))
@@ -65,4 +66,10 @@ internal fun JSONObject.optionalObject(key: String): JSONObject? = if (!has(key)
 internal fun JSONObject.array(key: String, max: Int): List<JSONObject> {
     val value = get(key); require(value is JSONArray && value.length() <= max)
     return (0 until value.length()).map { index -> value.get(index).let { require(it is JSONObject); it } }
+}
+/** 缺省/null保留旧端语义，显式空数组保留为已知空集合，不转换其他JSON类型。 */
+internal fun JSONObject.optionalStringArray(key: String, max: Int): List<String>? {
+    if (!has(key) || isNull(key)) return null
+    val value = get(key); require(value is JSONArray && value.length() <= max)
+    return (0 until value.length()).map { index -> value.get(index).let { require(it is String); it } }
 }

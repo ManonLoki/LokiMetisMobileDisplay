@@ -26,6 +26,7 @@ data class AndroidWidgetSnapshot(val sourceId: String, val receivedAtMs: Long, v
                 tokens = snapshot.tokens?.let { it.copy(agents = it.agents.toList()) },
                 hooks = snapshot.hooks.map { it.copy(content = "", contentTruncated = false, image = null) },
                 assets = emptyList(), catalogError = null,
+                enabledAgents = snapshot.enabledAgents?.toList(),
             )).also { it.validate() }
         }
     }

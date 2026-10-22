@@ -80,7 +80,7 @@ struct WatchSnapshotEnvelope: Codable, Equatable {
         }
         let merged = LanDisplaySnapshot(version: snapshot.version, tokens: snapshot.tokens,
             tokenError: snapshot.tokenError, hooksAvailable: snapshot.hooksAvailable, hooks: hooks,
-            assets: retainedAssets, catalogError: snapshot.catalogError, providerQuota: snapshot.providerQuota)
+            assets: retainedAssets, catalogError: snapshot.catalogError, providerQuota: snapshot.providerQuota, enabledAgents: snapshot.enabledAgents)
         let value = Self(version: version, phoneId: phoneId, sourceId: sourceId,
             phoneReceivedAtMs: phoneReceivedAtMs, snapshot: merged)
         try value.validate()

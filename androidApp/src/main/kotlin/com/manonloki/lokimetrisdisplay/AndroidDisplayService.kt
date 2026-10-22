@@ -215,7 +215,7 @@ class AndroidDisplayService : Service() {
     private fun renderContent() {
         val view = latest
         val snapshot = view?.takeIf { it.connected && it.receivedAtMs != null }?.snapshot
-        val tokens = snapshot?.tokens
+        val tokens = snapshot?.displayTokens
         heading?.text = when {
             collapsed && page == OverlayPage.TOKEN && tokens != null -> "Token ${tokens.all.text}"
             collapsed -> page.label

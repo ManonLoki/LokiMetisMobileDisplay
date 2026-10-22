@@ -18,7 +18,6 @@ struct LanLinkView: Equatable {
     var error: String?
     var pairingCode: String?
     var connected = false
-    var canQuerySnapshot = false
     var snapshot: LanDisplaySnapshot?
     var receivedDate: Date?
     var images: [String: LanImageAsset] = [:]
@@ -43,7 +42,6 @@ final class LanLinkEngine {
     let changed: (LanLinkView) -> Void
     var view = LanLinkView()
     var active = false
-    var retiredForRecovery = false
     struct BackgroundRun {
         let id: UUID
         let completion: (Bool) -> Void
@@ -77,7 +75,6 @@ final class LanLinkEngine {
     /// init 末尾必定赋值；隐式解包只为让构造闭包可在其它属性就绪后捕获 self。
     var watch: PhoneWatchBridge!
     var deviceType: LanDeviceFormFactorReport
-    var lastSnapshotQueryAt: UInt64?
     var watchCapability = false
     var watchNonce: NSNumber?
     var watchProjectionGeneration: UInt64?
@@ -93,7 +90,7 @@ final class LanLinkEngine {
         deviceType = LanDeviceFormFactorReport(formFactor: formFactor)
         watch = PhoneWatchBridge(phoneId: deviceId) { [weak self] value, facts, generation in
             self?.queue.async { [weak self] in
-                guard let self, !self.retiredForRecovery, self.generation == generation else { return }
+                guard let self, self.generation == generation else { return }
                 self.watchProjectionGeneration = generation
                 self.view.watch = value; self.watchFacts = facts; self.publish()
                 if !value.reachable {
@@ -106,7 +103,6 @@ final class LanLinkEngine {
     /// 失败后的重试入口；首次发现由前台生命周期自动开始。
     func discover(name: String) {
         queue.async {
-            guard !self.retiredForRecovery else { return }
             self.name = name; self.intent.discover(); self.view.error = nil
             self.startBrowser()
             if self.socket == nil, self.active {
@@ -118,46 +114,11 @@ final class LanLinkEngine {
         }
     }
 
-    /// 用户主动查询只使用当前认证连接明确广告的能力，每秒合并重复点击。
-    func requestSnapshot() {
-        queue.async { [self] in
-            guard active, phase == .streaming, view.connected, view.canQuerySnapshot,
-                  lastSnapshotQueryAt.map({ now >= $0 && now - $0 >= 1_000_000_000 }) ?? true else { return }
-            lastSnapshotQueryAt = now
-            do { try sendSecure(["type": "snapshotRequest"]) }
-            catch { fail(retry: true, message: "额度查询中断，正在重新连接。") }
-        }
-    }
-
     /// 手表重试只影响系统配套通道，不重开桌面配对或LAN认证。
     func retryWatch() { watch.retry() }
 
     /// 用户选中候选才允许首次开码；可信候选使用已有秘密恢复，不重新显示密码。
-    func select(_ id: String, name: String) { queue.async { guard !self.retiredForRecovery else { return }; self.name = name; self.selectNow(id) } }
-
-    /// 导出经过唯一Keychain owner，不把主配对秘密放进常规投影。
-    func exportPairingRecovery(completion: @escaping (Result<PairingRecovery.Exported, Error>) -> Void) {
-        queue.async {
-            guard !self.retiredForRecovery else {
-                DispatchQueue.main.async { completion(.failure(WidgetSnapshotError.unavailable)) }; return
-            }
-            let result = Result { try self.store.exportRecovery() }
-            DispatchQueue.main.async { completion(result) }
-        }
-    }
-
-    /// 恢复之前永久停旧owner；完成后旧前后台回调不能重启它。
-    func stopForRecovery(completion: @escaping () -> Void) {
-        queue.async {
-            self.retiredForRecovery = true
-            self.watch.retireForRecovery { self.queue.async { completion() } }
-            self.finishBackgroundRefresh(success: false)
-            self.active = false; self.intent.leaveForeground()
-            self.browser?.cancel(); self.browser = nil; self.endpoints = [:]
-            self.cancelSession(); self.clearLiveDisplay(clearCached: true)
-            self.retry?.cancel(); self.retry = nil; self.setTickActive(false)
-        }
-    }
+    func select(_ id: String, name: String) { queue.async { self.name = name; self.selectNow(id) } }
 
     /// 保存名称只更新下一次握手的配置，不重启正在运行的连接或密码窗口。
     func updateName(_ value: String) { queue.async { self.name = value } }
@@ -165,7 +126,7 @@ final class LanLinkEngine {
     /// 系统授予后台时间后仅恢复已配对服务，收到一份摘要即关闭，不开新配对窗口。
     func refreshInBackground(name: String, completion: @escaping (Bool) -> Void) {
         queue.async { [self] in
-            guard !self.retiredForRecovery, !self.active, self.backgroundRun == nil else { completion(false); return }
+            guard !self.active, self.backgroundRun == nil else { completion(false); return }
             do {
                 guard let target = try self.backgroundTargets.load(), try self.store.load(target.id) != nil else {
                     completion(false); return
@@ -202,7 +163,6 @@ final class LanLinkEngine {
     /// 前后台由App拥有；后台尽力pause后关闭，恢复时仅使用现有信任认证。
     func setActive(_ active: Bool, name: String) {
         queue.async { [self] in
-            guard !self.retiredForRecovery else { return }
             if active, self.backgroundRun != nil { self.finishBackgroundRefresh(success: false) }
             guard active != self.active else { return }
             self.active = active; self.name = name
@@ -244,7 +204,6 @@ final class LanLinkEngine {
     /// 忘记只删除精确双端Keychain记录，失败不改变本地信任列表。
     func forget(_ id: String) {
         queue.async {
-            guard !self.retiredForRecovery else { return }
             if self.view.selectedId == id { self.cancelSession(); self.clearLiveDisplay(clearCached: true); self.view.selectedId = nil }
             do {
                 do { try self.backgroundTargets.forget(id) }

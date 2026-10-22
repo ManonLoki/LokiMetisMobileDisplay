@@ -67,35 +67,6 @@ class AndroidPairingStore(context: Context, private val deviceId: String) {
         return committed.update(clientId, encode(material), ::persist)
     }
 
-    /** 导出只有已提交的主配对材料，恢复码由系统安全随机数单独生成。 */
-    fun exportRecovery(): AndroidPairingRecovery.Exported = AndroidPairingRecovery.export(deviceId,
-        clientIds().sorted().map { requireNotNull(load(it)) })
-
-    /** 恢复先在内存用目标身份封装，journal 只接触本机 Keystore 密文。 */
-    internal fun encryptedRecoveryRecords(payload: PairingRecoveryCodec.Payload): Map<String, String> {
-        PairingRecoveryCodec.validate(payload)
-        require(payload.deviceId == deviceId) { "pairing_recovery_identity" }
-        return payload.materials.associate { it.clientId to encode(JSONObject(it.fields())) }
-    }
-
-    internal fun recoverySnapshot(): Map<String, String> = committed.snapshot()
-
-    /** 回放前逐条解密并验证，损坏journal不能先写配对或替换身份。 */
-    internal fun recoveryPayload(records: Map<String, String> = committed.snapshot()): PairingRecoveryCodec.Payload {
-        val materials = records.toSortedMap().map { (id, raw) ->
-            require(MdnsProtocol.isCanonicalDeviceId(id)) { "pairing_recovery_invalid" }
-            val value = decode(id, raw)
-            PairingRecoveryCodec.material(value.keys().asSequence().associateWith { value.get(it) })
-        }
-        return PairingRecoveryCodec.Payload(deviceId, materials).also(PairingRecoveryCodec::validate)
-    }
-
-    internal fun commitRecoveryRecords(records: Map<String, String>): Boolean {
-        val existing = committed.snapshot()
-        check(existing.isEmpty() || existing == records) { "pairing_recovery_conflict" }
-        return committed.replaceAll(records, ::persist)
-    }
-
     private fun encode(material: JSONObject): String {
         val clientId = material.getString("clientId")
         check(MdnsProtocol.isCanonicalDeviceId(clientId) && material.getString("deviceId") == deviceId) { "pairing_storage_invalid" }

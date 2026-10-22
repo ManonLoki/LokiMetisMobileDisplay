@@ -7,10 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F40000000000000000000001 /* ProviderPlanBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41000000000000000000001 /* ProviderPlanBadge.swift */; };
+		F40000000000000000000002 /* ProviderPlanBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41000000000000000000001 /* ProviderPlanBadge.swift */; };
+		F40000000000000000000003 /* ProviderPlanBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41000000000000000000001 /* ProviderPlanBadge.swift */; };
+		F40000000000000000000004 /* WatchProviderQuotaContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41000000000000000000002 /* WatchProviderQuotaContent.swift */; };
 		F30000000000000000000001 /* WatchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */; };
 		F30000000000000000000002 /* WatchHTTPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WatchHTTPConfiguration.swift */; };
 		F30000000000000000000003 /* LanDisplaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */; };
-		F10000000000000000000002 /* PairingRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000002 /* PairingRecovery.swift */; };
 		F10000000000000000000001 /* DeviceIdentityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* DeviceIdentityPolicy.swift */; };
 		E20000000000000000000005 /* WatchHTTPConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */; };
 		E20000000000000000000004 /* WidgetHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* WidgetHTTPClient.swift */; };
@@ -102,7 +105,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F20000000000000000000002 /* PairingRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/PairingRecovery.swift; sourceTree = SOURCE_ROOT; };
+		F41000000000000000000001 /* ProviderPlanBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/ProviderPlanBadge.swift; sourceTree = SOURCE_ROOT; };
+		F41000000000000000000002 /* WatchProviderQuotaContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/WatchProviderQuotaContent.swift; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000001 /* DeviceIdentityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/DeviceIdentityPolicy.swift; sourceTree = SOURCE_ROOT; };
 		E10000000000000000000002 /* WatchHTTPConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LokiMetrisWatch/WatchHTTPConfigurationStore.swift; sourceTree = SOURCE_ROOT; };
 		E10000000000000000000001 /* WatchHTTPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchHTTPConfiguration.swift; sourceTree = SOURCE_ROOT; };
@@ -223,13 +227,13 @@
 		A60000000000000000000001 /* Apple Display Sources */ = {
 			isa = PBXGroup;
 			children = (
-				F20000000000000000000002 /* PairingRecovery.swift */,
 				F20000000000000000000001 /* DeviceIdentityPolicy.swift */,
 				A80000000000000000000015 /* LanImageAsset.swift */,
 				A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */,
 				A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */,
 				A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */,
 				A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */,
+				F41000000000000000000001 /* ProviderPlanBadge.swift */,
 				A20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift */,
 				D20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift */,
 				C10000000000000000000002 /* WidgetHTTPClient.swift */,
@@ -252,6 +256,7 @@
 				B10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift */,
 				B10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift */,
 				B10000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift */,
+				F41000000000000000000002 /* WatchProviderQuotaContent.swift */,
 				B10000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift */,
 			);
 			name = "Watch Sources";
@@ -486,11 +491,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F10000000000000000000002 /* PairingRecovery.swift in Sources */,
 				F10000000000000000000001 /* DeviceIdentityPolicy.swift in Sources */,
 				A80000000000000000000016 /* LanImageAsset.swift in Sources */,
 				E20000000000000000000001 /* WatchHTTPConfiguration.swift in Sources */,
 				B20000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */,
+				F40000000000000000000001 /* ProviderPlanBadge.swift in Sources */,
 				A10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
 				D10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift in Sources */,
 				C20000000000000000000102 /* WidgetHTTPClient.swift in Sources */,
@@ -513,6 +518,7 @@
 				F30000000000000000000001 /* WatchProtocol.swift in Sources */,
 				F30000000000000000000002 /* WatchHTTPConfiguration.swift in Sources */,
 				F30000000000000000000003 /* LanDisplaySnapshot.swift in Sources */,
+				F40000000000000000000002 /* ProviderPlanBadge.swift in Sources */,
 				A10000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
 				D10000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift in Sources */,
 				C20000000000000000000202 /* WidgetHTTPClient.swift in Sources */,
@@ -537,7 +543,9 @@
 				B20000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/WatchDisplayStore.swift in Sources */,
 				B20000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/WatchAssetCache.swift in Sources */,
 				B20000000000000000000004 /* LokiMetrisWatch/WatchLinkEngine.swift in Sources */,
+				F40000000000000000000004 /* WatchProviderQuotaContent.swift in Sources */,
 				B20000000000000000000005 /* LokiMetrisWatch/LokiMetrisWatchApp.swift in Sources */,
+				F40000000000000000000003 /* ProviderPlanBadge.swift in Sources */,
 				B20000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/WidgetSnapshot.swift in Sources */,
 				D10000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/SharedSupport.swift in Sources */,
 				B20000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */,

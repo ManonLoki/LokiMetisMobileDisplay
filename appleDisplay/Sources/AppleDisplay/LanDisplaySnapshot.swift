@@ -31,6 +31,11 @@ struct LanDisplaySnapshot: Codable, Equatable {
     let assets: [Asset]
     let catalogError: String?
     var providerQuota: ProviderQuotaSnapshot? = nil
+    /// nil 为旧桌面未声明；空数组表示明确停用所有 Agent。
+    var enabledAgents: [String]? = nil
+    var displayTokens: WidgetTokens? { tokens?.forDisplay(enabledAgents: enabledAgents) }
+    var displayProviderQuota: ProviderQuotaSnapshot? { providerQuota?.forDisplay(enabledAgents: enabledAgents) }
+    var displayUsageRows: [WidgetUsageRow] { WidgetUsageRow.project(tokens: tokens, quota: providerQuota, enabledAgents: enabledAgents) }
 
     /// 明文已经通过共享会话认证，此处只解析展示协议及宿主容量边界。
     static func decode(_ message: [String: Any]) throws -> Self {
@@ -57,7 +62,7 @@ struct LanDisplaySnapshot: Codable, Equatable {
             throw WidgetSnapshotError.invalid
         }
         let summary = WidgetDisplaySnapshot(version: value.version, tokens: value.tokens, tokenError: value.tokenError,
-            hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) }, providerQuota: value.providerQuota)
+            hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) }, providerQuota: value.providerQuota, enabledAgents: value.enabledAgents)
         try summary.validate()
     }
 }

@@ -70,6 +70,22 @@ final class ProviderQuotaTests: XCTestCase {
             XCTAssertThrowsError(try WidgetSnapshot.authenticatedMessage(JSONSerialization.data(withJSONObject: raw), sourceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", receivedAtMs: 1_000))
         }
     }
+    /// 套餐标签只改显示首字母；编码和解码仍保留桌面提供的原值。
+    func test_plan_tag_capitalizes_only_first_character_without_changing_wire_value() throws {
+        for (raw, shown) in [("ultra", "Ultra"), ("pro", "Pro"), ("proMAX", "ProMAX"), ("team-plus", "Team-plus")] {
+            let entry = ProviderQuotaEntry(provider: "cursor", plan: raw, fiveHour: nil,
+                weekly: ProviderQuotaWindow(kind: "weekly", usedTenths: 300, resetAtUnix: nil))
+            XCTAssertEqual(entry.planLabel, shown)
+            XCTAssertEqual(entry.displayName, "Cursor，套餐 " + shown)
+            let encoded = try SharedJSON.encoder.encode(entry)
+            let decoded = try SharedJSON.decoder.decode(ProviderQuotaEntry.self, from: encoded)
+            XCTAssertEqual(decoded.plan, raw)
+        }
+        let noPlan = ProviderQuotaEntry(provider: "codex", plan: nil, fiveHour: nil,
+            weekly: ProviderQuotaWindow(kind: "weekly", usedTenths: 0, resetAtUnix: nil))
+        XCTAssertNil(noPlan.planLabel)
+        XCTAssertEqual(noPlan.displayName, "Codex")
+    }
     /// 三色阈值与耗尽/满额在各Apple终端共享整数语义。
     func test_percent_and_color_boundaries_keep_zero_balance() throws {
         for (remaining, level) in [(0,0), (200,0), (201,1), (500,1), (501,2), (1000,2)] {

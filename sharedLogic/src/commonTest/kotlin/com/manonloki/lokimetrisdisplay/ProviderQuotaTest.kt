@@ -37,8 +37,8 @@ class ProviderQuotaTest {
             assertEquals(level, ProviderQuotaWindow("weekly", 1000 - remaining, null).level)
         }
         val snapshot = TerminalSnapshot(1, null, null, false, emptyList(), emptyList(), null, ProviderQuotaSnapshot(123, listOf(weekly())))
-        val live = TerminalLinkView("id", "name", connected = true, canQuerySnapshot = true, snapshot = snapshot)
+        val live = TerminalLinkView("id", "name", connected = true, snapshot = snapshot)
         assertNull(live.withoutLiveDisplay().snapshot)
-        assertFalse(live.withoutLiveDisplay().canQuerySnapshot)
+        assertFalse(live.withoutLiveDisplay().connected)
     }
 }
