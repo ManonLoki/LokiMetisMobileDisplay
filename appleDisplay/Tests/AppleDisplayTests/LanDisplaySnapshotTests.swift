@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 import XCTest
 @testable import AppleDisplay
 
@@ -65,5 +66,29 @@ final class LanDisplaySnapshotTests: XCTestCase {
         hooks[0]["content"] = String(repeating: "界", count: 171)
         snapshot["hooks"] = hooks; raw["snapshot"] = snapshot
         XCTAssertThrowsError(try LanDisplaySnapshot.decode(raw))
+    }
+
+    /// 主 LAN 与 Watch 消费同一元信息映射；引用顺序不能改变清单优先级，也不能丢失 UInt64 高位。
+    func test_shared_transfer_mapping_preserves_manifest_indices_and_unsigned_lengths() {
+        let assets = (1...4).map {
+            LanDisplaySnapshot.Asset(hash: String(format: "%064x", $0), mime: "image/gif", length: UInt64($0))
+        }
+        let hooks = [3, 1, 2].enumerated().map { slot, index in
+            LanDisplaySnapshot.Hook(agent: "codex", slot: slot + 1, behavior: .running,
+                content: "", contentTruncated: false, image: assets[index].hash)
+        }
+        let snapshot = LanDisplaySnapshot(version: 1, tokens: nil, tokenError: nil, hooksAvailable: true,
+            hooks: hooks, assets: assets, catalogError: nil)
+        let excluded: Set<String> = [assets[2].hash]
+        let pending = AssetTransferRules.shared.pendingIndices(manifest: snapshot.transferManifest, excludedHashes: excluded)
+        XCTAssertEqual(pending.map(\.intValue), [1, 3])
+        XCTAssertFalse(AssetTransferRules.shared.keepInFlight(asset: assets[0].transferAsset, latest: snapshot.transferManifest))
+        XCTAssertTrue(WatchTransferPolicy.keepInFlight(asset: assets[1], latest: snapshot))
+        let changed = LanDisplaySnapshot.Asset(hash: assets[1].hash, mime: assets[1].mime, length: assets[1].length + 1)
+        XCTAssertFalse(WatchTransferPolicy.keepInFlight(asset: changed, latest: snapshot))
+
+        let wide = LanDisplaySnapshot.Asset(hash: assets[1].hash, mime: assets[1].mime, length: UInt64.max)
+        XCTAssertEqual(wide.transferAsset.byteLength, "18446744073709551615")
+        XCTAssertFalse(AssetTransferRules.shared.keepInFlight(asset: wide.transferAsset, latest: snapshot.transferManifest))
     }
 }

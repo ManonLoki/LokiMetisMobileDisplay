@@ -55,12 +55,15 @@ final class WidgetRefreshStoreTests: XCTestCase {
     func test_target_rotation_preserves_identical_generation_and_rejects_old_response() throws {
         try isolated { store in
             XCTAssertNil(try store.loadRefreshTarget())
-            let initial = try store.saveRefreshTarget(target())
-            let same = try store.saveRefreshTarget(target())
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: target())
+            let initial = try XCTUnwrap(store.loadRefreshTarget())
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: target())
+            let same = try XCTUnwrap(store.loadRefreshTarget())
             XCTAssertEqual(initial, same)
             XCTAssertEqual(try store.loadRefreshTarget(), initial)
             XCTAssertTrue(try store.saveFetchedSnapshot(record(), for: initial))
-            let changed = try store.saveRefreshTarget(target(host: "192.168.1.11"))
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: target(host: "192.168.1.11"))
+            let changed = try XCTUnwrap(store.loadRefreshTarget())
             XCTAssertNotEqual(initial.generation, changed.generation)
             XCTAssertFalse(try store.saveFetchedSnapshot(record(at: 5000), for: initial))
             XCTAssertEqual(try store.load().receivedAtMs, 3000)
@@ -68,14 +71,35 @@ final class WidgetRefreshStoreTests: XCTestCase {
         }
     }
 
+    /// Codable 绕过构造器的损坏整数也不能在跨语言映射时截断碰撞或崩溃。
+    func test_decoded_out_of_range_connection_fields_fail_comparison_safely() throws {
+        let valid = try target()
+        let data = try SharedJSON.encoder.encode(valid)
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for field in ["version", "port"] {
+            for value in [Int.min, Int.max] {
+                var object = original
+                object[field] = value
+                let corrupt = try SharedJSON.decoder.decode(WidgetRefreshTarget.self,
+                    from: JSONSerialization.data(withJSONObject: object))
+                XCTAssertThrowsError(try corrupt.validate())
+                XCTAssertFalse(corrupt.sameConnection(as: valid))
+                XCTAssertFalse(corrupt.sameConnection(as: corrupt))
+            }
+        }
+    }
+
     func test_switch_revokes_target_even_without_snapshot_and_forgetting_is_source_specific() throws {
         try isolated { store in
-            let initial = try store.saveRefreshTarget(target())
+            // 模拟旧摘要已被清理但授权文件仍存在的盘面。
+            try WidgetStoreFixture.writeTarget(target(), to: store)
+            let initial = try XCTUnwrap(store.loadRefreshTarget())
+            XCTAssertThrowsError(try store.load())
             try store.selectSource(other)
             XCTAssertNil(try store.loadRefreshTarget())
             XCTAssertFalse(try store.saveFetchedSnapshot(record(), for: initial))
-            try store.save(record(sourceId: other))
-            let selected = try store.saveRefreshTarget(target(sourceId: other))
+            try store.saveAuthenticatedSnapshot(record(sourceId: other), refreshTarget: target(sourceId: other))
+            let selected = try XCTUnwrap(store.loadRefreshTarget())
             try store.forgetSource(source)
             XCTAssertEqual(try store.loadRefreshTarget(), selected)
             XCTAssertEqual(try store.load().sourceId, other)
@@ -88,8 +112,8 @@ final class WidgetRefreshStoreTests: XCTestCase {
 
     func test_clear_revokes_credentials_and_cached_summary() throws {
         try isolated { store in
-            let initial = try store.saveRefreshTarget(target())
-            try store.save(record())
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: target())
+            let initial = try XCTUnwrap(store.loadRefreshTarget())
             try store.selectSource(source)
             XCTAssertEqual(try store.loadRefreshTarget(), initial)
             try store.clear(); try store.clear()
@@ -100,8 +124,8 @@ final class WidgetRefreshStoreTests: XCTestCase {
 
     func test_fetch_does_not_replace_newer_app_snapshot_or_wrong_source() throws {
         try isolated { store in
-            let initial = try store.saveRefreshTarget(target())
-            try store.save(record(at: 5000))
+            try store.saveAuthenticatedSnapshot(record(at: 5000), refreshTarget: target())
+            let initial = try XCTUnwrap(store.loadRefreshTarget())
             XCTAssertFalse(try store.saveFetchedSnapshot(record(at: 4000), for: initial))
             XCTAssertFalse(try store.saveFetchedSnapshot(record(at: 6000), for: initial, startedAtMs: 4000))
             XCTAssertThrowsError(try store.saveFetchedSnapshot(record(at: 6000, sourceId: other), for: initial))
@@ -190,7 +214,7 @@ final class WidgetRefreshStoreTests: XCTestCase {
                 summaryOnly: false)
             try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
             // 模拟两次原子写之间进程结束：摘要已更新，完整投影仍旧。
-            try store.save(record(at: 8000))
+            try WidgetStoreFixture.writeSnapshot(record(at: 8000), to: store)
             let recovered = try XCTUnwrap(store.loadDisplayCache())
             XCTAssertTrue(recovered.summaryOnly)
             XCTAssertEqual(recovered.envelope.phoneReceivedAtMs, 8000)
@@ -198,20 +222,31 @@ final class WidgetRefreshStoreTests: XCTestCase {
         }
     }
 
-    func test_corrupt_and_symlink_targets_fail_without_touching_snapshot() throws {
+    func test_corrupt_targets_recover_by_authentication_and_http_never_follows_symlinks() throws {
         try isolated { store in
-            try store.save(record())
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: nil)
             let path = store.directory.appendingPathComponent("display-widget-refresh-v1.json")
             try Data("broken".utf8).write(to: path)
             XCTAssertThrowsError(try store.loadRefreshTarget())
-            let replacement = try store.saveRefreshTarget(target())
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: target())
+            let replacement = try XCTUnwrap(store.loadRefreshTarget())
             XCTAssertEqual(try store.loadRefreshTarget(), replacement)
             try FileManager.default.removeItem(at: path)
             let sentinel = store.directory.appendingPathComponent("untouched")
             try Data("original".utf8).write(to: sentinel)
             try FileManager.default.createSymbolicLink(at: path, withDestinationURL: sentinel)
             XCTAssertThrowsError(try store.loadRefreshTarget())
-            XCTAssertThrowsError(try store.saveRefreshTarget(target()))
+            XCTAssertThrowsError(try store.saveFetchedSnapshot(record(at: 5000), for: replacement))
+            XCTAssertEqual(try String(contentsOf: sentinel, encoding: .utf8), "original")
+            XCTAssertEqual(try store.load().receivedAtMs, 3000)
+
+            // 新认证可以撤销旧链接并重建普通目标文件，不能跟随链接写入外部正文。
+            let authenticated = try target()
+            try store.saveAuthenticatedSnapshot(record(), refreshTarget: authenticated)
+            XCTAssertEqual(try store.loadRefreshTarget(), authenticated)
+            let values = try path.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            XCTAssertEqual(values.isRegularFile, true)
+            XCTAssertEqual(values.isSymbolicLink, false)
             XCTAssertEqual(try String(contentsOf: sentinel, encoding: .utf8), "original")
             XCTAssertEqual(try store.load().receivedAtMs, 3000)
         }
@@ -228,7 +263,7 @@ final class WidgetRefreshStoreTests: XCTestCase {
             let finished = DispatchSemaphore(value: 0)
             let value = try record()
             DispatchQueue.global().async {
-                do { try store.save(value) }
+                do { try store.saveAuthenticatedSnapshot(value, refreshTarget: nil) }
                 catch { XCTFail("Store write failed: \(error)") }
                 finished.signal()
             }
@@ -244,7 +279,7 @@ final class WidgetRefreshStoreTests: XCTestCase {
             let sentinel = store.directory.appendingPathComponent("untouched")
             try Data("original".utf8).write(to: sentinel)
             try FileManager.default.createSymbolicLink(at: store.directory.appendingPathComponent("display-widget.lock"), withDestinationURL: sentinel)
-            XCTAssertThrowsError(try store.save(record()))
+            XCTAssertThrowsError(try store.saveAuthenticatedSnapshot(record(), refreshTarget: nil))
             XCTAssertEqual(try String(contentsOf: sentinel, encoding: .utf8), "original")
         }
     }

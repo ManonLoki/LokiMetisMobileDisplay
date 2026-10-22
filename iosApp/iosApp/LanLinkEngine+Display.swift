@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 
 /// 快照投影、图片接收与 Watch 同步：所有方法都在引擎串行队列上执行。
 extension LanLinkEngine {
@@ -25,8 +26,14 @@ extension LanLinkEngine {
             }
             return
         }
+        // JSON 只在宿主转换类型；能力表边界与单连接资格由 Kotlin 的非抛异常入口判定。
+        let capabilities: [String]?
+        if let raw = message["capabilities"] { capabilities = raw as? [String] }
+        else { capabilities = [] }
+        let deviceReport = deviceType.evaluateAuthenticatedSnapshot(capabilities: capabilities)
+        guard deviceReport.valid else { throw WidgetSnapshotError.invalid }
         let supportsWatch = try WatchCompanionFacts.hostSupports(message)
-        if let report = try deviceType.afterAuthenticatedSnapshot(message) { try sendSecure(report) }
+        if let type = deviceReport.type { try sendSecure(["type": "deviceFormFactor", "formFactor": type.wireValue]) }
         watchCapability = supportsWatch
         if let id = view.selectedId { WidgetSnapshotPublisher.shared.enqueue(message, sourceId: id, phoneId: deviceId, receivedAtMs: receivedAt.epochMs, refreshTarget: refreshTarget) }
         view.snapshot = snapshot; view.receivedDate = receivedAt; view.connected = true; view.status = "已连接，正在同步"; view.error = nil
@@ -45,7 +52,9 @@ extension LanLinkEngine {
     /// 只有成功解密快照的能力字段与系统实际对端组合成读取地址；每次认证同步均更新。
     func widgetRefreshTarget(_ message: [String: Any]) -> WidgetRefreshTarget? {
         guard let source = view.selectedId, let host = socket?.connectedHost,
-              (message["capabilities"] as? [String])?.contains("widgetHttpV1") == true,
+              // 畸形能力表撤销只读权限；后台仍可接纳合法摘要，不从这里抛连接错误。
+              TerminalCapabilities.shared.supports(values: message["capabilities"] as? [String],
+                  capability: TerminalCapabilities.shared.WIDGET_HTTP),
               let endpoint = message["widgetEndpoint"] as? [String: Any],
               let version = endpoint["version"] as? NSNumber, CFGetTypeID(version) != CFBooleanGetTypeID(), version.doubleValue == 1,
               let port = endpoint["port"] as? NSNumber, CFGetTypeID(port) != CFBooleanGetTypeID(),
@@ -57,9 +66,10 @@ extension LanLinkEngine {
     /// 一次只请求一个16KiB块，文件失败允许降级；所有消耗nonce后的发送失败必须向连接owner传播。
     func nextAsset() throws {
         guard phase == .streaming, currentAsset == nil, let snapshot = view.snapshot, let bridge, let cache else { return }
-        let hashes = Set(snapshot.hooks.compactMap(\.image))
-        for asset in snapshot.assets where hashes.contains(asset.hash) && view.images[asset.hash] == nil
-            && !failedAssets.contains(asset.hash) && !decodingImages.contains(asset.hash) {
+        let excluded = Set(view.images.keys).union(failedAssets).union(decodingImages)
+        let pending = AssetTransferRules.shared.pendingIndices(manifest: snapshot.transferManifest, excludedHashes: excluded)
+        for index in pending {
+            let asset = snapshot.assets[index.intValue]
             do {
                 if let path = cache.cached(asset) {
                     assetPaths[asset.hash] = path
@@ -83,7 +93,9 @@ extension LanLinkEngine {
     /// 对已失效清单的在途块只排空一次，之后再创建新接收器，避免旧块混入新图片。
     func acceptAsset(_ chunk: [String: Any]) throws {
         guard let asset = currentAsset, let bridge, let cache, chunk["hash"] as? String == asset.hash else { throw WidgetSnapshotError.invalid }
-        let active = view.snapshot?.hooks.contains(where: { $0.image == asset.hash }) == true && view.snapshot?.assets.contains(asset) == true
+        let active = view.snapshot.map {
+            AssetTransferRules.shared.keepInFlight(asset: asset.transferAsset, latest: $0.transferManifest)
+        } ?? false
         if !active { dropCurrentAsset(); try nextAsset(); publish(); return }
         let result: (UInt64, URL?)
         do { result = try cache.accept(chunk, bridge: bridge) }
@@ -157,7 +169,7 @@ extension LanLinkEngine {
     func requestAsset(_ hash: String, offset: UInt64) throws {
         do {
             try sendSecure(["type": "assetRequest", "hash": hash, "offset": offset])
-            assetDeadline = now + 10_000_000_000
+            assetDeadline = now + UInt64(timing.ASSET_TIMEOUT_MS) * 1_000_000
         } catch {
             dropCurrentAsset()
             throw error

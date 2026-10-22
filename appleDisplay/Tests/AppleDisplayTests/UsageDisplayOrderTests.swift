@@ -29,7 +29,7 @@ final class UsageDisplayOrderTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let before = try encoder.encode(original)
-        let rows = original.displayRows(quota: nil)
+        let rows = WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: nil)
 
         XCTAssertEqual(rows.map(\.id),
                        ["agent:codex", "agent:Claude Code", "agent:Cursor", "agent:Grok-Build", "agent:Hermes", "agent:Custom", "agent:WorkBuddy", "agent:work-buddy"])
@@ -48,7 +48,7 @@ final class UsageDisplayOrderTests: XCTestCase {
         let original = tokens(["workbuddy", "hermes", "grok-build", "claude-code", "codex"])
         let quota = quota(["codex", "claude", "cursor", "grok"])
         try quota.validate()
-        let rows = original.displayRows(quota: quota)
+        let rows = WidgetUsageRow.project(tokens: original, quota: quota, enabledAgents: nil)
 
         XCTAssertEqual(rows.map(\.id), ["agent:codex", "agent:claude-code", "quota:cursor", "agent:grok-build", "agent:hermes", "agent:workbuddy"])
         XCTAssertEqual(rows[2], .quota(quota.providers[2]))
@@ -68,7 +68,7 @@ final class UsageDisplayOrderTests: XCTestCase {
     func test_cursor_token_and_quota_share_one_row() throws {
         let original = tokens(["workbuddy", "cursor", "codex"])
         let quota = quota(["codex", "cursor"])
-        let rows = original.displayRows(quota: quota)
+        let rows = WidgetUsageRow.project(tokens: original, quota: quota, enabledAgents: nil)
 
         XCTAssertEqual(rows, [.agent(original.agents[2], quota: quota.providers[0]),
                               .agent(original.agents[1], quota: quota.providers[1]),
@@ -77,14 +77,14 @@ final class UsageDisplayOrderTests: XCTestCase {
 
     func test_quota_only_and_token_only_snapshots_preserve_real_rows() {
         let quota = quota(["claude", "cursor", "grok"])
-        XCTAssertEqual(tokens([]).displayRows(quota: quota),
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: quota, enabledAgents: nil),
                        [.quota(quota.providers[0]), .quota(quota.providers[1]), .quota(quota.providers[2])])
-        XCTAssertEqual(tokens([]).displayRows(quota: quota).map(\.presentation),
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: quota, enabledAgents: nil).map(\.presentation),
                        [.quotaOnly(quota.providers[0]), .headline(tokenText: "0"), .quotaOnly(quota.providers[2])])
         let original = tokens(["workbuddy", "custom", "cursor"])
-        XCTAssertEqual(original.displayRows(quota: nil),
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: nil),
                        [.agent(original.agents[2], quota: nil), .agent(original.agents[1], quota: nil), .agent(original.agents[0], quota: nil)])
-        XCTAssertEqual(tokens([]).displayRows(quota: nil), [.cursorDefault])
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: nil, enabledAgents: nil), [.cursorDefault])
     }
 
     func test_missing_cursor_is_visible_before_workbuddy_and_does_not_change_serialized_tokens() throws {
@@ -92,7 +92,7 @@ final class UsageDisplayOrderTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let before = try encoder.encode(original)
-        let rows = original.displayRows(quota: nil)
+        let rows = WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: nil)
 
         XCTAssertEqual(rows.map(\.displayName), ["Codex", "Cursor", "Grok", "WorkBuddy"])
         XCTAssertEqual(rows[1], .cursorDefault)
@@ -118,6 +118,6 @@ final class UsageDisplayOrderTests: XCTestCase {
             XCTAssertEqual(row.tokenText, total)
         }
         let original = tokens(["CUR-SOR", "workbuddy"])
-        XCTAssertEqual(original.displayRows(quota: nil).count, 2)
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: nil).count, 2)
     }
 }

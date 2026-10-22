@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import SharedLogic
 
 /// 广告只提供候选身份，只有保存凭据认证和真实snapshot才能建立连接状态。
 struct LanHost: Identifiable, Equatable {
@@ -30,8 +31,9 @@ struct LanLinkView: Equatable {
 /// 连接流程见 `LanLinkEngine+Connection.swift`，展示与图片接收见 `LanLinkEngine+Display.swift`；
 /// 成员为跨文件扩展放宽到模块内可见，但只能在 `queue` 上访问。
 final class LanLinkEngine {
-    /// 只描述当前线协议阶段，密码判断与尝试预算仍唯一归共享Rust。
-    enum Phase { case idle, pairHello, pairConfirmation, pairClose, resumeReply, metadata, streaming, pausing }
+    /// 连接阶段与期限规则由 Kotlin 共用；密码判断与尝试预算仍唯一归 Rust。
+    typealias Phase = TerminalSessionPhase
+    let timing = TerminalSessionTimingPolicy.shared
     let queue = DispatchQueue(label: "LokiMetris.lan-link")
     /// 多帧解码与冷启动缓存校验可能耗时数百毫秒，放到独立低优先级串行队列，
     /// 网络队列不必等待，心跳与认证回复不受影响；串行也限制同时解码的峰值内存。
@@ -60,7 +62,8 @@ final class LanLinkEngine {
     var pairingDeadline: UInt64?
     var deadline: UInt64?
     var lastInbound: UInt64 = 0
-    var intent = LanConnectionPolicy()
+    /// 前台发现与重试预算由共享规则维护，网络执行仍归当前串行队列。
+    let intent = TerminalConnectionPolicy()
     var retry: DispatchWorkItem?
     var timer: DispatchSourceTimer?
     /// 空闲（无连接且无期限）时挂起每秒检查；挂起与恢复必须成对。
@@ -74,7 +77,7 @@ final class LanLinkEngine {
     var assetPaths: [String: URL] = [:]
     /// init 末尾必定赋值；隐式解包只为让构造闭包可在其它属性就绪后捕获 self。
     var watch: PhoneWatchBridge!
-    var deviceType: LanDeviceFormFactorReport
+    let deviceType: TerminalDeviceTypeReport
     var watchCapability = false
     var watchNonce: NSNumber?
     var watchProjectionGeneration: UInt64?
@@ -87,7 +90,13 @@ final class LanLinkEngine {
     init(deviceId: String, formFactor: LanDeviceFormFactor?, changed: @escaping (LanLinkView) -> Void) {
         self.deviceId = deviceId; store = PairingStore(deviceId: deviceId); self.changed = changed
         backgroundTargets = BackgroundTargetStore(deviceId: deviceId)
-        deviceType = LanDeviceFormFactorReport(formFactor: formFactor)
+        let sharedType: TerminalDeviceType?
+        switch formFactor {
+        case .some(.phone): sharedType = .phone
+        case .some(.tablet): sharedType = .tablet
+        case .none: sharedType = nil
+        }
+        deviceType = TerminalDeviceTypeReport(type: sharedType)
         watch = PhoneWatchBridge(phoneId: deviceId) { [weak self] value, facts, generation in
             self?.queue.async { [weak self] in
                 guard let self, self.generation == generation else { return }

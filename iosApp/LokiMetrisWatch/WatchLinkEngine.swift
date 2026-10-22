@@ -251,18 +251,16 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
     /// HTTP授权单独存Keychain；换来源丢弃旧展示，暂时离线保留缓存。
     private func applyConfiguration(_ configuration: WatchHTTPConfiguration) throws {
         try configuration.validate()
-        if configuration == httpConfiguration {
+        let acceptance = configuration.acceptance(comparedTo: httpConfiguration)
+        if acceptance == .unchanged {
             if configurationNeedsSave {
                 try WatchHTTPConfigurationStore.save(configuration); configurationNeedsSave = false
             }
             return
         }
-        guard configuration.supersedes(httpConfiguration) else { return }
-        let keepPhoneSnapshot = view.envelope?.phoneId == configuration.phoneId &&
-            (configuration.target == nil || view.envelope?.sourceId == configuration.target?.sourceId)
-        let keepPhoneTransfer = snapshotTransfer != nil && configuration.target != nil &&
-            (httpConfiguration == nil || httpConfiguration?.phoneId == configuration.phoneId) &&
-            (httpConfiguration?.target == nil || httpConfiguration?.target?.sourceId == configuration.target?.sourceId)
+        guard acceptance == .replace else { return }
+        let keepPhoneSnapshot = configuration.keepsSnapshot(phoneId: view.envelope?.phoneId, sourceId: view.envelope?.sourceId)
+        let keepPhoneTransfer = configuration.keepsTransfer(previous: httpConfiguration, hasTransfer: snapshotTransfer != nil)
         httpConfiguration = configuration
         configurationNeedsSave = true
         cancelHTTP(); lastHTTPAttempt = nil; fallback?.cancel(); fallback = nil

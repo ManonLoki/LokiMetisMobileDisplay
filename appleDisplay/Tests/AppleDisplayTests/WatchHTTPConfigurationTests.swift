@@ -104,6 +104,25 @@ final class WatchHTTPConfigurationTests: XCTestCase {
         XCTAssertTrue(newPhone.supersedes(initial))
     }
 
+    /// Swift 保留 u64 原值与 Codable 字段，共享策略决定相同连接去重和最大修订的撤销接纳。
+    func test_shared_policy_stabilizes_generation_and_preserves_extreme_revision_revocation() throws {
+        let initial = try WatchHTTPConfiguration(phoneId: phone, target: target(), revision: UInt64.max - 1)
+        let regenerated = try target()
+        let stable = WatchHTTPConfiguration.stableTarget(regenerated, previous: initial)
+        XCTAssertEqual(stable, initial.target)
+        XCTAssertFalse(WatchHTTPConfiguration.needsPublication(previous: initial, target: stable, forceRevision: false))
+        XCTAssertTrue(WatchHTTPConfiguration.needsPublication(previous: initial, target: stable, forceRevision: true))
+        let revoked = try WatchHTTPConfiguration(phoneId: phone, target: nil, revision: UInt64.max)
+        XCTAssertTrue(revoked.supersedes(initial))
+        XCTAssertFalse(initial.supersedes(revoked))
+        let conflicting = try WatchHTTPConfiguration(phoneId: phone, target: regenerated, revision: UInt64.max)
+        XCTAssertFalse(conflicting.supersedes(revoked))
+        XCTAssertEqual(try WatchHTTPConfiguration.decode(revoked.encoded()), revoked)
+        for version in [Int.min, Int.max] {
+            XCTAssertThrowsError(try WatchHTTPConfiguration(version: version, phoneId: phone, target: nil))
+        }
+    }
+
     func test_decoding_rejects_invalid_target_identity_address_and_oversized_input() throws {
         let value = try configuration()
         let data = try value.encoded()

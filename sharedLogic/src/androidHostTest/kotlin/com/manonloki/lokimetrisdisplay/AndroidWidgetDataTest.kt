@@ -34,8 +34,8 @@ class AndroidWidgetDataTest {
         null, true, listOf(TerminalHook("codex", 1, "running", "private-hook-body", true, "a".repeat(64))),
         listOf(TerminalAsset("a".repeat(64), "image/png", 1024)), "private-catalog-error")
 
-    private fun record(at: Long = 1_000, sourceId: String = source): AndroidWidgetSnapshot =
-        AndroidWidgetSnapshot.fromLive(sourceId, at, full())
+    private fun record(at: Long = 1_000, sourceId: String = source): TerminalWidgetSnapshot =
+        TerminalWidgetSnapshot.fromLive(sourceId, at, full())
 
     private fun isolated(body: (File, AndroidWidgetStore, AndroidWidgetStore) -> Unit) {
         val directory = Files.createTempDirectory("android-widget-test-").toFile()
@@ -54,7 +54,7 @@ class AndroidWidgetDataTest {
         assertFalse(value.snapshot.hooks.single().contentTruncated)
         assertNull(value.snapshot.hooks.single().image)
         assertTrue(value.snapshot.assets.isEmpty()); assertNull(value.snapshot.catalogError)
-        assertFails { AndroidWidgetSnapshot(source, 1_000, full()).validate() }
+        assertFails { TerminalWidgetSnapshot(source, 1_000, full()).validate() }
         val bytes = AndroidWidgetCodec.encode(AndroidWidgetCodec.State(value, null))
         assertFalse(bytes.toString(Charsets.UTF_8).contains("private-hook-body"))
         assertFalse(bytes.toString(Charsets.UTF_8).contains("private-catalog-error"))
@@ -65,14 +65,14 @@ class AndroidWidgetDataTest {
     fun enabledListIsCopiedAndExplicitlyDisabledAgentsStayHiddenAcrossStoreInstances() = isolated { _, first, second ->
         val enabled = mutableListOf("codex", "cursor")
         val original = full().copy(enabledAgents = enabled)
-        val record = AndroidWidgetSnapshot.fromLive(source, 1_000, original)
+        val record = TerminalWidgetSnapshot.fromLive(source, 1_000, original)
         enabled.clear()
         assertEquals(listOf("codex", "cursor"), record.snapshot.enabledAgents)
         assertEquals(listOf("Cursor"), record.snapshot.displayUsageRows.map { it.displayName })
         assertTrue(first.acceptLive(record, target()))
         assertEquals(listOf("codex", "cursor"), second.read()?.snapshot?.enabledAgents)
 
-        val disabled = AndroidWidgetSnapshot.fromLive(source, 2_000, full().copy(enabledAgents = emptyList()))
+        val disabled = TerminalWidgetSnapshot.fromLive(source, 2_000, full().copy(enabledAgents = emptyList()))
         assertTrue(second.acceptLive(disabled, target()))
         val restarted = assertNotNull(first.read()).snapshot
         assertEquals(emptyList(), restarted.enabledAgents)
@@ -121,6 +121,23 @@ class AndroidWidgetDataTest {
         val changed = encrypted.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }
         assertFails { AndroidWidgetCrypto.response(widgetKey, requestNonce, responseNonce, changed) }
         assertFails { AndroidWidgetCrypto.response(widgetKey, requestNonce, ByteArray(11), encrypted) }
+    }
+
+    @Test
+    fun httpBinaryFieldsKeepCanonicalBase64AndExactNonceAndCipherBounds() {
+        val canonical = AndroidWidgetCrypto.encode(ByteArray(32))
+        val noncanonical = canonical.dropLast(2) + "B="
+        assertContentEquals(Base64.getDecoder().decode(canonical), Base64.getDecoder().decode(noncanonical))
+        assertFails { AndroidWidgetCrypto.decode(noncanonical, WidgetHttpBinaryField.KEY) }
+        assertFails { target().copy(key = noncanonical).validate() }
+        target().copy(key = canonical).validate()
+        assertEquals(32, AndroidWidgetCrypto.decode(canonical, WidgetHttpBinaryField.KEY).size)
+        assertFails { AndroidWidgetCrypto.decode(AndroidWidgetCrypto.encode(ByteArray(11)), WidgetHttpBinaryField.NONCE) }
+        assertFails { AndroidWidgetCrypto.decode(AndroidWidgetCrypto.encode(ByteArray(13)), WidgetHttpBinaryField.NONCE) }
+        assertFails { AndroidWidgetCrypto.decode(AndroidWidgetCrypto.encode(ByteArray(15)), WidgetHttpBinaryField.RESPONSE_CIPHERTEXT) }
+        assertEquals(65_552, AndroidWidgetCrypto.decode(AndroidWidgetCrypto.encode(ByteArray(65_552)),
+            WidgetHttpBinaryField.RESPONSE_CIPHERTEXT).size)
+        assertFails { AndroidWidgetCrypto.decode(AndroidWidgetCrypto.encode(ByteArray(65_553)), WidgetHttpBinaryField.RESPONSE_CIPHERTEXT) }
     }
 
     @Test

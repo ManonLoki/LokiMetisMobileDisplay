@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 
 /// 应用私有内容寻址缓存；未完成文件只属于本次接收，不作为命中或展示来源。
 final class IOSAssetCache {
@@ -84,17 +85,22 @@ final class IOSAssetCache {
         let manager = FileManager.default
         guard let files = try? manager.contentsOfDirectory(at: directory,
                 includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return }
-        let entries = files.compactMap { path -> (URL, Int, Date)? in
+        let entries = files.compactMap { path -> ImageCacheEntry? in
             guard SharedValidation.validHash(path.lastPathComponent),
                   let values = try? path.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]),
                   values.isRegularFile == true, values.isSymbolicLink != true else { return nil }
-            return (path, values.fileSize ?? 0, values.contentModificationDate ?? .distantPast)
+            return ImageCacheEntry(key: path.lastPathComponent, byteLength: Int64(values.fileSize ?? 0),
+                lastUsed: (values.contentModificationDate ?? .distantPast).timeIntervalSinceReferenceDate)
         }
-        var total = entries.reduce(0) { $0 + $1.1 }
+        let plan = ImageCachePolicy.shared.plan(entries: entries, keeping: hashes)
+        var occupancy = plan.occupancy
         var settled = true
-        for (path, length, _) in entries.sorted(by: { $0.2 < $1.2 }) where total > 512 * 1024 * 1024 {
-            guard !hashes.contains(path.lastPathComponent) else { continue }
-            do { try manager.removeItem(at: path); total -= length } catch { settled = false /* 下轮继续，不扩大删除范围。 */ }
+        for entry in plan.candidates {
+            guard ImageCachePolicy.shared.shouldEvict(occupancy: occupancy, profile: .iphone) else { break }
+            do {
+                try manager.removeItem(at: directory.appendingPathComponent(entry.key))
+                occupancy = ImageCachePolicy.shared.removed(occupancy: occupancy, entry: entry)
+            } catch { settled = false /* 下轮继续，不扩大删除范围。 */ }
         }
         settledKeeping = settled ? hashes : nil
     }

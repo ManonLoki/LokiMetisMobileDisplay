@@ -57,10 +57,10 @@ final class WidgetSnapshotTests: XCTestCase {
     func test_complete_snapshot_replaces_released_state() throws {
         try isolated { store in
             let before = try record()
-            try store.save(before)
+            try store.saveAuthenticatedSnapshot(before, refreshTarget: nil)
             XCTAssertEqual(try store.load(), before)
             let released = try record(#"{"type":"snapshot","snapshot":{"version":1,"tokens":null,"tokenError":"unavailable","hooksAvailable":true,"hooks":[]}}"#)
-            try store.save(released)
+            try store.saveAuthenticatedSnapshot(released, refreshTarget: nil)
             let loaded = try store.load()
             XCTAssertNil(loaded.snapshot.tokens)
             XCTAssertTrue(loaded.snapshot.hooks.isEmpty)
@@ -72,11 +72,11 @@ final class WidgetSnapshotTests: XCTestCase {
     func test_invalid_update_preserves_previous_bytes() throws {
         try isolated { store in
             let before = try record()
-            try store.save(before)
+            try store.saveAuthenticatedSnapshot(before, refreshTarget: nil)
             let file = store.directory.appendingPathComponent("display-widget-v1.json")
             let bytes = try Data(contentsOf: file)
             let invalid = WidgetSnapshot(schemaVersion: 2, sourceId: source, receivedAtMs: 4000, snapshot: before.snapshot)
-            XCTAssertThrowsError(try store.save(invalid))
+            XCTAssertThrowsError(try store.saveAuthenticatedSnapshot(invalid, refreshTarget: nil))
             XCTAssertEqual(try Data(contentsOf: file), bytes)
             XCTAssertEqual(try store.load(), before)
         }
@@ -89,7 +89,7 @@ final class WidgetSnapshotTests: XCTestCase {
             try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
             let sentinel = path.appendingPathComponent("keep")
             try Data("original".utf8).write(to: sentinel)
-            XCTAssertThrowsError(try store.save(record()))
+            XCTAssertThrowsError(try store.saveAuthenticatedSnapshot(record(), refreshTarget: nil))
             XCTAssertEqual(try String(contentsOf: sentinel, encoding: .utf8), "original")
         }
     }
@@ -113,7 +113,7 @@ final class WidgetSnapshotTests: XCTestCase {
             try Data("untouched".utf8).write(to: sentinel)
             try FileManager.default.createSymbolicLink(at: store.directory.appendingPathComponent("display-widget-v1.json"), withDestinationURL: sentinel)
             XCTAssertThrowsError(try store.load())
-            XCTAssertThrowsError(try store.save(record()))
+            XCTAssertThrowsError(try store.saveAuthenticatedSnapshot(record(), refreshTarget: nil))
             XCTAssertEqual(try String(contentsOf: sentinel, encoding: .utf8), "untouched")
         }
     }
@@ -128,7 +128,7 @@ final class WidgetSnapshotTests: XCTestCase {
         let renewed = try XCTUnwrap(value.renewed(atMs: 18_000))
         XCTAssertTrue(renewed.isLive(atMs: 48_000))
         try isolated { store in
-            try store.save(value)
+            try store.saveAuthenticatedSnapshot(value, refreshTarget: nil)
             XCTAssertNotNil(try store.loadLive(atMs: 3000))
             XCTAssertNil(try store.loadLive(atMs: 48_000))
             try store.clear(); try store.clear()
@@ -145,7 +145,7 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertTrue(value.isCached(atMs: nextDay))
         XCTAssertNil(value.renewed(atMs: nextDay))
         try isolated { store in
-            try store.save(value)
+            try store.saveAuthenticatedSnapshot(value, refreshTarget: nil)
             XCTAssertEqual(try store.loadCached(atMs: 48_000), value)
             let cached = try XCTUnwrap(store.loadCached(atMs: nextDay))
             XCTAssertEqual(cached.receivedAtMs, 3000)
@@ -161,11 +161,11 @@ final class WidgetSnapshotTests: XCTestCase {
         let value = try record()
         XCTAssertFalse(value.isCached(atMs: 2999))
         try isolated { store in
-            try store.save(value)
+            try store.saveAuthenticatedSnapshot(value, refreshTarget: nil)
             XCTAssertNil(try store.loadCached(atMs: 2999))
             let futureLease = WidgetSnapshot(schemaVersion: 2, sourceId: source, receivedAtMs: 3000,
                                              snapshot: value.snapshot, validUntilMs: 100_000)
-            try store.save(futureLease)
+            try store.saveAuthenticatedSnapshot(futureLease, refreshTarget: nil)
             XCTAssertFalse(futureLease.isCached(atMs: 3000))
             XCTAssertNil(try store.loadCached(atMs: 3000))
         }
@@ -183,7 +183,7 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(value.receivedAtMs, 3000)
         XCTAssertEqual(value.validUntilMs, 228_000)
         try isolated { store in
-            try store.save(value)
+            try store.saveAuthenticatedSnapshot(value, refreshTarget: nil)
             XCTAssertEqual(try store.loadCached(atMs: 183_000), value)
             XCTAssertEqual(try store.loadCached(atMs: 228_000), value)
             XCTAssertNil(try store.loadLive(atMs: 228_000))
@@ -200,12 +200,12 @@ final class WidgetSnapshotTests: XCTestCase {
             WidgetSnapshot(schemaVersion: 2, sourceId: source, receivedAtMs: Int64.max - 1, snapshot: before.snapshot, validUntilMs: Int64.max)
         ]
         try isolated { store in
-            try store.save(before)
+            try store.saveAuthenticatedSnapshot(before, refreshTarget: nil)
             for invalid in malformed {
                 XCTAssertThrowsError(try invalid.validate())
                 XCTAssertFalse(invalid.isCached(atMs: invalid.receivedAtMs))
                 XCTAssertFalse(invalid.isLive(atMs: invalid.receivedAtMs))
-                XCTAssertThrowsError(try store.save(invalid))
+                XCTAssertThrowsError(try store.saveAuthenticatedSnapshot(invalid, refreshTarget: nil))
                 XCTAssertEqual(try store.loadCached(atMs: 48_000), before)
             }
         }
@@ -215,7 +215,7 @@ final class WidgetSnapshotTests: XCTestCase {
     func test_explicit_clear_removes_cached_summary() throws {
         try isolated { store in
             let value = try record()
-            try store.save(value)
+            try store.saveAuthenticatedSnapshot(value, refreshTarget: nil)
             XCTAssertEqual(try store.loadCached(atMs: 100_000), value)
             try store.clear(); try store.clear()
             XCTAssertThrowsError(try store.loadCached(atMs: 100_000))

@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import Security
+import SharedLogic
 
 /// 仅表示配套应用实际通信，手机TCP/IP与系统isReachable都不能单独产生此投影。
 /// 只放界面需要的字段：每个分块回执都会刷新的通信事实另行交给连接引擎，避免逐块触发重绘。
@@ -81,19 +82,19 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     /// 生成新修订号的 HTTP 配置并推送；目标未变时不重复发布。
     private func configureHTTPNow(_ target: WidgetRefreshTarget?, forceRevision: Bool = false) {
         do {
-            let stable: WidgetRefreshTarget?
-            if let target, let previous = httpConfiguration?.target, previous.sameConnection(as: target) { stable = previous }
-            else { stable = target }
-            if !forceRevision, let current = httpConfiguration, current.target == stable { return }
+            let stable = WatchHTTPConfiguration.stableTarget(target, previous: httpConfiguration)
+            guard WatchHTTPConfiguration.needsPublication(previous: httpConfiguration, target: stable,
+                                                         forceRevision: forceRevision) else { return }
             let revision = try PhoneWatchConfigurationRevisionStore.next(phoneId: phoneId, after: httpRevisionFloor)
             httpConfiguration = try WatchHTTPConfiguration(phoneId: phoneId, target: stable, revision: revision)
             httpRevisionFloor = revision
             publishHTTPConfiguration()
         } catch {
             // 存储失败不能继续向手表发送旧授权；本进程发布更高修订的撤销，后续持久修订从它之后继续。
-            if httpRevisionFloor < UInt64.max {
-                httpRevisionFloor += 1
-                httpConfiguration = try? WatchHTTPConfiguration(phoneId: phoneId, target: nil, revision: httpRevisionFloor)
+            if let text = WatchConfigurationPolicy.shared.nextRevision(persistedRevision: String(httpRevisionFloor),
+                floorRevision: String(httpRevisionFloor)), let next = UInt64(text) {
+                httpRevisionFloor = next
+                httpConfiguration = try? WatchHTTPConfiguration(phoneId: phoneId, target: nil, revision: next)
             } else { httpConfiguration = nil }
             publishHTTPConfiguration()
             view.error = "手表 HTTP 配置暂不可用，请解锁 iPhone 后重试。"; publish()
@@ -455,9 +456,11 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
                 }
                 if let revision = request.configurationRevision, let hash = request.configurationHash,
                    SharedValidation.validHash(hash) {
-                    self.httpRevisionFloor = max(self.httpRevisionFloor, revision)
-                    if let configuration = self.httpConfiguration, revision >= configuration.revision,
-                       let encoded = try? configuration.encoded(), WatchProtocol.hash(encoded) != hash {
+                    if let text = WatchConfigurationPolicy.shared.observedRevisionFloor(currentRevision: String(self.httpRevisionFloor),
+                        reportedRevision: String(revision)), let floor = UInt64(text) { self.httpRevisionFloor = floor }
+                    if let configuration = self.httpConfiguration, let encoded = try? configuration.encoded(),
+                       WatchConfigurationPolicy.shared.shouldReissue(currentRevision: String(configuration.revision),
+                           reportedRevision: String(revision), matchingHash: WatchProtocol.hash(encoded) == hash) {
                         self.configureHTTPNow(configuration.target, forceRevision: true)
                     }
                 }
@@ -509,17 +512,16 @@ private enum PhoneWatchConfigurationRevisionStore {
         var request = query; request[kSecReturnData as String] = true; request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
         let status = SecItemCopyMatching(request as CFDictionary, &result)
-        let previous: UInt64
-        if status == errSecItemNotFound { previous = 0 }
+        let previous: String
+        if status == errSecItemNotFound { previous = "0" }
         else {
             guard status == errSecSuccess, let data = result as? Data, data.count <= 20,
-                  let text = String(data: data, encoding: .utf8), let value = UInt64(text) else { throw WidgetSnapshotError.unavailable }
-            previous = value
+                  let text = String(data: data, encoding: .utf8) else { throw WidgetSnapshotError.unavailable }
+            previous = text
         }
-        let baseline = max(previous, floor)
-        guard baseline < UInt64.max else { throw WidgetSnapshotError.unavailable }
-        let next = baseline + 1
-        let attributes: [String: Any] = [kSecValueData as String: Data(String(next).utf8),
+        guard let text = WatchConfigurationPolicy.shared.nextRevision(persistedRevision: previous,
+            floorRevision: String(floor)), let next = UInt64(text) else { throw WidgetSnapshotError.unavailable }
+        let attributes: [String: Any] = [kSecValueData as String: Data(text.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if updated == errSecItemNotFound {

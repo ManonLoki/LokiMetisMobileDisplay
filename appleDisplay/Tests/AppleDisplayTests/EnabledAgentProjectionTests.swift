@@ -1,4 +1,5 @@
 import Foundation
+import class SharedLogic.UsageDisplayPolicy
 import XCTest
 @testable import AppleDisplay
 
@@ -63,7 +64,7 @@ final class EnabledAgentProjectionTests: XCTestCase {
         XCTAssertEqual(summary.displayTokens, full.displayTokens)
         XCTAssertEqual(full.displayProviderQuota?.providers, [quota().providers[0], quota().providers[2]])
         XCTAssertEqual(summary.displayProviderQuota, full.displayProviderQuota)
-        XCTAssertEqual(original.displayRows(quota: quota(), enabledAgents: enabled), [
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: quota(), enabledAgents: enabled), [
             .agent(original.agents[0], quota: quota().providers[0]),
             .agent(original.agents[2], quota: quota().providers[2])
         ])
@@ -74,10 +75,10 @@ final class EnabledAgentProjectionTests: XCTestCase {
     func test_disabled_cursor_never_reappears_as_quota_or_default_zero() {
         let original = tokens(["codex", "claude-code"])
         let expected: [WidgetUsageRow] = [.agent(original.agents[0], quota: quota().providers[0])]
-        XCTAssertEqual(original.displayRows(quota: quota(), enabledAgents: ["codex"]), expected)
-        XCTAssertEqual(original.displayRows(quota: nil, enabledAgents: ["codex"]), [.agent(original.agents[0], quota: nil)])
-        XCTAssertTrue(tokens([]).displayRows(quota: nil, enabledAgents: ["codex"]).isEmpty)
-        XCTAssertEqual(tokens([]).displayRows(quota: nil, enabledAgents: ["Cursor"]), [.cursorDefault])
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: quota(), enabledAgents: ["codex"]), expected)
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: ["codex"]), [.agent(original.agents[0], quota: nil)])
+        XCTAssertTrue(WidgetUsageRow.project(tokens: tokens([]), quota: nil, enabledAgents: ["codex"]).isEmpty)
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: nil, enabledAgents: ["Cursor"]), [.cursorDefault])
     }
 
     func test_explicit_empty_list_hides_every_token_and_quota_without_clearing_raw_values() throws {
@@ -91,7 +92,7 @@ final class EnabledAgentProjectionTests: XCTestCase {
         XCTAssertEqual(summary.displayTokens?.agents, [])
         XCTAssertEqual(full.displayProviderQuota?.providers, [])
         XCTAssertEqual(summary.displayProviderQuota?.providers, [])
-        XCTAssertTrue(original.displayRows(quota: quota(), enabledAgents: []).isEmpty)
+        XCTAssertTrue(WidgetUsageRow.project(tokens: original, quota: quota(), enabledAgents: []).isEmpty)
         XCTAssertEqual(full.tokens, original)
         XCTAssertEqual(full.providerQuota, quota())
     }
@@ -107,11 +108,11 @@ final class EnabledAgentProjectionTests: XCTestCase {
         XCTAssertEqual(summary.displayTokens, original)
         XCTAssertEqual(full.displayProviderQuota, quota())
         XCTAssertEqual(summary.displayProviderQuota, quota())
-        XCTAssertEqual(original.displayRows(quota: nil, enabledAgents: nil), [
+        XCTAssertEqual(WidgetUsageRow.project(tokens: original, quota: nil, enabledAgents: nil), [
             .agent(original.agents[0], quota: nil), .agent(original.agents[1], quota: nil),
             .cursorDefault, .agent(original.agents[2], quota: nil)
         ])
-        XCTAssertEqual(tokens([]).displayRows(quota: nil, enabledAgents: nil), [.cursorDefault])
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: nil, enabledAgents: nil), [.cursorDefault])
     }
 
     func test_quota_filters_independently_when_token_snapshot_is_missing() throws {
@@ -124,7 +125,7 @@ final class EnabledAgentProjectionTests: XCTestCase {
         XCTAssertNil(summary.displayTokens)
         XCTAssertEqual(full.displayProviderQuota?.providers, [quota().providers[1], quota().providers[3]])
         XCTAssertEqual(summary.displayProviderQuota, full.displayProviderQuota)
-        XCTAssertEqual(tokens([]).displayRows(quota: quota(), enabledAgents: ["claudeCode", "grok"]), [
+        XCTAssertEqual(WidgetUsageRow.project(tokens: tokens([]), quota: quota(), enabledAgents: ["claudeCode", "grok"]), [
             .quota(quota().providers[1]), .quota(quota().providers[3])
         ])
     }
@@ -151,22 +152,22 @@ final class EnabledAgentProjectionTests: XCTestCase {
                         "Code Buddy", "qwen-code", "Kimi Code", "Qoder", "Gemini", "GitHub Copilot CLI", "Grok-Build"]
         let original = tokens(variants)
         let projected = summary(desktopAgents, tokens: original)
-        try AgentDisplayPolicy.validate(desktopAgents)
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: desktopAgents))
         try projected.validate()
 
         XCTAssertEqual(projected.displayTokens, original)
         XCTAssertEqual(projected.displayProviderQuota, quota())
         for (canonical, variant) in zip(desktopAgents, variants) {
-            XCTAssertTrue(AgentDisplayPolicy.isEnabled(variant, enabledAgents: [canonical]), "\(variant) must match \(canonical)")
-            XCTAssertTrue(AgentDisplayPolicy.isEnabled(canonical, enabledAgents: [variant]), "\(canonical) must match \(variant)")
+            XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: variant, enabledAgents: [canonical]), "\(variant) must match \(canonical)")
+            XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: canonical, enabledAgents: [variant]), "\(canonical) must match \(variant)")
         }
-        let rows = original.displayRows(quota: quota(), enabledAgents: desktopAgents)
+        let rows = WidgetUsageRow.project(tokens: original, quota: quota(), enabledAgents: desktopAgents)
         XCTAssertEqual(rows.count, desktopAgents.count)
         XCTAssertEqual(rows.compactMap(\.quotaEntry).map(\.provider), ["codex", "claude", "cursor", "grok"])
         XCTAssertFalse(rows.contains(.cursorDefault))
-        XCTAssertTrue(AgentDisplayPolicy.isEnabled("geminiCli", enabledAgents: ["gemini"]))
-        XCTAssertTrue(AgentDisplayPolicy.isEnabled("claude", enabledAgents: ["claudeCode"]))
-        XCTAssertTrue(AgentDisplayPolicy.isEnabled("grok", enabledAgents: ["grok-build"]))
+        XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: "geminiCli", enabledAgents: ["gemini"]))
+        XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: "claude", enabledAgents: ["claudeCode"]))
+        XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: "grok", enabledAgents: ["grok-build"]))
     }
 
     func test_changing_enabled_list_never_recomputes_total_quality_or_serialized_tokens() throws {
@@ -197,14 +198,14 @@ final class EnabledAgentProjectionTests: XCTestCase {
     }
 
     func test_valid_list_boundaries_include_fourteen_agents_and_sixty_four_utf8_bytes() throws {
-        XCTAssertNoThrow(try AgentDisplayPolicy.validate(nil))
-        XCTAssertNoThrow(try AgentDisplayPolicy.validate([]))
-        XCTAssertNoThrow(try AgentDisplayPolicy.validate(desktopAgents))
-        XCTAssertNoThrow(try AgentDisplayPolicy.validate([String(repeating: "a", count: 64)]))
-        XCTAssertNoThrow(try AgentDisplayPolicy.validate([String(repeating: "界", count: 21)]))
-        XCTAssertFalse(AgentDisplayPolicy.isEnabled("codex", enabledAgents: []))
-        XCTAssertTrue(AgentDisplayPolicy.isEnabled("custom-agent", enabledAgents: nil))
-        XCTAssertFalse(AgentDisplayPolicy.isEnabled("claude", enabledAgents: ["codex"]))
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: nil))
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: []))
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: desktopAgents))
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: [String(repeating: "a", count: 64)]))
+        XCTAssertTrue(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: [String(repeating: "界", count: 21)]))
+        XCTAssertFalse(UsageDisplayPolicy.shared.isEnabled(agent: "codex", enabledAgents: []))
+        XCTAssertTrue(UsageDisplayPolicy.shared.isEnabled(agent: "custom-agent", enabledAgents: nil))
+        XCTAssertFalse(UsageDisplayPolicy.shared.isEnabled(agent: "claude", enabledAgents: ["codex"]))
     }
 
     func test_invalid_lists_are_rejected_before_full_or_http_projection_can_be_cached() throws {
@@ -216,7 +217,7 @@ final class EnabledAgentProjectionTests: XCTestCase {
             ["gitHubCopilot", "GitHub Copilot CLI"], ["cursor", " CUR-SOR "]
         ]
         for enabled in invalidLists {
-            XCTAssertThrowsError(try AgentDisplayPolicy.validate(enabled), "\(enabled)")
+            XCTAssertFalse(UsageDisplayPolicy.shared.validEnabledAgents(enabledAgents: enabled), "\(enabled)")
             XCTAssertThrowsError(try full(enabled, tokens: tokens()).validate(), "\(enabled)")
             XCTAssertThrowsError(try summary(enabled, tokens: tokens()).validate(), "\(enabled)")
             let raw = try message(full(enabled, tokens: tokens()))

@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import XCTest
+@testable import AppleDisplay
 
 extension XCTestCase {
     /// 测试自建临时私有目录并在用例结束时回收，不读取真实HOME或共享容器。
@@ -10,6 +11,17 @@ extension XCTestCase {
         try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: path) }
         return path
+    }
+}
+
+/// 只为异常盘面建立固定文件：模拟进程中断或历史文件，不经过生产提交事务。
+enum WidgetStoreFixture {
+    static func writeSnapshot(_ snapshot: WidgetSnapshot, to store: WidgetSnapshotStore) throws {
+        try SharedJSON.encoder.encode(snapshot).write(to: store.directory.appendingPathComponent("display-widget-v1.json"), options: .atomic)
+    }
+
+    static func writeTarget(_ target: WidgetRefreshTarget, to store: WidgetSnapshotStore) throws {
+        try SharedJSON.encoder.encode(target).write(to: store.directory.appendingPathComponent("display-widget-refresh-v1.json"), options: .atomic)
     }
 }
 

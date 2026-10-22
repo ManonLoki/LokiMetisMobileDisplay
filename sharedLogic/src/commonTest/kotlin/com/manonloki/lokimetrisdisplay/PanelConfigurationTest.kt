@@ -6,6 +6,11 @@ import kotlin.test.assertFalse
 
 class PanelConfigurationTest {
     @Test
+    fun swiftDefaultsMatchTheSharedRestorationDefaults() {
+        assertEquals(PanelConfiguration.restore(), PanelConfiguration.defaults())
+    }
+
+    @Test
     fun restoresIndependentCardVisibilityAndDisplayOptions() {
         val restored = PanelConfiguration.restore(false, false, "detailed", "2x2")
         assertFalse(restored.showUsage)
@@ -78,5 +83,34 @@ class PanelConfigurationTest {
                     pages.flatten().drop(count))
             }
         }
+    }
+
+    @Test
+    fun nativePageQueriesKeepSourceOrderAndReturnSentinelForPaddedCells() {
+        assertEquals(1, HookLayout.GRID.pageCount(0))
+        assertEquals(listOf(-1, -1, -1, -1), (0..3).map { HookLayout.GRID.itemIndex(0, 0, it) })
+        assertEquals(2, HookLayout.GRID.pageCount(5))
+        assertEquals(listOf(0, 1, 2, 3), (0..3).map { HookLayout.GRID.itemIndex(5, 0, it) })
+        assertEquals(listOf(4, -1, -1, -1), (0..3).map { HookLayout.GRID.itemIndex(5, 1, it) })
+        assertEquals(5, HookLayout.SINGLE.pageCount(5))
+        assertEquals(4, HookLayout.SINGLE.itemIndex(5, 4, 0))
+    }
+
+    @Test
+    fun nativePageQueriesHandleInvalidAndMaximumInputsWithoutThrowing() {
+        for (layout in HookLayout.entries) {
+            assertEquals(1, layout.pageCount(-1))
+            assertEquals(-1, layout.itemIndex(-1, 0, 0))
+            assertEquals(-1, layout.itemIndex(12, -1, 0))
+            assertEquals(-1, layout.itemIndex(12, layout.pageCount(12), 0))
+            assertEquals(-1, layout.itemIndex(12, 0, -1))
+            assertEquals(-1, layout.itemIndex(12, 0, layout.pageSize))
+            assertEquals(-1, layout.itemIndex(12, Int.MAX_VALUE, Int.MAX_VALUE))
+        }
+        assertEquals(Int.MAX_VALUE, HookLayout.SINGLE.pageCount(Int.MAX_VALUE))
+        assertEquals(Int.MAX_VALUE - 1, HookLayout.SINGLE.itemIndex(Int.MAX_VALUE, Int.MAX_VALUE - 1, 0))
+        assertEquals(536_870_912, HookLayout.GRID.pageCount(Int.MAX_VALUE))
+        assertEquals(Int.MAX_VALUE - 1, HookLayout.GRID.itemIndex(Int.MAX_VALUE, 536_870_911, 2))
+        assertEquals(-1, HookLayout.GRID.itemIndex(Int.MAX_VALUE, 536_870_911, 3))
     }
 }

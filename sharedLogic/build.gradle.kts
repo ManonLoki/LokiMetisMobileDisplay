@@ -8,9 +8,13 @@ plugins {
 kotlin {
     listOf(
         iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
+        iosSimulatorArm64(),
+        watchosArm64(),
+        watchosDeviceArm64(),
+        watchosSimulatorArm64(),
+        macosArm64(),
+    ).forEach { appleTarget ->
+        appleTarget.binaries.framework {
             baseName = "SharedLogic"
             isStatic = true
         }
@@ -33,9 +37,6 @@ kotlin {
     }
     
     sourceSets {
-        commonMain.dependencies {
-            // put your Multiplatform dependencies here
-        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }

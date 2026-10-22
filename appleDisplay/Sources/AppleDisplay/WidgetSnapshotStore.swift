@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 #if canImport(Darwin)
 import Darwin
 #else
@@ -77,17 +78,6 @@ struct WidgetSnapshotStore {
     /// 加锁读取独立只读刷新凭据；未授权时返回 nil。
     func loadRefreshTarget() throws -> WidgetRefreshTarget? { try withLock { try loadTarget() } }
 
-    /// 成功认证后才调用。相同地址和密钥保留代次，改变服务地址会使旧请求失效。
-    @discardableResult
-    func saveRefreshTarget(_ target: WidgetRefreshTarget) throws -> WidgetRefreshTarget {
-        try target.validate()
-        return try withLock {
-            if let previous = try? loadTarget(), previous.sameConnection(as: target) { return previous }
-            try write(try SharedJSON.encoder.encode(target), to: targetFile, limit: 4096)
-            return target
-        }
-    }
-
     /// 摘要和独立获取能力在同一锁内提交；先撤销旧目标，进程中断也不会留下跨来源凭据。
     func saveAuthenticatedSnapshot(_ snapshot: WidgetSnapshot, refreshTarget: WidgetRefreshTarget?, displayCache: PhoneDisplayCache? = nil) throws {
         try snapshot.validate(); try refreshTarget?.validate(); try displayCache?.validate()
@@ -107,7 +97,7 @@ struct WidgetSnapshotStore {
             if let targetData, targetData.count > 4096 { throw WidgetSnapshotError.tooLarge }
             if previous != next || next == nil { try remove(targetFile) }
             let current = try? loadSnapshot()
-            if current?.sourceId != snapshot.sourceId || (current?.receivedAtMs ?? -1) <= snapshot.receivedAtMs {
+            if SnapshotAcceptancePolicy.shared.acceptAuthenticated(current: current?.stamp, incoming: snapshot.stamp) {
                 try write(snapshotData, to: file, limit: WidgetSnapshot.maxBytes)
                 if let displayCache { try writeDisplayIfNotOlder(displayCache) }
             } else if let current, let displayCache {
@@ -132,8 +122,8 @@ struct WidgetSnapshotStore {
     func saveIfNotOlder(_ snapshot: WidgetSnapshot) throws -> Bool {
         try snapshot.validate()
         return try withLock {
-            if let current = try? loadSnapshot(),
-               current.sourceId != snapshot.sourceId || current.receivedAtMs > snapshot.receivedAtMs { return false }
+            guard SnapshotAcceptancePolicy.shared.acceptSameSource(current: (try? loadSnapshot())?.stamp,
+                incoming: snapshot.stamp) else { return false }
             try writeSnapshot(snapshot)
             return true
         }
@@ -167,12 +157,9 @@ struct WidgetSnapshotStore {
         if let startedAtMs, startedAtMs < 0 { throw WidgetSnapshotError.invalid }
         guard snapshot.sourceId == target.sourceId else { throw WidgetSnapshotError.invalid }
         return try withLock {
-            guard try loadTarget() == target else { return false }
-            if let current = try? loadSnapshot() {
-                guard current.sourceId == snapshot.sourceId else { return false }
-                if current.receivedAtMs > snapshot.receivedAtMs { return false }
-                if let startedAtMs, current.receivedAtMs > startedAtMs { return false }
-            }
+            guard SnapshotAcceptancePolicy.shared.acceptFetched(current: (try? loadSnapshot())?.stamp,
+                incoming: snapshot.stamp, targetMatches: try loadTarget() == target,
+                requestSourceId: target.sourceId, startedAtMs: startedAtMs ?? -1) else { return false }
             try writeSnapshot(snapshot)
             try writeDisplayIfNotOlder(PhoneDisplayCache.summary(snapshot, phoneId: target.deviceId,
                 preservingImagesFrom: try? loadDisplay()))
@@ -182,12 +169,6 @@ struct WidgetSnapshotStore {
 
     /// 明确撤销共享同时删除摘要和刷新凭据；不清理容器内其他文件。
     func clear() throws { try withLock { try remove(targetFile); try remove(file); try remove(displayFile) } }
-
-    /// 先校验再加锁原子写入，非法摘要不覆盖现有文件。
-    func save(_ snapshot: WidgetSnapshot) throws {
-        try snapshot.validate()
-        try withLock { try writeSnapshot(snapshot) }
-    }
 
     private func loadDisplay() throws -> PhoneDisplayCache? {
         let data: Data
@@ -200,11 +181,12 @@ struct WidgetSnapshotStore {
 
     /// 同源只接受更晚结果；同一时刻完整快照优先，旧 App 回调不能覆盖扩展的新摘要。
     private func writeDisplayIfNotOlder(_ value: PhoneDisplayCache) throws {
-        if let current = try? loadDisplay(), current.envelope.sourceId == value.envelope.sourceId {
-            guard current.envelope.phoneReceivedAtMs <= value.envelope.phoneReceivedAtMs else { return }
-            if current.envelope.phoneReceivedAtMs == value.envelope.phoneReceivedAtMs,
-               current.envelope.cachePriority(summaryOnly: current.summaryOnly) >
-                value.envelope.cachePriority(summaryOnly: value.summaryOnly) { return }
+        if let current = try? loadDisplay() {
+            guard SnapshotAcceptancePolicy.shared.acceptDisplay(
+                current: SnapshotStamp(sourceId: current.envelope.sourceId, receivedAtMs: current.envelope.phoneReceivedAtMs),
+                currentPriority: Int32(current.envelope.cachePriority(summaryOnly: current.summaryOnly)),
+                incoming: SnapshotStamp(sourceId: value.envelope.sourceId, receivedAtMs: value.envelope.phoneReceivedAtMs),
+                incomingPriority: Int32(value.envelope.cachePriority(summaryOnly: value.summaryOnly))) else { return }
         }
         try write(try SharedJSON.encoder.encode(value), to: displayFile, limit: WatchProtocol.maxSnapshotBytes + 1024)
     }

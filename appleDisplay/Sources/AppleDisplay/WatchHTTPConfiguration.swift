@@ -1,8 +1,9 @@
 import Foundation
+import SharedLogic
 
 /// 通过系统配套通道下发的独立只读 HTTP 配置；target 为 nil 明确撤销先前授权。
 struct WatchHTTPConfiguration: Codable, Equatable {
-    static let maxBytes = 4096
+    static let maxBytes = Int(WatchConfigurationPolicy.shared.MAX_BYTES)
     let version: Int
     let phoneId: String
     let target: WidgetRefreshTarget?
@@ -19,16 +20,60 @@ struct WatchHTTPConfiguration: Codable, Equatable {
     /// 同一手机只有更高修订号可改变授权；完全相等的重送可作无操作接收。
     /// 新手机身份由当前系统配套通道授权，不与旧手机的本机计数器比较。
     func supersedes(_ previous: Self?) -> Bool {
-        guard let previous, previous.phoneId == phoneId else { return true }
-        return revision > previous.revision || self == previous
+        acceptance(comparedTo: previous) != .reject
+    }
+
+    /// Codable 只映射字段；修订接纳、重复配置和同号冲突统一由共享层判定。
+    func acceptance(comparedTo previous: Self?) -> WatchConfigurationAcceptance {
+        guard let incoming = sharedConfiguration else { return .reject }
+        if let previous, previous.sharedConfiguration == nil { return .reject }
+        return WatchConfigurationPolicy.shared.acceptance(incoming: incoming, previous: previous?.sharedConfiguration)
+    }
+
+    static func stableTarget(_ proposed: WidgetRefreshTarget?, previous: Self?) -> WidgetRefreshTarget? {
+        if WatchConfigurationPolicy.shared.reusePreviousTarget(previous: previous?.target?.watchConfigurationTarget,
+                                                              incoming: proposed?.watchConfigurationTarget) {
+            return previous?.target
+        }
+        return proposed
+    }
+
+    static func needsPublication(previous: Self?, target: WidgetRefreshTarget?, forceRevision: Bool) -> Bool {
+        let incomingTarget = target?.watchConfigurationTarget
+        guard target == nil || incomingTarget != nil else { return true }
+        return WatchConfigurationPolicy.shared.needsPublication(previous: previous?.sharedConfiguration,
+            incomingTarget: incomingTarget, forceRevision: forceRevision)
+    }
+
+    func keepsSnapshot(phoneId: String?, sourceId: String?) -> Bool {
+        guard let configuration = sharedConfiguration else { return false }
+        return WatchConfigurationPolicy.shared.keepSnapshot(configuration: configuration,
+            cachedPhoneId: phoneId, cachedSourceId: sourceId)
+    }
+
+    func keepsTransfer(previous: Self?, hasTransfer: Bool) -> Bool {
+        guard let incoming = sharedConfiguration else { return false }
+        return WatchConfigurationPolicy.shared.keepTransfer(incoming: incoming,
+            previous: previous?.sharedConfiguration, hasTransfer: hasTransfer)
+    }
+
+    func acceptsHTTPSource(_ sourceId: String) -> Bool {
+        guard let configuration = sharedConfiguration else { return false }
+        return WatchConfigurationPolicy.shared.acceptsHTTPSource(configuration: configuration, sourceId: sourceId)
+    }
+
+    private var sharedConfiguration: WatchConfigurationState? {
+        guard let version = Int32(exactly: version) else { return nil }
+        let projectedTarget = target?.watchConfigurationTarget
+        guard target == nil || projectedTarget != nil else { return nil }
+        return WatchConfigurationState(version: version, phoneId: phoneId, revision: String(revision), target: projectedTarget)
     }
 
     /// 凭据仍绑定授予它的手机身份，Watch 不得把其他手机的目标拼接到本配置。
     func validate() throws {
-        guard version == 1, SharedValidation.validId(phoneId) else { throw WidgetSnapshotError.invalid }
-        if let target {
-            try target.validate()
-            guard target.deviceId == phoneId else { throw WidgetSnapshotError.invalid }
+        try target?.validate()
+        guard let configuration = sharedConfiguration, WatchConfigurationPolicy.shared.valid(configuration: configuration) else {
+            throw WidgetSnapshotError.invalid
         }
         guard try SharedJSON.encoder.encode(self).count <= Self.maxBytes else { throw WidgetSnapshotError.tooLarge }
     }
@@ -68,12 +113,21 @@ struct WatchHTTPConfiguration: Codable, Equatable {
     }
 }
 
+private extension WidgetRefreshTarget {
+    var watchConfigurationTarget: WatchConfigurationTarget? {
+        guard let version = Int32(exactly: version), let port = Int32(exactly: port) else { return nil }
+        return WatchConfigurationTarget(sourceId: sourceId, deviceId: deviceId, generation: generation,
+            connection: RefreshConnection(version: version, sourceId: sourceId, deviceId: deviceId,
+                host: host, port: port, key: key))
+    }
+}
+
 extension WatchSnapshotEnvelope {
     /// HTTP 仅提供摘要：保留桌面精确数值、质量及槽位四态，旧正文和图片不混入新结果。
     static func fromHTTP(_ summary: WidgetSnapshot, configuration: WatchHTTPConfiguration) throws -> Self {
         try configuration.validate()
         try summary.validate()
-        guard let target = configuration.target, summary.sourceId == target.sourceId else {
+        guard configuration.acceptsHTTPSource(summary.sourceId) else {
             throw WidgetSnapshotError.invalid
         }
         let snapshot = LanDisplaySnapshot(version: summary.snapshot.version, tokens: summary.snapshot.tokens,

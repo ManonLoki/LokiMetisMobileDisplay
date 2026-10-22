@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import SharedLogic
 
 /// Watch只缓存当前展示引用的内容，系统配套通道传来的文件同样需完整校验。
 final class WatchAssetCache {
@@ -47,10 +48,15 @@ final class WatchAssetCache {
     }
     /// 精确块偏移和大小通过后才写；同步磁盘、完整校验及原子替换完成才返回成功路径。
     func accept(id: String, offset: UInt64, data: Data) throws -> (UInt64, URL?) {
-        guard transferId == id, self.offset == offset, let writer, let asset = descriptor, let partial,
-              offset < asset.length, data.count == min(WatchProtocol.chunkSize, Int(asset.length - offset)) else { throw WidgetSnapshotError.invalid }
-        try writer.write(contentsOf: data); self.offset += UInt64(data.count)
-        if self.offset < asset.length { return (self.offset, nil) }
+        guard let writer, let asset = descriptor, let partial,
+              let length = Int32(exactly: asset.length), let received = Int32(exactly: self.offset),
+              let incomingOffset = Int64(exactly: offset), let count = Int32(exactly: data.count)
+        else { throw WidgetSnapshotError.invalid }
+        let decision = WatchProtocolRules.shared.assetChunk(transferId: transferId, incomingId: id,
+            length: length, receivedBytes: received, offset: incomingOffset, byteCount: count)
+        guard decision.valid else { throw WidgetSnapshotError.invalid }
+        try writer.write(contentsOf: data); self.offset = UInt64(decision.nextOffset)
+        if !decision.complete { return (self.offset, nil) }
         try writer.synchronize(); try writer.close(); self.writer = nil
         // 先在临时文件名下验证，不覆盖此前有效的同摘要正文。
         guard try validPartial(partial, asset: asset) else { throw WidgetSnapshotError.invalid }
@@ -76,24 +82,26 @@ final class WatchAssetCache {
     /// 后台保留全部动画帧和原始时序；每张最多256像素、2MiB，十二张约24MiB。
     /// 不读写缓存状态，可在独立解码队列执行，不占用配套RPC队列。
     static func image(_ path: URL, asset: LanDisplaySnapshot.Asset) throws -> LanImageAsset {
-        var limits = LanImageAsset.Limits()
-        limits.maxPixelSize = 256
-        limits.maxDecodedBytes = 2 * 1024 * 1024
+        let limits = LanImageAsset.Limits(profile: .watch)
         return try LanImageAsset.decode(contentsOf: path, mime: asset.mime, id: asset.hash, limits: limits)
     }
     /// 当前引用优先保留，旧缓存按最近复用时间收敛到512MiB和512个文件。
     func prune(keeping: Set<String>) {
         guard keeping != settledKeeping else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]) else { return }
-        let entries = files.compactMap { path -> (URL, Int, Date)? in
+        let entries = files.compactMap { path -> ImageCacheEntry? in
             guard SharedValidation.validHash(path.lastPathComponent), let value = try? path.resourceValues(forKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]),
                   value.isRegularFile == true, value.isSymbolicLink != true else { return nil }
-            return (path, value.fileSize ?? 0, value.contentModificationDate ?? .distantPast)
+            return ImageCacheEntry(key: path.lastPathComponent, byteLength: Int64(value.fileSize ?? 0),
+                lastUsed: (value.contentModificationDate ?? .distantPast).timeIntervalSinceReferenceDate)
         }
-        var bytes = entries.reduce(0) { $0 + $1.1 }; var count = entries.count; var settled = true
-        for (path, size, _) in entries.sorted(by: { $0.2 < $1.2 }) where bytes > 512 * 1024 * 1024 || count > 512 {
-            guard !keeping.contains(path.lastPathComponent) else { continue }
-            if (try? FileManager.default.removeItem(at: path)) != nil { bytes -= size; count -= 1 } else { settled = false }
+        let plan = ImageCachePolicy.shared.plan(entries: entries, keeping: keeping)
+        var occupancy = plan.occupancy; var settled = true
+        for entry in plan.candidates {
+            guard ImageCachePolicy.shared.shouldEvict(occupancy: occupancy, profile: .watch) else { break }
+            if (try? FileManager.default.removeItem(at: directory.appendingPathComponent(entry.key))) != nil {
+                occupancy = ImageCachePolicy.shared.removed(occupancy: occupancy, entry: entry)
+            } else { settled = false }
         }
         settledKeeping = settled ? keeping : nil
     }

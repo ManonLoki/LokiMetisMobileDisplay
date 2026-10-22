@@ -14,10 +14,16 @@ struct ContentView: View {
     @State private var forgetCandidate: LanHost?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @AppStorage("panel.showUsage") private var showUsage = true
-    @AppStorage("panel.showHooks") private var showHooks = true
-    @AppStorage("panel.usageDetail") private var usageDetail = UsageDetail.compact.rawValue
-    @AppStorage("panel.hookLayout") private var hookLayout = HookLayout.single.rawValue
+    @AppStorage("panel.showUsage") private var showUsage = PanelConfiguration.companion.defaults().showUsage
+    @AppStorage("panel.showHooks") private var showHooks = PanelConfiguration.companion.defaults().showHooks
+    @AppStorage("panel.usageDetail") private var usageDetail = PanelConfiguration.companion.defaults().usageDetail.key
+    @AppStorage("panel.hookLayout") private var hookLayout = PanelConfiguration.companion.defaults().hookLayout.key
+
+    /// AppStorage 负责系统持久化，未知选项恢复与默认布局由共享配置决定。
+    private var panelConfiguration: PanelConfiguration {
+        PanelConfiguration.companion.restore(showUsage: showUsage, showHooks: showHooks,
+                                             detail: usageDetail, hookLayout: hookLayout)
+    }
 
     private var appDisplayName: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "LokiMetris"
@@ -56,7 +62,10 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 260)
             } detail: {
                 if selected == .panel { panelNavigation } else { settingsNavigation }
-            }.navigationSplitViewStyle(.balanced)
+            }
+            .navigationSplitViewStyle(.balanced)
+            // 主入口切换时清空分栏容器保留的子导航，连接模型仍由 App 根实例持有。
+            .id(selected)
         } else {
             TabView(selection: $selected) {
                 panelNavigation
@@ -73,9 +82,7 @@ struct ContentView: View {
         NavigationStack {
             LanDisplayPage(state: panelState, snapshot: panelSnapshot,
                 widgetSharingError: displayState.sharingError,
-                showUsage: showUsage, showHooks: showHooks,
-                usageDetail: UsageDetail(rawValue: usageDetail) ?? .compact,
-                hookLayout: HookLayout(rawValue: hookLayout) ?? .single,
+                configuration: panelConfiguration,
                 openSettings: { selected = .settings },
                 motionEnabled: selected == .panel)
                 .navigationTitle("")
@@ -315,7 +322,9 @@ struct ContentView: View {
     }
 
     private var panelDescription: String {
-        let cards = [showUsage ? "用量" : nil, showHooks ? "Hooks \(HookLayout(rawValue: hookLayout)?.title ?? HookLayout.single.title)" : nil].compactMap { $0 }
+        let configuration = panelConfiguration
+        let cards = [configuration.showUsage ? "用量" : nil,
+                     configuration.showHooks ? "Hooks \(HookLayout(shared: configuration.hookLayout).title)" : nil].compactMap { $0 }
         return cards.isEmpty ? "尚未选择卡片" : cards.joined(separator: " · ")
     }
 

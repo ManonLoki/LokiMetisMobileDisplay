@@ -166,4 +166,21 @@ final class LanImageAssetTests: XCTestCase {
         XCTAssertLessThanOrEqual(value.decodedByteCount, limits.maxDecodedBytes)
         XCTAssertLessThan(value.frames[0].width, 8)
     }
+
+    /// 两种 Apple profile 实际经过同一共享预算，原生 ImageIO 仍执行各自的缩图与行字节核算。
+    func test_shared_profiles_preserve_phone_and_watch_native_decode_limits() throws {
+        let phoneLimits = LanImageAsset.Limits()
+        let watchLimits = LanImageAsset.Limits(profile: .watch)
+        XCTAssertEqual(phoneLimits.maxPixelSize, 512)
+        XCTAssertEqual(phoneLimits.maxDecodedBytes, 8 * 1024 * 1024)
+        XCTAssertEqual(watchLimits.maxPixelSize, 256)
+        XCTAssertEqual(watchLimits.maxDecodedBytes, 2 * 1024 * 1024)
+        let data = try TestImages.encoded("public.png", mime: "image/png", size: 1024)
+        let phone = try LanImageAsset.decode(data, mime: "image/png", id: "phone", limits: phoneLimits)
+        let watch = try LanImageAsset.decode(data, mime: "image/png", id: "watch", limits: watchLimits)
+        XCTAssertEqual(phone.frames[0].width, 512)
+        XCTAssertEqual(watch.frames[0].width, 256)
+        XCTAssertLessThanOrEqual(phone.decodedByteCount, phoneLimits.maxDecodedBytes)
+        XCTAssertLessThanOrEqual(watch.decodedByteCount, watchLimits.maxDecodedBytes)
+    }
 }

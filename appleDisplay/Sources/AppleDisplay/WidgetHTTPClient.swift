@@ -1,12 +1,12 @@
 import CryptoKit
 import Foundation
+import SharedLogic
 
 /// Widget 独立读取桌面展示投影；凭据只进入加密请求，地址和响应都受固定边界约束。
 struct WidgetHTTPClient {
-    static let timeout: TimeInterval = 6
-    static let maxResponseBytes = 96 * 1024
-    private static let requestContext = Data("loki-widget-request-v1".utf8)
-    private static let responseContext = Data("loki-widget-response-v1".utf8)
+    static let timeout = Double(WidgetHttpPolicy.shared.TIMEOUT_MS) / 1000
+    static let maxResponseBytes = Int(WidgetHttpPolicy.shared.MAX_RESPONSE_BYTES)
+    private static let requestContext = Data(WidgetHttpPolicy.shared.REQUEST_CONTEXT.utf8)
     private let configuration: URLSessionConfiguration
     private let now: () -> Date
 
@@ -24,7 +24,7 @@ struct WidgetHTTPClient {
               (0...(Int64.max - WidgetSnapshot.leaseMs)).contains(receivedAtMs) else {
             throw WidgetHTTPError.invalidResponse
         }
-        guard let keyBytes = Data(base64Encoded: target.key), keyBytes.count == 32 else {
+        guard let keyBytes = WidgetHTTPBinary.decode(target.key, field: .key) else {
             throw WidgetHTTPError.invalidResponse
         }
         let key = SymmetricKey(data: keyBytes)
@@ -36,11 +36,14 @@ struct WidgetHTTPClient {
                               ciphertext: (sealed.ciphertext + sealed.tag).base64EncodedString())
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
                                  timeoutInterval: Self.timeout)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpMethod = WidgetHttpPolicy.shared.METHOD
+        request.setValue(WidgetHttpPolicy.shared.MEDIA_TYPE, forHTTPHeaderField: "Content-Type")
+        request.setValue(WidgetHttpPolicy.shared.MEDIA_TYPE, forHTTPHeaderField: "Accept")
         request.httpShouldHandleCookies = false
         request.httpBody = try SharedJSON.encoder.encode(payload)
+        guard WidgetHttpPolicy.shared.validRequestSize(bytes: Int64(request.httpBody?.count ?? 0), profile: .apple) else {
+            throw WidgetHTTPError.invalidResponse
+        }
 
         // 每次独立会话，不共享 Cookie、HTTP 认证、缓存或代理凭据。
         guard let config = configuration.copy() as? URLSessionConfiguration else { throw WidgetHTTPError.invalidResponse }
@@ -55,17 +58,23 @@ struct WidgetHTTPClient {
         let data = try await BoundedWidgetRequest().perform(request, configuration: config)
         try Task.checkCancellation()
         let response = try SharedJSON.decoder.decode(Response.self, from: data)
-        guard let responseNonce = Data(base64Encoded: response.nonce), responseNonce.count == 12,
-              let ciphertext = Data(base64Encoded: response.ciphertext),
-              (16...(WidgetSnapshot.maxBytes + 16)).contains(ciphertext.count) else {
+        guard let responseNonce = WidgetHTTPBinary.decode(response.nonce, field: .nonce),
+              let ciphertext = WidgetHTTPBinary.decode(response.ciphertext, field: .responseCiphertext),
+              WidgetHttpPolicy.shared.validResponseEnvelope(requestNonceBytes: Int64(requestNonce.count),
+                  responseNonceBytes: Int64(responseNonce.count), ciphertextBytes: Int64(ciphertext.count)),
+              let aad = WidgetHTTPBinary.responseAssociatedData(requestNonce) else {
             throw WidgetHTTPError.invalidResponse
         }
         let box = try ChaChaPoly.SealedBox(nonce: ChaChaPoly.Nonce(data: responseNonce),
-                                         ciphertext: ciphertext.dropLast(16), tag: ciphertext.suffix(16))
-        let plaintext = try ChaChaPoly.open(box, using: key,
-                                           authenticating: Self.responseContext + requestNonce)
-        guard plaintext.count <= WidgetSnapshot.maxBytes,
-              try SharedJSON.decoder.decode(Source.self, from: plaintext).sourceId == target.sourceId else {
+                                         ciphertext: ciphertext.dropLast(Int(WidgetHttpPolicy.shared.TAG_BYTES)),
+                                         tag: ciphertext.suffix(Int(WidgetHttpPolicy.shared.TAG_BYTES)))
+        let plaintext = try ChaChaPoly.open(box, using: key, authenticating: aad)
+        guard WidgetHttpPolicy.shared.validPlaintextSize(bytes: Int64(plaintext.count)) else {
+            throw WidgetHTTPError.invalidResponse
+        }
+        let source = try SharedJSON.decoder.decode(Source.self, from: plaintext)
+        guard WidgetHttpPolicy.shared.acceptsMessageSource(expectedSourceId: target.sourceId,
+            sourceId: source.sourceId, type: source.type) else {
             throw WidgetHTTPError.invalidResponse
         }
         try Task.checkCancellation()
@@ -79,7 +88,26 @@ struct WidgetHTTPClient {
         let ciphertext: String
     }
     private struct Response: Decodable { let nonce: String; let ciphertext: String }
-    private struct Source: Decodable { let sourceId: String }
+    private struct Source: Decodable { let sourceId: String; let type: String }
+}
+
+/// 平台只负责 Base64 与固定小型字节桥接，字段长度和兼容接纳策略均调用 SharedLogic。
+enum WidgetHTTPBinary {
+    static func decode(_ text: String, field: WidgetHttpBinaryField) -> Data? {
+        guard WidgetHttpPolicy.shared.acceptsBase64Input(characters: Int64(text.utf16.count), field: field, profile: .apple),
+              let data = Data(base64Encoded: text),
+              WidgetHttpPolicy.shared.acceptsDecodedBase64(field: field, profile: .apple,
+                  decodedBytes: Int64(data.count), canonicalEncoding: data.base64EncodedString() == text) else { return nil }
+        return data
+    }
+
+    static func responseAssociatedData(_ nonce: Data) -> Data? {
+        guard WidgetHttpPolicy.shared.validNonceSize(bytes: Int64(nonce.count)) else { return nil }
+        let input = KotlinByteArray(size: Int32(nonce.count))
+        for (index, byte) in nonce.enumerated() { input.set(index: Int32(index), value: Int8(bitPattern: byte)) }
+        guard let result = WidgetHttpPolicy.shared.responseAssociatedData(requestNonce: input) else { return nil }
+        return Data((0..<Int(result.size)).map { UInt8(bitPattern: result.get(index: Int32($0))) })
+    }
 }
 
 /// 错误不包含端点、密钥或服务端原文，调用方保留上次合法摘要。
@@ -145,14 +173,14 @@ private final class BoundedWidgetRequest: NSObject, URLSessionDataDelegate, @unc
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        guard let response = response as? HTTPURLResponse, response.statusCode == 200,
-              response.mimeType?.lowercased() == "application/json",
-              response.url == dataTask.originalRequest?.url else {
+        guard let response = response as? HTTPURLResponse,
+              WidgetHttpPolicy.shared.acceptsResponse(status: Int32(clamping: response.statusCode),
+                  mediaType: response.mimeType, sameRequestURL: response.url == dataTask.originalRequest?.url) else {
             completionHandler(.cancel)
             finish(.failure(WidgetHTTPError.invalidResponse))
             return
         }
-        guard response.expectedContentLength <= WidgetHTTPClient.maxResponseBytes else {
+        guard WidgetHttpPolicy.shared.acceptsDeclaredResponseSize(bytes: response.expectedContentLength) else {
             completionHandler(.cancel)
             finish(.failure(WidgetHTTPError.responseTooLarge))
             return
@@ -163,7 +191,8 @@ private final class BoundedWidgetRequest: NSObject, URLSessionDataDelegate, @unc
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         lock.lock()
         guard !finished else { lock.unlock(); return }
-        guard data.count <= WidgetHTTPClient.maxResponseBytes - bytes.count else {
+        guard WidgetHttpPolicy.shared.fitsCapacity(bufferedBytes: Int64(bytes.count), incomingBytes: Int64(data.count),
+            maximumBytes: Int64(WidgetHTTPClient.maxResponseBytes)) else {
             lock.unlock()
             finish(.failure(WidgetHTTPError.responseTooLarge))
             return
@@ -183,8 +212,12 @@ private final class BoundedWidgetRequest: NSObject, URLSessionDataDelegate, @unc
     /// 拒绝任何重定向，防止摘要请求被引向其他主机。
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-        completionHandler(nil)
-        finish(.failure(WidgetHTTPError.redirect))
+        guard WidgetHttpPolicy.shared.FOLLOW_REDIRECTS else {
+            completionHandler(nil)
+            finish(.failure(WidgetHTTPError.redirect))
+            return
+        }
+        completionHandler(request)
     }
 
     /// 不接受系统凭据质询，认证只依赖请求内密钥。

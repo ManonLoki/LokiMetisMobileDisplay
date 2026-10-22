@@ -134,7 +134,7 @@ final class PhoneHookCacheTests: XCTestCase {
         let store = WidgetSnapshotStore(directory: directory)
         try commit(full(), to: store)
         // 模拟摘要已原子提交、展示文件尚未更新时进程结束。
-        try store.save(summary(at: 6000))
+        try WidgetStoreFixture.writeSnapshot(summary(at: 6000), to: store)
         let recovered = try XCTUnwrap(WidgetSnapshotStore(directory: directory).loadDisplayCache())
         XCTAssertEqual(recovered.envelope.phoneReceivedAtMs, 6000)
         XCTAssertEqual(recovered.envelope.snapshot.hooks.first?.behavior, .error)
@@ -240,7 +240,8 @@ final class PhoneHookCacheTests: XCTestCase {
         try store.selectSource(otherSource)
         XCTAssertNil(try store.loadDisplayCache())
         XCTAssertFalse(try store.saveFetchedSnapshot(summary(at: 7000), for: initialTarget))
-        let newTarget = try store.saveRefreshTarget(target(sourceId: otherSource))
+        try store.saveAuthenticatedSnapshot(summary(at: 7000, sourceId: otherSource), refreshTarget: target(sourceId: otherSource))
+        let newTarget = try XCTUnwrap(store.loadRefreshTarget())
         XCTAssertTrue(try store.saveFetchedSnapshot(summary(at: 8000, sourceId: otherSource), for: newTarget))
         let switched = try XCTUnwrap(store.loadDisplayCache())
         XCTAssertTrue(switched.summaryOnly)
@@ -275,7 +276,10 @@ final class PhoneHookCacheTests: XCTestCase {
     func test_delayed_complete_publish_adds_image_to_newer_http_without_rolling_back_facts() throws {
         let directory = try temporaryFolder()
         let store = WidgetSnapshotStore(directory: directory)
-        let authorized = try store.saveRefreshTarget(target())
+        // 只读凭据已落盘但旧摘要缺失，HTTP 先补齐摘要，迟到的完整发布随后补图。
+        try WidgetStoreFixture.writeTarget(target(), to: store)
+        let authorized = try XCTUnwrap(store.loadRefreshTarget())
+        XCTAssertThrowsError(try store.load())
         let current = try summary(at: 5000)
         XCTAssertTrue(try store.saveFetchedSnapshot(current, for: authorized))
         XCTAssertTrue(try XCTUnwrap(store.loadDisplayCache()).summaryOnly)

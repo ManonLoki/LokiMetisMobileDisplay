@@ -29,8 +29,8 @@ class ProviderQuotaTest {
         assertEquals("Claude", claude.label)
         assertEquals(listOf("每周", "5h"), claude.windows.map { it.kindLabel })
         assertEquals(listOf("每月 75%"), cursor.windows.map { "${it.kindLabel} ${it.percentText}" })
-        assertEquals("claude", providerQuotaKey("claude-code"))
-        assertEquals("claude", providerQuotaKey("Claude Code"))
+        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("claude-code"))
+        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("Claude Code"))
     }
     @Test fun remaining_color_thresholds_and_disconnect_clear_quota() {
         for ((remaining, level) in listOf(0 to 0, 200 to 0, 201 to 1, 500 to 1, 501 to 2, 1000 to 2)) {

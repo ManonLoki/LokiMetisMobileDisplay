@@ -7,7 +7,7 @@ class ProviderQuotaCodecTest {
     @Test fun quota_roundtrip_preserves_weekly_only_and_legacy_without_quota() {
         val quota = ProviderQuotaSnapshot(123, listOf(ProviderQuotaEntry("codex", "pro", null, ProviderQuotaWindow("weekly", 970, 1900000000))))
         val snapshot = TerminalSnapshot(1, null, null, false, emptyList(), emptyList(), null, quota)
-        val record = AndroidWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
+        val record = TerminalWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
         val bytes = AndroidWidgetCodec.encode(AndroidWidgetCodec.State(record, null))
         assertEquals(quota, AndroidWidgetCodec.decode(bytes).snapshot.snapshot.providerQuota)
         val oldRecord = record.copy(snapshot = snapshot.copy(providerQuota = null))
@@ -31,7 +31,7 @@ class ProviderQuotaCodecTest {
             ProviderQuotaEntry("cursor", "pro", null, null, ProviderQuotaWindow("monthly", 1000, 1900000000)),
             ProviderQuotaEntry("grok", null, null, ProviderQuotaWindow("weekly", 0, null))))
         val snapshot = TerminalSnapshot(1, null, null, false, emptyList(), emptyList(), null, quota)
-        val record = AndroidWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
+        val record = TerminalWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
         val bytes = AndroidWidgetCodec.encode(AndroidWidgetCodec.State(record, null))
         assertEquals(quota, AndroidWidgetCodec.decode(bytes).snapshot.snapshot.providerQuota)
     }
@@ -43,7 +43,7 @@ class ProviderQuotaCodecTest {
             ProviderQuotaEntry("cursor", null, null, null, ProviderQuotaWindow("monthly", 30, null))))
         for (enabled in listOf(null, emptyList(), listOf("codex", "cursor"))) {
             val snapshot = TerminalSnapshot(1, null, null, false, emptyList(), emptyList(), null, quota, enabled)
-            val record = AndroidWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
+            val record = TerminalWidgetSnapshot.fromLive("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 1_000, snapshot)
             val encoded = AndroidWidgetCodec.encode(AndroidWidgetCodec.State(record, null))
             assertEquals(0x34, encoded[3].toInt())
             val restored = AndroidWidgetCodec.decode(encoded).snapshot.snapshot

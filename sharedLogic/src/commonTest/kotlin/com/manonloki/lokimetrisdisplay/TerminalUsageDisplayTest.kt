@@ -22,12 +22,13 @@ class TerminalUsageDisplayTest {
     @Test fun display_agents_prioritize_cursor_and_keep_other_agents_stable() {
         val tokens = tokens("Work_Buddy", "Hermes", "Grok Build", "OpenCode", "Cursor", "Claude-Code", "codex")
         val original = tokens.agents.toList()
+        val displayed = snapshot(tokens).displayUsageRows.mapNotNull { it.tokenAgent }
 
         assertEquals(listOf("codex", "Claude-Code", "Cursor", "Grok Build", "Hermes", "OpenCode", "Work_Buddy"),
-            tokens.displayAgents.map { it.agent })
+            displayed.map { it.agent })
         assertEquals(original, tokens.agents)
         assertSame(amount, tokens.all)
-        tokens.displayAgents.forEach { assertSame(amount, it.amount) }
+        displayed.forEach { assertSame(amount, it.amount) }
     }
 
     @Test fun cursor_with_quota_only_appears_before_grok_and_workbuddy_without_fabricating_tokens() {
@@ -153,9 +154,9 @@ class TerminalUsageDisplayTest {
         assertEquals(14, selected.displayTokens?.agents?.size)
         assertEquals(14, selected.displayUsageRows.size)
         assertEquals(listOf("codex", "claude", "cursor", "grok"), selected.displayProviderQuota?.providers?.map { it.provider })
-        assertEquals("GitHub Copilot", agentDisplayName("gitHubCopilot"))
-        assertEquals("claude", providerQuotaKey("claudeCode"))
-        assertEquals("grok", providerQuotaKey("grok-build"))
+        assertEquals("GitHub Copilot", UsageDisplayPolicy.agentDisplayName("gitHubCopilot"))
+        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("claudeCode"))
+        assertEquals("grok", UsageDisplayPolicy.providerQuotaKey("grok-build"))
     }
 
     @Test fun changing_enabled_list_immediately_changes_projection_and_null_keeps_legacy_behavior() {
@@ -175,5 +176,17 @@ class TerminalUsageDisplayTest {
                 listOf("claudeCode", "Claude-Code"), listOf("grok", "grok-build"), List(15) { "tool$it" })) {
             assertFails { original.copy(enabledAgents = invalid).validate() }
         }
+    }
+
+    @Test fun tokenNamesRejectCanonicalUnicodeDuplicatesWithoutFoldingCaseOrAliasesOrRewritingPayload() {
+        val composed = "Caf\u00e9"
+        val decomposed = "Cafe\u0301"
+        assertFalse(tokens(composed, decomposed).isValid())
+        val original = tokens(decomposed, "CAF\u00c9", "workbuddy", "Work-Buddy")
+        assertTrue(original.isValid())
+        assertEquals(listOf(decomposed, "CAF\u00c9", "workbuddy", "Work-Buddy"), original.agents.map { it.agent })
+        val selected = snapshot(original).copy(enabledAgents = listOf(composed))
+        assertEquals(listOf(decomposed, "CAF\u00c9"), selected.displayTokens?.agents?.map { it.agent })
+        assertEquals(listOf(decomposed, "CAF\u00c9"), selected.displayUsageRows.map { it.tokenAgent?.agent })
     }
 }

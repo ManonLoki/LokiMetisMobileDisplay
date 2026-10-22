@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 
 /// 缓存保留真实数据时间与来源，恢复文件本身不能产生手机在线或新同步证明。
 struct WatchDisplayRecord: Codable, Equatable {
@@ -27,26 +28,12 @@ struct WatchDisplayRecord: Codable, Equatable {
         return envelope
     }
 
-    /// 同来源迟到的摘要不能覆盖新数据，同一时刻优先保留完整图文。
+    /// 接收时间、图文优先级及历史清图防复活统一由共享策略决策。
     func supersedes(_ previous: Self?) throws -> Bool {
         let incoming = try validate()
-        guard let previous else { return true }
-        let old = try previous.validate()
-        guard incoming.phoneId == old.phoneId, incoming.sourceId == old.sourceId else { return true }
-        if incoming.phoneReceivedAtMs != old.phoneReceivedAtMs { return incoming.phoneReceivedAtMs > old.phoneReceivedAtMs }
-        let incomingPriority = incoming.cachePriority(summaryOnly: summaryOnly)
-        let previousPriority = old.cachePriority(summaryOnly: previous.summaryOnly)
-        if incomingPriority == 1, previousPriority == 1 {
-            let incomingHooks = Dictionary(uniqueKeysWithValues: incoming.snapshot.hooks.map { ($0.slot, $0) })
-            for oldHook in old.snapshot.hooks {
-                guard let oldTime = oldHook.cachedImageReceivedAtMs ?? oldHook.cachedImageClearedAtMs else { continue }
-                guard let hook = incomingHooks[oldHook.slot], hook.agent == oldHook.agent,
-                      let incomingTime = hook.cachedImageReceivedAtMs ?? hook.cachedImageClearedAtMs,
-                      incomingTime >= oldTime else { return false }
-                if incomingTime == oldTime, oldHook.cachedImageClearedAtMs != nil, hook.image != nil { return false }
-            }
-        }
-        return incomingPriority >= previousPriority
+        let old = try previous?.validate()
+        return HookImageCachePolicy.shared.supersedes(incoming: incoming.imageCacheState(summaryOnly: summaryOnly),
+            previous: old.map { $0.imageCacheState(summaryOnly: previous?.summaryOnly ?? true) })
     }
 
     /// HTTP摘要只有以相同类型请求时才可命中，不能作为完整快照ACK。
@@ -100,7 +87,7 @@ enum WatchRefreshPolicy {
     static let backgroundBudget: TimeInterval = 12
     /// 未来时间可能来自两端时钟偏差，应重新取数，不能永久阻止HTTP后备。
     static func shouldRefresh(receivedAtMs: Int64?, nowMs: Int64) -> Bool {
-        guard let receivedAtMs, receivedAtMs >= 0, nowMs >= 0, receivedAtMs <= nowMs else { return true }
-        return nowMs - receivedAtMs >= Int64(interval * 1000)
+        SnapshotFreshnessPolicy.shared.shouldRefresh(receivedAtMs: receivedAtMs ?? -1,
+            nowMs: nowMs, intervalMs: Int64(interval * 1000))
     }
 }

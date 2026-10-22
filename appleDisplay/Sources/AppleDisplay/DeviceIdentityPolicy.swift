@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 
 /// 本机身份只使用 UUID 与配对索引，不读取、改绑或重新生成已有配对秘密。
 enum DeviceIdentityFailure: Error, Equatable {
@@ -31,23 +32,14 @@ enum DeviceIdentityPolicy {
 
     /// 配对账户严格为「桌面 UUID.本机 UUID」；多组身份不得按顺序、数量或最近使用时间猜测。
     static func uniquePairedIdentity(accounts: [String]) throws -> String? {
-        let identities = try pairedIdentities(accounts: accounts)
-        guard identities.count <= 1 else { throw DeviceIdentityFailure.ambiguousPairedIdentity }
-        return identities.first
-    }
-
-    /// 从配对账户名解析出现过的本机身份集合；任何格式异常都整体拒绝。
-    private static func pairedIdentities(accounts: [String]) throws -> Set<String> {
-        guard accounts.count <= 64 else { throw DeviceIdentityFailure.invalidPairingIndex }
-        var identities: Set<String> = []
-        var seen: Set<String> = []
-        for account in accounts {
-            let parts = account.split(separator: ".", omittingEmptySubsequences: false)
-            guard parts.count == 2, SharedValidation.validId(String(parts[0])),
-                  SharedValidation.validId(String(parts[1])), parts[0] != parts[1],
-                  seen.insert(account).inserted else { throw DeviceIdentityFailure.invalidPairingIndex }
-            identities.insert(String(parts[1]))
+        let result = DeviceIdentityRules.shared.recoverFromPairingAccounts(accounts: accounts)
+        switch result.status {
+        case .ambiguous: throw DeviceIdentityFailure.ambiguousPairedIdentity
+        case .missing: return nil
+        case .recovered:
+            guard let deviceId = result.deviceId else { throw DeviceIdentityFailure.invalidPairingIndex }
+            return deviceId
+        default: throw DeviceIdentityFailure.invalidPairingIndex
         }
-        return identities
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 import Network
 
 /// 一个Apple Network连接拥有读进度、有限写队列和半写超时；与iOS App编译同一源码进行宿主socket回归。
@@ -58,7 +59,7 @@ final class LanSocket {
 
     /// 队列最多八帧，任何半写失败都销毁连接，绝不重发已经消费nonce的密文。
     func send(_ json: [String: Any], limit: Int, completion: @escaping () -> Void = {}) throws {
-        guard !closed, writes.count + (writeId == nil ? 0 : 1) < 8 else { throw Failure.overloaded }
+        guard !closed, TerminalWritePolicy.shared.canEnqueue(queuedFrames: Int32(clamping: writes.count), separateInFlight: writeId != nil) else { throw Failure.overloaded }
         let bytes = try JSONSerialization.data(withJSONObject: json)
         writes.append((try LanFrames.encode(bytes, limit: limit), completion))
         writeNext()
@@ -84,7 +85,7 @@ final class LanSocket {
             self.close(reason: .timeout)
         }
         writeTimeout = timeout
-        queue.asyncAfter(deadline: .now() + 2, execute: timeout)
+        queue.asyncAfter(deadline: .now() + Double(TerminalWritePolicy.shared.TIMEOUT_MS) / 1000, execute: timeout)
         connection.send(content: data, completion: .contentProcessed { [weak self] error in
             guard let self, !self.closed, self.writeId == id else { return }
             self.writeTimeout?.cancel(); self.writeTimeout = nil; self.writeId = nil
@@ -96,7 +97,7 @@ final class LanSocket {
 
     /// 半帧进度由decoder保留，阶段上限在每个完整头部出现后立即检查。
     private func read() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 * 1024) { [weak self] data, _, complete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: Int(TerminalFramePolicy.shared.MAX_READ_BYTES)) { [weak self] data, _, complete, error in
             guard let self, !self.closed else { return }
             do {
                 if let data, !data.isEmpty {

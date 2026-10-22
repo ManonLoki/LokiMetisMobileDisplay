@@ -1,4 +1,5 @@
 import Foundation
+import SharedLogic
 
 /// 手机展示与缓存调度共用的完整展示投影，不重新计算桌面Token或Hook状态机。
 struct LanDisplaySnapshot: Codable, Equatable {
@@ -47,33 +48,35 @@ struct LanDisplaySnapshot: Codable, Equatable {
         return value
     }
 
-    /// 网络与私有缓存共用同一展示语义，缓存不能绕过版本、质量和容量检查。
+    /// Codable 字段保留原样，领域校验和展示模型由 Kotlin 共用。
+    var sharedValue: TerminalSnapshot {
+        TerminalSnapshot(version: Int32(clamping: version), tokens: tokens?.sharedValue, tokenError: tokenError,
+            hooksAvailable: hooksAvailable, hooks: hooks.map {
+                TerminalHook(agent: $0.agent, slot: Int32(clamping: $0.slot), behavior: $0.behavior.rawValue,
+                    content: $0.content, contentTruncated: $0.contentTruncated, image: $0.image)
+            }, assets: assets.map(\.sharedValue), catalogError: catalogError,
+            providerQuota: providerQuota?.sharedValue, enabledAgents: enabledAgents)
+    }
+
+    /// 缓存图片的本机观测信息属于 Apple 缓存外壳，其余约束只在共享模型维护。
     func validate() throws {
-        let value = self
-        guard value.version == 1, value.hooks.count <= 12, value.assets.count <= 64,
-              Set(value.hooks.map(\.slot)).count == value.hooks.count,
-              Set(value.assets.map(\.hash)).count == value.assets.count,
-              value.hooks.allSatisfy({ (1...12).contains($0.slot) && $0.content.utf8.count <= 512 &&
-                  ($0.cachedImageReceivedAtMs.map { $0 >= 0 } ?? true) &&
-                  ($0.cachedImageReceivedAtMs == nil || $0.image != nil) &&
-                  ($0.cachedImageClearedAtMs.map { $0 >= 0 } ?? true) &&
-                  ($0.cachedImageClearedAtMs == nil || ($0.image == nil && $0.cachedImageReceivedAtMs == nil)) }),
-              value.assets.allSatisfy(\.isValid) else {
-            throw WidgetSnapshotError.invalid
-        }
-        let summary = WidgetDisplaySnapshot(version: value.version, tokens: value.tokens, tokenError: value.tokenError,
-            hooksAvailable: value.hooksAvailable, hooks: value.hooks.map { WidgetHook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior) }, providerQuota: value.providerQuota, enabledAgents: value.enabledAgents)
-        try summary.validate()
+        guard sharedValue.isValid(), hooks.allSatisfy({
+            ($0.cachedImageReceivedAtMs.map { $0 >= 0 } ?? true) &&
+            ($0.cachedImageReceivedAtMs == nil || $0.image != nil) &&
+            ($0.cachedImageClearedAtMs.map { $0 >= 0 } ?? true) &&
+            ($0.cachedImageClearedAtMs == nil || ($0.image == nil && $0.cachedImageReceivedAtMs == nil))
+        }) else { throw WidgetSnapshotError.invalid }
     }
 }
 
 /// 图片元信息与格式魔数在网络、手机缓存和 Watch 缓存间共用同一边界。
 extension LanDisplaySnapshot.Asset {
-    static let supportedMimes: Set<String> = ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"]
+    static let supportedMimes: Set<String> = TerminalAsset.companion.SUPPORTED_MIMES
     /// 单张编码正文上限 32MiB。
-    static let maxLength: UInt64 = 33_554_432
+    static let maxLength = UInt64(TerminalAsset.companion.MAX_LENGTH)
     /// 摘要、公开 MIME 与长度都在协议边界内。
-    var isValid: Bool { SharedValidation.validHash(hash) && Self.supportedMimes.contains(mime) && (1...Self.maxLength).contains(length) }
+    var sharedValue: TerminalAsset { TerminalAsset(hash: hash, mime: mime, length: Int64(clamping: length)) }
+    var isValid: Bool { sharedValue.isValid() }
     /// 摘要之外再核对公开 MIME 与实际文件头，防止格式混淆。
     static func validMagic(_ bytes: Data, mime: String) -> Bool {
         switch mime {
@@ -86,5 +89,18 @@ extension LanDisplaySnapshot.Asset {
                 && bytes[bytes.startIndex + 8 ..< bytes.startIndex + 12].elementsEqual("WEBP".utf8)
         default: return false
         }
+    }
+}
+
+/// 只搬运传输元信息与当前引用；十进制长度保留 Swift UInt64 的完整范围。
+extension LanDisplaySnapshot.Asset {
+    var transferAsset: AssetTransferDescriptor {
+        AssetTransferDescriptor(hash: hash, mime: mime, byteLength: String(length))
+    }
+}
+
+extension LanDisplaySnapshot {
+    var transferManifest: AssetTransferManifest {
+        AssetTransferManifest(assets: assets.map(\.transferAsset), referencedHashes: Set(hooks.compactMap(\.image)))
     }
 }

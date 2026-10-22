@@ -31,4 +31,46 @@ class TerminalDeviceTypeTest {
         }
         assertEquals(TerminalDeviceType.PHONE, report.afterAuthenticatedSnapshot(listOf("deviceFormFactorV1")))
     }
+
+    /** Swift 的 JSON 类型错误传 null，坏能力表必须返回错误而不把 Kotlin 异常带过边界。 */
+    @Test fun native_decision_rejects_invalid_input_without_consuming_report() {
+        val report = TerminalDeviceTypeReport(TerminalDeviceType.TABLET)
+        val invalid = listOf(null, listOf(""), listOf("deviceFormFactorV1", "deviceFormFactorV1"),
+            List(17) { "cap$it" }, listOf("长".repeat(22)))
+        for (capabilities in invalid) {
+            assertEquals(TerminalDeviceTypeDecision(false, null), report.evaluateAuthenticatedSnapshot(capabilities))
+        }
+        assertEquals(TerminalDeviceTypeDecision(true, TerminalDeviceType.TABLET),
+            report.evaluateAuthenticatedSnapshot(listOf("deviceFormFactorV1")))
+        // 已上报后也不能忽略同连接随后出现的非法能力表。
+        assertEquals(TerminalDeviceTypeDecision(false, null), report.evaluateAuthenticatedSnapshot(null))
+    }
+
+    /** 迁自 Swift 形态报告测试：未知、旧主机、单连接一次与重新认证使用相同状态。 */
+    @Test fun native_decision_preserves_live_capability_and_reconnection_rules() {
+        val supported = listOf("deviceFormFactorV1", "watchCompanionV1")
+        for (type in TerminalDeviceType.entries) {
+            val report = TerminalDeviceTypeReport(type)
+            assertEquals(TerminalDeviceTypeDecision(true, null), report.evaluateAuthenticatedSnapshot(emptyList()))
+            assertEquals(TerminalDeviceTypeDecision(true, null), report.evaluateAuthenticatedSnapshot(listOf("watchCompanionV1")))
+            assertEquals(TerminalDeviceTypeDecision(true, type), report.evaluateAuthenticatedSnapshot(supported))
+            assertEquals(TerminalDeviceTypeDecision(true, null), report.evaluateAuthenticatedSnapshot(supported))
+            report.reset()
+            assertEquals(TerminalDeviceTypeDecision(true, null), report.evaluateAuthenticatedSnapshot(emptyList()))
+            assertEquals(TerminalDeviceTypeDecision(true, type), report.evaluateAuthenticatedSnapshot(supported))
+        }
+        assertEquals(TerminalDeviceTypeDecision(true, null), TerminalDeviceTypeReport(null).evaluateAuthenticatedSnapshot(supported))
+    }
+
+    /** 两种宿主入口共用状态；边界长度按 UTF-8 字节计算而非字符数量。 */
+    @Test fun native_and_android_entries_share_one_report_budget_and_byte_limits() {
+        val report = TerminalDeviceTypeReport(TerminalDeviceType.PHONE)
+        val atLimit = listOf("deviceFormFactorV1", "a".repeat(64), "长".repeat(21) + "a")
+        assertEquals(TerminalDeviceTypeDecision(true, TerminalDeviceType.PHONE), report.evaluateAuthenticatedSnapshot(atLimit))
+        assertNull(report.afterAuthenticatedSnapshot(atLimit))
+        report.reset()
+        assertEquals(TerminalDeviceType.PHONE, report.afterAuthenticatedSnapshot(atLimit))
+        assertEquals(TerminalDeviceTypeDecision(true, null), report.evaluateAuthenticatedSnapshot(atLimit))
+        assertEquals(TerminalDeviceTypeDecision(false, null), report.evaluateAuthenticatedSnapshot(listOf("a".repeat(65))))
+    }
 }

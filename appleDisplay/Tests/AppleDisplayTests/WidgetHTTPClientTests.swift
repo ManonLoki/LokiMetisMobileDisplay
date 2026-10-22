@@ -118,6 +118,23 @@ final class WidgetHTTPClientTests: XCTestCase {
                        "Xb0+fryh6yKmj9ynUJN1ibves2wo6z40FJxtUvoAbZtNdXluBiI=")
     }
 
+    /// Foundation 继续决定响应 Base64 可解码性，读取密钥仍要求规范；共享层校验字段界限。
+    func test_shared_binary_policy_preserves_apple_decoder_and_exact_aad_bytes() throws {
+        let canonicalKey = Data(repeating: 0, count: 32).base64EncodedString()
+        let noncanonicalKey = String(canonicalKey.dropLast(2)) + "B="
+        XCTAssertNil(WidgetHTTPBinary.decode(noncanonicalKey, field: .key))
+        XCTAssertEqual(WidgetHTTPBinary.decode(canonicalKey, field: .key), Data(repeating: 0, count: 32))
+        let canonicalCipher = Data(repeating: 0, count: 16).base64EncodedString()
+        let noncanonicalCipher = String(canonicalCipher.dropLast(3)) + "B=="
+        XCTAssertEqual(WidgetHTTPBinary.decode(noncanonicalCipher, field: .responseCiphertext),
+                       Data(base64Encoded: noncanonicalCipher))
+        XCTAssertNil(WidgetHTTPBinary.decode(Data(repeating: 0, count: 11).base64EncodedString(), field: .nonce))
+        XCTAssertNil(WidgetHTTPBinary.decode(Data(repeating: 0, count: 15).base64EncodedString(), field: .responseCiphertext))
+        let nonce = Data(128..<140)
+        XCTAssertEqual(WidgetHTTPBinary.responseAssociatedData(nonce), Data("loki-widget-response-v1".utf8) + nonce)
+        XCTAssertNil(WidgetHTTPBinary.responseAssociatedData(Data(repeating: 0, count: 11)))
+    }
+
     /// 请求使用新随机 Nonce，上一轮响应不能重放到下一轮。
     func test_fresh_request_nonce_rejects_replayed_response() async throws {
         var response: Data?

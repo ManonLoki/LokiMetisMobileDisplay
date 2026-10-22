@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import ImageIO
+import SharedLogic
 
 /// 已在网络后台解码的展示图片；帧只保存一次，逐帧时间不靠重复位图近似。
 struct LanImageAsset {
@@ -18,10 +19,15 @@ struct LanImageAsset {
     /// 每张最多8MiB解码帧，最多十二个Hook约96MiB；编码正文仍限制32MiB。
     struct Limits {
         var maxEncodedBytes = Int(LanDisplaySnapshot.Asset.maxLength)
-        var maxSourcePixels = 16_777_216
-        var maxFrames = 512
-        var maxDecodedBytes = 8 * 1024 * 1024
-        var maxPixelSize = 512
+        var maxSourcePixels = Int(ImageDecodePolicy.shared.MAX_SOURCE_PIXELS)
+        var maxFrames = Int(ImageDecodePolicy.shared.APPLE_MAX_FRAMES)
+        var maxDecodedBytes: Int
+        var maxPixelSize: Int
+
+        init(profile: ImageDecodeProfile = .iphone) {
+            maxDecodedBytes = Int(ImageDecodePolicy.shared.decodedByteLimit(profile: profile))
+            maxPixelSize = Int(ImageDecodePolicy.shared.pixelEdge(profile: profile))
+        }
     }
     /// 内容摘要即播放身份；同一图片重复解码不会让界面从头重播。
     let id: String
@@ -46,44 +52,46 @@ struct LanImageAsset {
     static func decode(_ data: Data, mime: String, id: String, limits: Limits = Limits()) throws -> Self {
         guard LanDisplaySnapshot.Asset.supportedMimes.contains(mime) else { throw Failure.unsupportedFormat }
         guard !data.isEmpty, data.count <= limits.maxEncodedBytes,
-              limits.maxFrames > 0, limits.maxPixelSize > 0, limits.maxDecodedBytes >= 4 else { throw Failure.resourceLimit }
+              ImageDecodePolicy.shared.validFrameLimits(maxFrames: Int32(clamping: limits.maxFrames),
+                maxDecodedBytes: Int64(limits.maxDecodedBytes), maxPixelSize: Int32(clamping: limits.maxPixelSize))
+        else { throw Failure.resourceLimit }
         guard LanDisplaySnapshot.Asset.validMagic(data, mime: mime), let source = CGImageSourceCreateWithData(data as CFData,
                 [kCGImageSourceShouldCache: false] as CFDictionary), CGImageSourceGetStatus(source) == .statusComplete else { throw Failure.invalidImage }
         let count = CGImageSourceGetCount(source)
         guard count > 0 else { throw Failure.invalidImage }
-        guard count <= limits.maxFrames else { throw Failure.resourceLimit }
+        guard let budget = ImageDecodePolicy.shared.frameBudget(frameCount: Int32(clamping: count),
+            maxFrames: Int32(clamping: limits.maxFrames), maxDecodedBytes: Int64(limits.maxDecodedBytes),
+            maxPixelSize: Int32(clamping: limits.maxPixelSize)) else { throw Failure.resourceLimit }
         let metadata = CGImageSourceCopyProperties(source, nil) as? [CFString: Any] ?? [:]
         if let width = metadata[kCGImagePropertyPixelWidth] as? NSNumber,
            let height = metadata[kCGImagePropertyPixelHeight] as? NSNumber {
-            guard width.doubleValue > 0, height.doubleValue > 0,
-                  width.doubleValue * height.doubleValue <= Double(limits.maxSourcePixels) else { throw Failure.resourceLimit }
+            guard ImageDecodePolicy.shared.validSourceDimensions(width: width.doubleValue, height: height.doubleValue,
+                maxPixels: Int64(limits.maxSourcePixels)) else { throw Failure.resourceLimit }
         }
         var images: [CGImage] = [], delays: [TimeInterval] = [], ends: [TimeInterval] = []
         var bytes = 0, total: TimeInterval = 0
         // 以帧数分配统一边长，保持全部动画帧而不增加位图副本；实际行字节再严格核算。
-        let perFrameBytes = limits.maxDecodedBytes / count
-        let perFramePixels = perFrameBytes / 4
-        let pixelSize = min(limits.maxPixelSize, Int(Double(perFramePixels).squareRoot()))
-        guard pixelSize >= 1 else { throw Failure.resourceLimit }
+        let perFrameBytes = Int(budget.byteLimit)
         // 缩小后的边长沿用到后续帧，同尺寸画布不再逐帧重复超限解码。
-        var edge = pixelSize
+        var edge = Int(budget.pixelEdge)
         for index in 0..<count {
             try autoreleasepool {
                 guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
                       let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
                       let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
-                      width.doubleValue > 0, height.doubleValue > 0,
-                      width.doubleValue * height.doubleValue <= Double(limits.maxSourcePixels) else { throw Failure.resourceLimit }
+                      ImageDecodePolicy.shared.validSourceDimensions(width: width.doubleValue, height: height.doubleValue,
+                        maxPixels: Int64(limits.maxSourcePixels)) else { throw Failure.resourceLimit }
                 var frame = try thumbnail(source, index: index, pixelSize: edge)
                 // ImageIO行字节含对齐开销；按实际占用缩小，不能把可缩放动画误判为超限。
                 while frame.bytesPerRow * frame.height > perFrameBytes {
-                    guard edge > 1 else { throw Failure.resourceLimit }
-                    let ratio = Double(perFrameBytes) / Double(frame.bytesPerRow * frame.height)
-                    edge = max(1, min(edge - 1, Int(Double(edge) * ratio.squareRoot())))
+                    edge = Int(ImageDecodePolicy.shared.smallerFrameEdge(currentEdge: Int32(clamping: edge),
+                        decodedBytes: Int64(frame.bytesPerRow * frame.height), frameByteLimit: budget.byteLimit))
+                    guard edge > 0 else { throw Failure.resourceLimit }
                     frame = try thumbnail(source, index: index, pixelSize: edge)
                 }
                 let size = frame.bytesPerRow * frame.height
-                guard size <= limits.maxDecodedBytes - bytes else { throw Failure.resourceLimit }
+                guard ImageDecodePolicy.shared.fitsDecodedFrame(decodedBytes: Int64(size), usedBytes: Int64(bytes),
+                    maxDecodedBytes: Int64(limits.maxDecodedBytes)) else { throw Failure.resourceLimit }
                 let delay = delayTime(properties, mime: mime)
                 bytes += size; total += delay; images.append(frame); delays.append(delay); ends.append(total)
             }

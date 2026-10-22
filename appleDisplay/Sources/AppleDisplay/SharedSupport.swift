@@ -1,21 +1,22 @@
 import Foundation
+import SharedLogic
 import CryptoKit
 
 /// App、组件与 Watch 共用的身份、文本和内容摘要校验；各宿主不再各自手写同一规则。
 enum SharedValidation {
     /// 全零 UUID 只作占位，不能代表任何真实设备或代次。
-    static let zeroId = "00000000-0000-0000-0000-000000000000"
+    static let zeroId = TerminalValueRules.shared.ZERO_ID
     /// 小写规范 UUID 文本；不排除全零，用于只要求格式的文件名或记录键。
-    static func isCanonicalUUID(_ id: String) -> Bool { UUID(uuidString: id)?.uuidString.lowercased() == id }
+    static func isCanonicalUUID(_ id: String) -> Bool { TerminalValueRules.shared.isCanonicalUUID(value: id) }
     /// 稳定身份与传输代次：小写规范且非全零。
-    static func validId(_ id: String) -> Bool { isCanonicalUUID(id) && id != zeroId }
+    static func validId(_ id: String) -> Bool { TerminalValueRules.shared.validDeviceId(value: id) }
     /// 名称等展示文本拒绝 C0/C1 控制字符。
     static func containsControl(_ text: String) -> Bool {
-        text.unicodeScalars.contains { $0.value < 32 || (127...159).contains($0.value) }
+        TerminalValueRules.shared.containsControl(value: text)
     }
     /// 内容摘要只接受 64 位小写十六进制，不接受大小写变体、换行或路径。
     static func validHash(_ hash: String) -> Bool {
-        hash.utf8.count == 64 && hash.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+        TerminalValueRules.shared.validContentHash(value: hash)
     }
     private static let hexDigits = Array("0123456789abcdef".utf8)
     /// 查表生成小写十六进制，避免逐字节 `String(format:)`。

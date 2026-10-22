@@ -58,6 +58,17 @@ class TerminalTransportTest {
         policy.leaveForeground(); policy.renewedEndpoint(); assertNull(policy.nextDelayMs())
         policy.enterForeground(); assertEquals(500L, policy.nextDelayMs())
     }
+    /** 已认证快照成功后恢复传输预算，不允许成功事件在后台自行打开连接。 */
+    @Test fun authenticated_snapshot_resets_budget_without_changing_foreground_intent() {
+        val policy = TerminalConnectionPolicy(); policy.enterForeground()
+        repeat(8) { policy.nextDelayMs() }
+        policy.connected()
+        assertEquals(0, policy.attempts)
+        assertEquals(500L, policy.nextDelayMs())
+        policy.leaveForeground(); policy.connected()
+        assertFalse(policy.requested)
+        assertNull(policy.nextDelayMs())
+    }
     /** u64最大值无损，溢出、前导零和缺失值不能伪装可用统计。 */
     @Test fun token_numbers_preserve_unsigned_precision() {
         TerminalAmount("18446744073709551615", "available", "partial", "derived").validate()

@@ -1,19 +1,37 @@
 import SwiftUI
+import SharedLogic
 
-/// 用量卡片详略档位，rawValue 用于持久化。
-enum UsageDetail: String, CaseIterable, Identifiable {
-    case compact, detailed
-    var id: String { rawValue }
+/// SwiftUI 的名称与标识适配；选项集合及持久化键由共享枚举提供。
+struct UsageDetail: Equatable, CaseIterable, Identifiable {
+    let shared: SharedLogic.UsageDetail
+    static var compact: UsageDetail { UsageDetail(shared: .compact) }
+    static var detailed: UsageDetail { UsageDetail(shared: .detailed) }
+    static var allCases: [UsageDetail] { SharedLogic.UsageDetail.entries.map { UsageDetail(shared: $0) } }
+    var rawValue: String { shared.key }
+    var id: String { shared.key }
     var title: String { self == .compact ? "精简" : "详细" }
 }
 
-/// Hooks 区域布局方式，rawValue 用于持久化。
-enum HookLayout: String, CaseIterable, Identifiable {
-    case single = "1x1", grid = "2x2"
-    var id: String { rawValue }
+/// SwiftUI 仅适配整数与空槽表示，列数、每页数量和来源位置均调用共享布局。
+struct HookLayout: Equatable, CaseIterable, Identifiable {
+    let shared: SharedLogic.HookLayout
+    static var single: HookLayout { HookLayout(shared: .single) }
+    static var grid: HookLayout { HookLayout(shared: .grid) }
+    static var allCases: [HookLayout] { SharedLogic.HookLayout.entries.map { HookLayout(shared: $0) } }
+    var rawValue: String { shared.key }
+    var id: String { shared.key }
     var title: String { self == .single ? "1×1" : "2×2" }
-    var columns: Int { self == .single ? 1 : 2 }
-    var pageSize: Int { columns * columns }
+    var columns: Int { Int(shared.columns) }
+    var pageSize: Int { Int(shared.pageSize) }
+
+    func pageCount(itemCount: Int) -> Int {
+        Int(shared.pageCount(itemCount: Int32(clamping: itemCount)))
+    }
+
+    func itemIndex(itemCount: Int, page: Int, cell: Int) -> Int? {
+        let index = shared.itemIndex(itemCount: Int32(clamping: itemCount), page: Int32(clamping: page), cell: Int32(clamping: cell))
+        return index >= 0 ? Int(index) : nil
+    }
 }
 
 /// 面板偏好只影响本机显示，不改变发现、连接或桌面快照。
@@ -24,6 +42,11 @@ struct PanelPreferencesView: View {
     @Binding var hookLayout: String
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var configuration: PanelConfiguration {
+        PanelConfiguration.companion.restore(showUsage: showUsage, showHooks: showHooks,
+                                             detail: usageDetail, hookLayout: hookLayout)
+    }
 
     var body: some View {
         ScrollView {
@@ -72,7 +95,7 @@ struct PanelPreferencesView: View {
                         ForEach(UsageDetail.allCases) { detail in
                             PanelChoiceTile(title: detail.title,
                                             subtitle: detail == .compact ? "仅显示总用量" : "总用量与 Agent 明细",
-                                            selected: usageDetail == detail.rawValue,
+                                            selected: configuration.usageDetail == detail.shared,
                                             accessibilityLabel: "Token 用量，" + detail.title,
                                             action: { usageDetail = detail.rawValue }) {
                                 usagePreview(detail)
@@ -101,7 +124,7 @@ struct PanelPreferencesView: View {
                         ForEach(HookLayout.allCases) { layout in
                             PanelChoiceTile(title: layout.title,
                                             subtitle: layout == .single ? "每页一张，聚焦内容" : "每页四张，一览动态",
-                                            selected: hookLayout == layout.rawValue,
+                                            selected: configuration.hookLayout == layout.shared,
                                             accessibilityLabel: "Hooks 布局，" + layout.title + (layout == .single ? "，每页一张" : "，每页四张"),
                                             action: { hookLayout = layout.rawValue }) {
                                 hookPreview(layout)

@@ -1,4 +1,5 @@
 import SwiftUI
+import SharedLogic
 
 /// App 内共用的配色；小组件与 Watch 各自定义同色值，不跨 target 共享。
 enum DisplayStyle {
@@ -15,14 +16,16 @@ struct LanDisplayPage: View {
     let state: LanLinkView
     let snapshot: LanDisplaySnapshot?
     var widgetSharingError = false
-    var showUsage = true
-    var showHooks = true
-    var usageDetail: UsageDetail = .compact
-    var hookLayout: HookLayout = .single
+    var configuration = PanelConfiguration.companion.defaults()
     var openSettings: () -> Void = {}
     var motionEnabled = true
     @State private var preview: HookPreview?
     @State private var selectedHookPage = 0
+
+    private var showUsage: Bool { configuration.showUsage }
+    private var showHooks: Bool { configuration.showHooks }
+    private var usageDetail: UsageDetail { UsageDetail(shared: configuration.usageDetail) }
+    private var hookLayout: HookLayout { HookLayout(shared: configuration.hookLayout) }
 
     var body: some View {
         GeometryReader { geometry in
@@ -116,7 +119,7 @@ struct LanDisplayPage: View {
     private func hooksPane(size: CGSize) -> some View {
         let hooks = snapshot?.hooks.sorted(by: { $0.slot < $1.slot }) ?? []
         let warning = state.assetWarning ?? (snapshot?.catalogError != nil ? "图片配置暂不可用" : nil)
-        let pageCount = snapshot?.hooksAvailable == true ? max(1, (hooks.count + hookLayout.pageSize - 1) / hookLayout.pageSize) : 1
+        let pageCount = hookLayout.pageCount(itemCount: snapshot?.hooksAvailable == true ? hooks.count : 0)
         return VStack(spacing: 8) {
             GeometryReader { content in
                 if snapshot?.hooksAvailable != true {
@@ -170,8 +173,7 @@ struct LanDisplayPage: View {
             ForEach(0..<columns, id: \.self) { row in
                 HStack(spacing: gap) {
                     ForEach(0..<columns, id: \.self) { column in
-                        let index = page * hookLayout.pageSize + row * columns + column
-                        if index < hooks.count {
+                        if let index = hookLayout.itemIndex(itemCount: hooks.count, page: page, cell: row * columns + column) {
                             let hook = hooks[index]
                             HookPanelTile(hook: hook, asset: hook.image.flatMap { state.images[$0] },
                                           connected: state.connected, grid: hookLayout == .grid,
@@ -539,7 +541,7 @@ private struct UsagePanelCard: View {
 
     /// 压缩显示的 Agent 用量，读屏仍读完整值。
     private func agentTotal(_ tokenText: String, size: CGSize) -> some View {
-        Text(TokenNumber.compact(tokenText))
+        Text(TokenFormatting.shared.compact(value: tokenText))
             .font(.system(size: agentNumberSize(size), weight: .medium).monospacedDigit())
             .accessibilityLabel(tokenText)
     }
@@ -574,7 +576,7 @@ private struct UsagePanelCard: View {
     private func exactText(_ amount: WidgetAmount) -> some View { exactText(amount.text) }
 
     private func exactText(_ value: String) -> some View {
-        Text(TokenNumber.grouped(value) + " Token").font(.caption2.monospacedDigit())
+        Text(TokenFormatting.shared.exact(value: value) + " Token").font(.caption2.monospacedDigit())
             .foregroundStyle(.white.opacity(0.65))
             .fixedSize(horizontal: true, vertical: false).textSelection(.enabled)
             .accessibilityLabel("完整用量 \(value) Token")

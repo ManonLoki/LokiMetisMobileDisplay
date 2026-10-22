@@ -139,7 +139,8 @@ private struct WatchRootView: View {
         }
         .onChange(of: model.state.envelope?.snapshot.hooks.map(\.slot), initial: true) { _, slots in
             guard let slots, !slots.isEmpty else { visibleHookSlot = nil; return }
-            if visibleHookSlot.map({ !slots.contains($0) }) ?? true { visibleHookSlot = slots.min() }
+            // 初始位置交给滚动容器报告，避免恢复 Hooks 页时程序定位覆盖系统安全区。
+            if let slot = visibleHookSlot, !slots.contains(slot) { visibleHookSlot = nil }
         }
         .onChange(of: phase, initial: true) { _, value in
             if value == .active {
@@ -263,7 +264,8 @@ private struct WatchRootView: View {
                 waitingPanel
             }
         }
-        .scrollTargetBehavior(.paging)
+        // 按活动卡自身对齐；系统安全区会使滚动视口与固定卡高不同，按视口分页会逐页偏移。
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
         .scrollPosition(id: $visibleHookSlot)
         .scrollIndicators(.hidden)
         .contentMargins(.vertical, 0, for: .scrollContent)
@@ -350,10 +352,11 @@ private struct WatchRootView: View {
     private func hookImage(_ hook: LanDisplaySnapshot.Hook) -> some View {
         let image = hook.image.flatMap { model.state.images[$0] }
         let placeholder = hook.image == nil ? "暂无图片" : "图片未缓存"
+        let visibleSlot = visibleHookSlot ?? model.state.envelope?.snapshot.hooks.map(\.slot).min()
         return GeometryReader { area in
             Group {
                 if let image {
-                    HookAssetImage(asset: image, playbackEnabled: selectedPage == Page.hooks.rawValue && allowsMotion && hook.slot == visibleHookSlot)
+                    HookAssetImage(asset: image, playbackEnabled: selectedPage == Page.hooks.rawValue && allowsMotion && hook.slot == visibleSlot)
                 } else {
                     VStack(spacing: 4) {
                         Image(systemName: "photo").accessibilityHidden(true)

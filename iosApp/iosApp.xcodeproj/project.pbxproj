@@ -40,7 +40,7 @@
 		A80000000000000000000003 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */; };
 		A80000000000000000000004 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */; };
 		A80000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */; };
-		A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */; };
+		A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift */; };
 		A80000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift */; };
 		A80000000000000000000014 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000013 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift */; };
 		B20000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */; };
@@ -123,7 +123,7 @@
 		A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanFrames.swift; sourceTree = SOURCE_ROOT; };
 		A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift; sourceTree = SOURCE_ROOT; };
 		A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift; sourceTree = SOURCE_ROOT; };
-		A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift; sourceTree = SOURCE_ROOT; };
+		A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift; sourceTree = SOURCE_ROOT; };
 		A80000000000000000000009 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift; sourceTree = SOURCE_ROOT; };
 		A80000000000000000000013 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/LanSocket.swift; sourceTree = SOURCE_ROOT; };
 		B10000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../appleDisplay/Sources/AppleDisplay/WatchProtocol.swift; sourceTree = SOURCE_ROOT; };
@@ -229,7 +229,7 @@
 			children = (
 				F20000000000000000000001 /* DeviceIdentityPolicy.swift */,
 				A80000000000000000000015 /* LanImageAsset.swift */,
-				A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift */,
+				A80000000000000000000007 /* ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift */,
 				A80000000000000000000005 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift */,
 				A80000000000000000000001 /* ../appleDisplay/Sources/AppleDisplay/LanFrames.swift */,
 				A80000000000000000000002 /* ../appleDisplay/Sources/AppleDisplay/LanDisplaySnapshot.swift */,
@@ -306,6 +306,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWidgets" */;
 			buildPhases = (
+				F50000000000000000000001 /* Compile Kotlin Framework for Widgets */,
 				A50000000000000000000003 /* Sources */,
 				A50000000000000000000002 /* Frameworks */,
 				A50000000000000000000004 /* Resources */,
@@ -325,6 +326,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B70000000000000000000001 /* Build configuration list for PBXNativeTarget "LokiMetrisWatch" */;
 			buildPhases = (
+				F50000000000000000000002 /* Compile Kotlin Framework for Watch */,
 				B50000000000000000000002 /* Sources */,
 				B50000000000000000000003 /* Frameworks */,
 				B50000000000000000000004 /* Resources */,
@@ -467,7 +469,37 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :sharedLogic:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "set -eu\npython3 \"$SRCROOT/../scripts/build_apple_shared.py\"\n";
+		};
+		F50000000000000000000001 /* Compile Kotlin Framework for Widgets */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Kotlin Framework for Widgets";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\npython3 \"$SRCROOT/../scripts/build_apple_shared.py\"\n";
+		};
+		F50000000000000000000002 /* Compile Kotlin Framework for Watch */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Kotlin Framework for Watch";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\npython3 \"$SRCROOT/../scripts/build_apple_shared.py\"\n";
 		};
 		E661C94D0BFA4B7C9B871001 /* Compile Rust Mobile Bridge */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -507,7 +539,7 @@
 				A80000000000000000000006 /* ../appleDisplay/Sources/AppleDisplay/LanAssetFiles.swift in Sources */,
 				A80000000000000000000010 /* ../appleDisplay/Sources/AppleDisplay/LanProjectionDelivery.swift in Sources */,
 				A80000000000000000000014 /* ../appleDisplay/Sources/AppleDisplay/LanSocket.swift in Sources */,
-				A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanConnectionPolicy.swift in Sources */,
+				A80000000000000000000008 /* ../appleDisplay/Sources/AppleDisplay/LanDeviceFormFactor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -578,6 +610,7 @@
 				CODE_SIGN_ENTITLEMENTS = LokiMetrisWidgets/LokiMetrisWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -587,6 +620,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).widgets";
 				PRODUCT_NAME = LokiMetrisWidgets;
+				OTHER_LDFLAGS = "$(inherited) -framework SharedLogic";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -601,6 +635,7 @@
 				CODE_SIGN_ENTITLEMENTS = LokiMetrisWidgets/LokiMetrisWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -610,6 +645,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).widgets";
 				PRODUCT_NAME = LokiMetrisWidgets;
+				OTHER_LDFLAGS = "$(inherited) -framework SharedLogic";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -718,9 +754,11 @@
 		B70000000000000000000002 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ARCHS[sdk=watchsimulator*]" = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -729,6 +767,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).watchkitapp";
 				PRODUCT_NAME = LokiMetrisWatch;
+				OTHER_LDFLAGS = "$(inherited) -framework SharedLogic";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
@@ -741,9 +780,11 @@
 		B70000000000000000000003 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ARCHS[sdk=watchsimulator*]" = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(TEAM_ID)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../sharedLogic/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LokiMetrisWatch/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -752,6 +793,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(LOKI_APP_BUNDLE_IDENTIFIER).watchkitapp";
 				PRODUCT_NAME = LokiMetrisWatch;
+				OTHER_LDFLAGS = "$(inherited) -framework SharedLogic";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";

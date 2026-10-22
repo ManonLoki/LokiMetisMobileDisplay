@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import SharedLogic
 
 /// 发现、配对、认证与重试：所有方法都在引擎串行队列上执行。
 extension LanLinkEngine {
@@ -12,7 +13,7 @@ extension LanLinkEngine {
     func startBrowser() {
         guard active, intent.requested, browser == nil else { return }
         let parameters = NWParameters.tcp; parameters.includePeerToPeer = false
-        let source = NWBrowser(for: .bonjourWithTXTRecord(type: "_loki-host._tcp", domain: "local."), using: parameters)
+        let source = NWBrowser(for: .bonjourWithTXTRecord(type: "_loki-host._tcp", domain: MdnsProtocol.shared.DOMAIN), using: parameters)
         browser = source
         if socket == nil { view.status = "正在发现桌面端…" }
         source.stateUpdateHandler = { [weak self, weak source] state in
@@ -94,7 +95,7 @@ extension LanLinkEngine {
                 let opened = try bridge!.call(["op": "openPairing", "clientId": id])
                 guard let code = opened["code"] as? String, let offer = opened["offer"] as? [String: Any] else { throw WidgetSnapshotError.invalid }
                 self.offer = offer; view.pairingCode = code
-                pairingDeadline = now + 60_000_000_000
+                pairingDeadline = now + UInt64(timing.PAIRING_WINDOW_MS) * 1_000_000
                 connect(pairing: true)
             }
         } catch { fail(retry: false, message: "无法开始连接，请检查设备身份或配对存储后重试。") }
@@ -122,15 +123,16 @@ extension LanLinkEngine {
         socket?.close(); socket = nil; generation &+= 1; resetWatchProjection()
         failedAssets = []; view.assetWarning = cache == nil ? "图片缓存暂不可用，连接仍可同步文字与用量。" : nil
         let token = generation
-        phase = pairing ? .pairHello : .resumeReply; deadline = now + 15_000_000_000
+        phase = pairing ? .pairHello : .resumeReply
+        deadline = now + UInt64(timing.HANDSHAKE_TIMEOUT_MS) * 1_000_000
         view.status = pairing ? "等待在桌面输入手机配对码" : "正在认证桌面…"; view.connected = false
         let connection = LanSocket(endpoint: endpoint, queue: queue,
-            limit: { [weak self] in (self?.phase == .streaming || self?.phase == .pausing) ? 98304 : 4096 },
+            limit: { [weak self] in Int(TerminalSessionTimingPolicy.shared.frameLimit(phase: self?.phase ?? .idle)) },
             ready: { [weak self] in
                 guard let self, self.generation == token else { return }
                 do {
                     if pairing { self.deadline = self.pairingDeadline }
-                    try self.socket?.send(offer, limit: 4096)
+                    try self.socket?.send(offer, limit: Int(self.timing.HANDSHAKE_FRAME_BYTES))
                 } catch { self.fail(retry: true, message: "连接中断，正在重新发现桌面…") }
             }, frame: { [weak self] frame in
                 guard let self, self.generation == token else { return }
@@ -151,8 +153,9 @@ extension LanLinkEngine {
         case .pairHello:
             let reply = try bridge.call(["op": "pairHello", "hello": json])
             guard let value = reply["reply"] as? [String: Any] else { throw WidgetSnapshotError.invalid }
-            phase = .pairConfirmation; deadline = min(pairingDeadline ?? now, now + 15_000_000_000)
-            try socket.send(value, limit: 4096)
+            phase = .pairConfirmation
+            deadline = min(pairingDeadline ?? now, now + UInt64(timing.HANDSHAKE_TIMEOUT_MS) * 1_000_000)
+            try socket.send(value, limit: Int(timing.HANDSHAKE_FRAME_BYTES))
         case .pairConfirmation:
             let pending = try bridge.call(["op": "pairConfirmation", "confirmation": json])
             guard let material = pending["material"] as? [String: Any], let commit = pending["commitId"] as? String else { throw WidgetSnapshotError.invalid }
@@ -165,18 +168,19 @@ extension LanLinkEngine {
             }
             let result = try bridge.call(["op": "pairingStored", "commitId": commit, "stored": saved])
             guard let ack = result["ack"] as? [String: Any] else { throw WidgetSnapshotError.invalid }
-            phase = .pairClose; deadline = now + 3_000_000_000
-            try socket.send(ack, limit: 4096)
+            phase = .pairClose; deadline = now + UInt64(timing.PAIR_CLOSE_TIMEOUT_MS) * 1_000_000
+            try socket.send(ack, limit: Int(timing.HANDSHAKE_FRAME_BYTES))
         case .resumeReply:
             let result = try bridge.call(["op": "resumeReply", "reply": json])
             guard let confirmation = result["confirmation"] as? [String: Any] else { throw WidgetSnapshotError.invalid }
             phase = .metadata
             let token = generation
-            try socket.send(confirmation, limit: 4096) { [weak self] in
+            try socket.send(confirmation, limit: Int(timing.HANDSHAKE_FRAME_BYTES)) { [weak self] in
                 guard let self, self.generation == token else { return }
                 do {
                     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
                     try self.sendSecure(["deviceId": self.deviceId, "name": self.name, "platform": "ios", "appVersion": version])
+                    // iOS 保留从 connect 起计的首次快照期限；Android 此时另开 15 秒预算。
                     self.phase = .streaming; self.lastInbound = self.now
                 } catch { self.fail(retry: false, message: "无法发送设备信息，请重试。") }
             }
@@ -216,30 +220,42 @@ extension LanLinkEngine {
     func sendSecure(_ message: [String: Any], completion: @escaping () -> Void = {}) throws {
         guard let bridge, let socket,
               let packet = try bridge.call(["op": "seal", "message": message])["packet"] as? [String: Any] else { throw WidgetSnapshotError.invalid }
-        try socket.send(packet, limit: 98304, completion: completion)
+        try socket.send(packet, limit: Int(timing.SECURE_FRAME_BYTES), completion: completion)
     }
 
     /// 单调期限覆盖配对、首次快照、心跳和单资源等待，不靠发送成功宣称在线。
     func tick() {
         if socket == nil, pairingDeadline == nil, deadline == nil, assetDeadline == nil { setTickActive(false); return }
-        if let pairingDeadline, now >= pairingDeadline { fail(retry: false, message: "配对窗口已过期，请重新选择桌面开启新配对。"); return }
-        if let deadline, now >= deadline {
-            if phase == .pairClose { pairingCompleted() }
-            else { fail(retry: true, message: "连接超时，正在等待桌面恢复…") }
-            return
-        }
-        if phase == .streaming, now - lastInbound >= 45_000_000_000 { fail(retry: true, message: "桌面暂不可达，恢复网络后重新连接。"); return }
-        if let assetDeadline, now >= assetDeadline, let currentAsset {
+        let currentTime = now
+        // 到期比较仍使用精确 UInt64 纳秒；时钟回退时不能执行无符号减法。
+        let result = timing.timeout(phase: phase,
+            pairingDue: pairingDeadline.map { currentTime >= $0 } ?? false,
+            phaseDue: deadline.map { currentTime >= $0 } ?? false,
+            heartbeatDue: currentTime >= lastInbound && currentTime - lastInbound >= UInt64(timing.INBOUND_IDLE_TIMEOUT_MS) * 1_000_000,
+            assetDue: currentAsset != nil && (assetDeadline.map { currentTime >= $0 } ?? false))
+        switch result {
+        case .none: return
+        case .pairingExpired:
+            fail(retry: false, message: "配对窗口已过期，请重新选择桌面开启新配对。")
+        case .pairingCompleted:
+            pairingCompleted()
+        case .phaseTimeout:
+            fail(retry: true, message: "连接超时，正在等待桌面恢复…")
+        case .heartbeatTimeout:
+            fail(retry: true, message: "桌面暂不可达，恢复网络后重新连接。")
+        case .assetTimeout:
+            guard let currentAsset else { return }
             failedAssets.insert(currentAsset.hash); dropCurrentAsset()
             view.assetWarning = "部分图片接收超时，重新连接后可补取。"; publish()
             // 旧响应仍可能在途，关闭并重新认证，避免它与下一资源接收器混合。
             fail(retry: true, message: "图片响应超时，正在恢复连接…")
+        default: return
         }
     }
 
     /// 网络重试有限且不重开密码窗口，mDNS更新与前台恢复会重新获取最新地址。
     func scheduleRetry() {
-        guard active, let delay = intent.nextDelay() else { view.status = "暂未连接，请重新选择桌面重试"; publish(); return }
+        guard active, let delayMs = intent.nextDelayMs() else { view.status = "暂未连接，请重新选择桌面重试"; publish(); return }
         retry?.cancel()
         let task = DispatchWorkItem { [weak self] in
             guard let self else { return }; self.retry = nil
@@ -247,7 +263,7 @@ extension LanLinkEngine {
             if self.pairingDeadline != nil { self.connect(pairing: true) }
             else { self.resumeSelected() }
         }
-        retry = task; queue.asyncAfter(deadline: .now() + delay, execute: task)
+        retry = task; queue.asyncAfter(deadline: .now() + delayMs.doubleValue / 1000, execute: task)
     }
 
     /// 协议/认证失败保留信任供用户显式处理，传输失败才在新socket进行恢复。
