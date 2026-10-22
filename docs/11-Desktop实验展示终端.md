@@ -43,7 +43,7 @@
 
 桌面功能开发、修复和集成验证统一使用 `codex/desktop-experimental`，跟踪 `origin/codex/desktop-experimental`。沿用当前仓库和 `origin`，不创建 fork；此分支与 `main` 禁止互相 merge、squash、rebase 或 cherry-pick，也不创建以 `main` 为目标的桌面实验合并请求。仓库协作规则见 [AGENTS.md](../AGENTS.md)。
 
-需要完整 JDK 21、Rust/Cargo、Python 3 和当前系统的 C 编译工具；本次构建辅助脚本已在 Python 3.9 下验证，不要求额外安装第三方模块。Gradle 使用仓库 wrapper，Python 脚本只使用标准库，不安装开发工具。额外需要采集端仓库的 `loki_metris_pairing`、`loki_metris_mobile_bridge` 和其 `Cargo.lock`：
+需要完整 JDK 21、Rust/Cargo、Python 3 和当前系统的 C 编译工具；本次构建辅助脚本已在 Python 3.9 下验证，不要求额外安装第三方模块。Gradle 使用仓库 wrapper，Python 脚本只使用标准库，不安装开发工具。额外需要采集端完整工作区中的 `loki_metris_pairing`、`loki_metris_mobile_bridge` 及一份匹配源码的根目录 `Cargo.lock`。采集端远程仓库当前忽略锁文件，单独 `git clone` 不会带上它；可沿用已验证的本地锁，或按下节使用本仓库冻结锁。
 
 ```sh
 git switch codex/desktop-experimental
@@ -54,10 +54,41 @@ git switch codex/desktop-experimental
 | 系统 | 原生构建工具 | 当前范围 |
 | --- | --- | --- |
 | macOS | Xcode Command Line Tools，含 Clang、macOS SDK、`install_name_tool` 和 `codesign` | 本次已验证 Apple Silicon arm64 |
-| Linux | C 编译器与 libc 开发文件 | 已配置构建路径，尚未构建或运行验证 |
-| Windows | 与 Rust 宿主相符的 Visual Studio MSVC Native Tools，或 MinGW GCC | 已配置构建路径，尚未构建或运行验证；使用 `gradlew.bat` |
+| Linux | C 编译器与 libc 开发文件 | Ubuntu 22.04 amd64 上自动测试及 DEB 构建通过，交互式安装与真实局域网配对未验证 |
+| Windows | 与 Rust 宿主相符的 Visual Studio MSVC Native Tools，或 MinGW GCC；MSI 还需 JDK 21 所使用的 WiX 3（`candle.exe`、`light.exe`） | Windows 2025 x64 MSVC 上自动测试及 MSI 构建通过；交互式安装与真实局域网配对未验证。使用 `gradlew.bat` |
 
 构建只生成当前系统、当前架构的原生库，没有在 macOS 上交叉生成 Windows／Linux 产物。未据此声明统一最低系统版本。
+
+Gradle 默认使用 `python3` 执行两个桌面构建脚本。Windows 的 `python3.exe` 可能是打开 Microsoft Store 的占位程序；遇到此情况，使用 `-PlokiPython` 指定真实 Python 可执行文件的完整路径，路径参数整体加引号：
+
+```powershell
+.\gradlew.bat :desktopApp:run `
+  "-PlokiDesktopRoot=C:\src\LokiMetis" `
+  "-PlokiPython=C:\path\to\python.exe"
+```
+
+将示例路径替换为本机实际位置。该选项同时用于宿主原生库与隔离 Rust 测试端构建，不改变系统默认 Python，也不安装或升级工具。原生构建任务以宿主操作系统、架构及 JDK 路径作为缓存输入，避免共享工作目录时复用另一平台的 `.dll`、`.so` 或 `.dylib`。
+
+
+### 准备 Rust 依赖锁
+
+本仓库的 [desktopApp/native/Cargo.lock](../desktopApp/native/Cargo.lock) 冻结本机已经验证的完整 Rust 依赖解析，用于采集端源码提交 `0e326ceb745d7fa50119d61ab5a2ee59d868c9f6`；它保存在展示端实验分支中，不依赖采集端远程仓库跟踪该文件。本次冻结不升级依赖。
+
+冻结锁的 SHA-256：
+
+```text
+ee38afedb4cf06bc1b6058d8b08fb925613c8a235afe59879fb25385a79c53d1
+```
+
+新克隆采集端源码后，先查看实际提交：
+
+```sh
+git -C /absolute/path/to/LokiMetis rev-parse HEAD
+```
+
+确认结果为上面的完整源码提交后，仅在采集端根目录没有 `Cargo.lock` 时，将本仓库 `desktopApp/native/Cargo.lock` 复制为 `/absolute/path/to/LokiMetis/Cargo.lock`。目标已经有锁时保留原文件并核对其依赖基线；不要自动覆盖或为了通过构建重新解析依赖。冻结锁对应本次固定源码，不作为任意采集端提交的通用锁。
+
+CI 的 [desktop_ci.py](../scripts/desktop_ci.py) 先确认检出提交完全匹配，再向临时工作区补入缺失的冻结锁并打印其 SHA-256；若已有锁与冻结锁不同则明确失败，不覆盖。此步骤只作用于 CI 临时检出目录，没有修改用户本机的外部采集端仓库。
 
 ### 原生库构建
 
@@ -87,7 +118,45 @@ python3 scripts/build_desktop_native.py \
 
 `createDistributable` 生成携带运行时的当前系统应用目录；macOS 路径为 `desktopApp/build/compose/binaries/main/app/LokiMetrisDisplay.app`。`packageDistributionForCurrentOS` 使用当前系统的分发格式，配置为 macOS DMG、Windows MSI、Linux DEB。生成应用目录、生成安装包、开发者签名／公证、对外发布是不同步骤，执行结果分别记录在下方。
 
+在 Windows x64 宿主上先运行测试，再生成 MSI：
+
+```powershell
+.\gradlew.bat :sharedLogic:desktopTest :desktopApp:desktopTest :desktopApp:packageMsi `
+  "-PlokiDesktopRoot=C:\src\LokiMetis" `
+  "-PlokiPython=C:\path\to\python.exe"
+```
+
+在 Linux x64 宿主上生成 DEB：
+
+```sh
+./gradlew :sharedLogic:desktopTest :desktopApp:desktopTest :desktopApp:packageDeb \
+  -PlokiDesktopRoot=/absolute/path/to/LokiMetis
+```
+
+无图形会话的 Linux 主机运行 Compose UI 测试时需要 Xvfb（虚拟显示服务）；CI 已用 `xvfb-run` 提供测试画面。安装包位于 `desktopApp/build/compose/binaries/main/` 下相应格式目录，Linux 包名配置为 `lokimetris-display`。本机产物只包含本机架构。
+
 Desktop 打包配置暂沿用包版本 `1.0.7`，没有独立桌面构建号；Android 仍为 `1.0.7 (9)`，Apple 为 `1.0.7 (15)`。这些配置值不表示已发布新的桌面版本。
+
+### GitHub Actions 构建与下载
+
+[desktop-build.yml](../.github/workflows/desktop-build.yml) 在 `codex/desktop-experimental` 的相关源码或构建配置推送后自动运行；需要重跑已有运行时，在运行详情选择 **Re-run jobs**。实验分支专有工作流的手动新建运行入口尚未验证。任务条件限定为实验分支，不将改动合入 `main`，不创建 GitHub Release。
+
+| 任务 | 宿主 | 测试与打包 | 成功后安装包 artifact |
+| --- | --- | --- | --- |
+| `windows-x64` | GitHub `windows-2025`，x64 | `:sharedLogic:desktopTest`、`:desktopApp:desktopTest`、`:desktopApp:packageMsi` | `desktop-windows-x64` |
+| `linux-amd64` | GitHub `ubuntu-22.04`，x64 | `:sharedLogic:desktopTest`、`:desktopApp:desktopTest`、`:desktopApp:packageDeb` | `desktop-linux-amd64` |
+
+两端使用 Zulu JDK 21 和 Rust **1.98.1**，检出完整外部 Rust 工作区并固定到 `0e326ceb745d7fa50119d61ab5a2ee59d868c9f6`。采集端 checkout 缺失的 `Cargo.lock` 由本仓库冻结锁补齐；已有不同锁则失败。工作流核对实际工具版本、路径、源码提交和锁文件 SHA-256 后再运行测试；只有测试和安装包生成都成功后才收集对应安装包与 SHA-256 校验值。
+
+下载步骤：
+
+1. 打开仓库的 [实验 Desktop 构建记录](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/workflows/desktop-build.yml)，选择 `codex/desktop-experimental` 对应的运行。
+2. 确认需要的平台任务成功；具体运行链接、测试数量与产物校验值以本节下方的验证记录为准。配置存在或任务开始不代表构建已经通过。
+3. 在运行详情的 **Artifacts** 区域下载 `desktop-windows-x64` 或 `desktop-linux-amd64` 并解压，得到 MSI／DEB 及同目录 `SHA256SUMS`。
+4. 用 SHA-256 核对安装包。例如 macOS 执行 `shasum -a 256 -c SHA256SUMS`，Linux 执行 `sha256sum -c SHA256SUMS`；Windows 可用 `Get-FileHash -Algorithm SHA256 .\安装包.msi` 与文件中对应行比较。
+
+另有 `desktop-tests-windows-x64` 与 `desktop-tests-linux-amd64`，包含测试报告、XML 结果和测试专用 UI 截图，供失败排查。工作流配置的 artifact 保留期为 **14 天**；过期后需重新运行对应实验构建。产物通过 Actions 提供，不进入正式 Releases。
+
 
 ## 本机数据与源码入口
 
@@ -132,8 +201,30 @@ Desktop 打包配置暂沿用包版本 `1.0.7`，没有独立桌面构建号；A
 | macOS 应用目录与实际启动 | `:desktopApp:createDistributable` 成功；实际启动携带运行时的 `.app`，mDNS 发现成功 |
 | 真实采集端配对与展示 | 用户在 Desktop 窗口手动完成配对，已看到实际 Token、额度与 Hooks 图片；真实内容截图不纳入文档 |
 | UI 图片 | Desktop UI 测试生成五张 PNG，本文选用其中三张演示布局 |
+| Windows x64 MSI CI | [本次任务成功](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/job/119812919428)，SharedLogic 133 项、DesktopApp 26 项通过，失败／错误／跳过均为 0，生成五张 UI 测试截图及 `LokiMetrisDisplay-1.0.7.msi` |
+| Linux x64 DEB CI | [本次任务成功](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/job/119812919826)，SharedLogic 133 项、DesktopApp 26 项通过，失败／错误／跳过均为 0，生成五张 UI 测试截图及 `lokimetris-display_1.0.7_amd64.deb` |
 
-自动化集成使用隔离测试端，与用户手动完成的真实采集端配对分别验证；测试数据没有进入正式采集端。macOS DMG、Windows／Linux 构建与运行、跨电脑真实局域网配对、IPv6-only 网络、Apple 构建／真机回归、开发者签名与公证均未验证；没有执行正式发布。
+自动化集成使用隔离测试端，与用户手动完成的真实采集端配对分别验证；测试数据没有进入正式采集端。macOS DMG、Windows／Linux 交互式安装及真实局域网配对、跨电脑真实局域网配对、IPv6-only 网络、Apple 构建／真机回归、开发者签名与公证均未验证；没有执行正式发布。
+
+### Windows／Linux 安装包交付记录
+
+本次 [CI 运行 39775395117](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117) 整体为 `completed / success`。构建使用的展示端源码为 [`14c3c26090dbee9f259db769f772c7e117421809`](https://github.com/ManonLoki/LokiMetisMobileDisplay/commit/14c3c26090dbee9f259db769f772c7e117421809)，外部 Rust 提交和冻结锁 SHA-256 沿用上文固定值。两个平台均在自己的 CI 宿主完成测试与安装包生成，没有在 macOS 上交叉打包。
+
+| 平台 | 安装包 | 字节数 | 下载 |
+| --- | --- | ---: | --- |
+| Windows x64 | `LokiMetrisDisplay-1.0.7.msi` | 66,276,038 | [desktop-windows-x64](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/artifacts/12423464488) |
+| Linux amd64 | `lokimetris-display_1.0.7_amd64.deb` | 67,558,984 | [desktop-linux-amd64](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/artifacts/12424278490) |
+
+两份 artifact 已下载，并分别按包内 `SHA256SUMS` 重新计算核对一致：
+
+```text
+8b2ebfdee31b6c1297d98d0f818750ca7041aad63f91a104230e8dfd54af90fb  LokiMetrisDisplay-1.0.7.msi
+e3d81a0169a325f444c956a7b21f203cec127ab1f7b504c3f03e7e1c1655b6be  lokimetris-display_1.0.7_amd64.deb
+```
+
+MSI 的 `SummaryInformation` 模板核对为 `x64;1033`。DEB 控制元信息核对为版本 `1.0.7`、架构 `amd64`，启动器及 `libapplauncher` 为 ELF x86-64。两端 XML 结果各为 **133 项 SharedLogic + 26 项 DesktopApp，0 失败、0 错误、0 跳过**，各保留五张测试专用 UI 截图。
+
+本记录证明原生宿主构建、自动化测试、安装包生成及下载完整性；Windows／Linux 尚未执行交互式安装、真实局域网配对或开发者签名验收。版本保持原配置，产物通过 Actions 交付，没有创建正式 Release 或新版本标签。
 
 常用回归入口：
 
@@ -142,4 +233,4 @@ Desktop 打包配置暂沿用包版本 `1.0.7`，没有独立桌面构建号；A
   -PlokiDesktopRoot=/absolute/path/to/LokiMetis
 ```
 
-UI 测试截图生成在 `desktopApp/build/screenshots/`，文档使用最终测试输出的三张样例 PNG。186 个本地文档目标路径与 `git diff --check` 已通过核对。文档核对已覆盖 README 的使用与启动、能力、设备／平台范围、目录、架构、版本与外部源码依赖；已有发布记录保持原范围，本次实验记录不替代未来正式发布时的 [发布检查清单](06-发布检查清单.md)。
+UI 测试截图生成在 `desktopApp/build/screenshots/`，文档使用最终测试输出的三张样例 PNG。文档中的本地目标路径与 `git diff --check` 已通过核对。文档核对已覆盖 README 的使用与启动、能力、设备／平台范围、目录、架构、版本与外部源码依赖；已有发布记录保持原范围，本次实验记录不替代未来正式发布时的 [发布检查清单](06-发布检查清单.md)。

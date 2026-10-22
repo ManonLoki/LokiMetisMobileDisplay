@@ -89,7 +89,7 @@ iPad 横屏将用量与 Hooks 并列，宽窗口使用侧栏导航；手机横�
 | iPhone | iOS 18.2 | 原生 SwiftUI 应用 |
 | iPad | iPadOS 18.2 | 平板布局与多窗口 |
 | Apple Watch | watchOS 11.0 | 首次配置需要已配对的 iPhone；Always On 取决于表款及系统设置 |
-| Desktop 实验展示终端 | 本次验证 macOS Apple Silicon | 配置了 macOS、Windows、Linux 宿主构建；后两者尚未构建或运行验证，未声明统一最低系统版本 |
+| Desktop 实验展示终端 | 未声明统一最低系统版本 | macOS arm64 已实际运行；Windows 2025 x64／Ubuntu 22.04 amd64 的安装包已在 CI 构建并自动测试，交互式安装与真实局域网配对范围见 [实验记录](docs/11-Desktop实验展示终端.md#本次验证记录) |
 
 ### 各端入口
 
@@ -111,7 +111,7 @@ Android 悬浮窗需开启系统的“显示在其他应用上层”权限。拖
 
 **Android**：从 [GitHub Releases](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/latest) 下载 APK 安装，附件中的 `SHA256SUMS` 可用于校验。
 
-**Desktop 实验 App**：当前从实验分支构建运行，见下方 [Desktop 源码运行](#desktop-实验展示终端)。macOS 可生成携带运行时的 `.app`；本次未向正式 Releases 发布桌面安装包。
+**Desktop 实验 App**：Windows x64 MSI／Linux amd64 DEB 已在 [本次 CI 运行](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117) 的 Artifacts 提供下载，每份附 `SHA256SUMS`，具体校验值与验证范围见 [交付记录](docs/11-Desktop实验展示终端.md#本次验证记录)。macOS 从实验分支构建携带运行时的 `.app`，见下方 [Desktop 源码运行](#desktop-实验展示终端)。本次未向正式 Releases 发布桌面安装包。
 
 **iPhone / iPad / Apple Watch**：当前通过 Xcode 开发签名安装，见下方[源码运行说明](#iphone--ipad)。iPhone 宿主同时包含 Widget 和 Watch 应用；Watch 需要与 iPhone 配对。
 
@@ -210,6 +210,8 @@ cd LokiMetisMobileDisplay
 
 下面的 `/absolute/path/to/LokiMetis` 请替换为桌面仓库的绝对路径。新环境应显式指定路径，不依赖脚本中的原开发环境默认值。构建脚本不安装开发工具；Gradle 与 Cargo 首次构建仍可能下载清单和锁文件声明的依赖。
 
+采集端远程仓库当前忽略 `Cargo.lock`，新克隆不会自带依赖锁。已有环境可继续使用已验证的本地锁；本次 Desktop 实验另冻结了一份 [desktopApp/native/Cargo.lock](desktopApp/native/Cargo.lock)，对应采集端提交 `0e326ceb745d7fa50119d61ab5a2ee59d868c9f6`。新环境先核对源码提交，再仅在缺少根目录锁文件时复制这份冻结锁，已有锁不自动覆盖；CI 在临时检出的工作区完成同样检查。锁文件依据与操作说明见 [Desktop 实验说明](docs/11-Desktop实验展示终端.md#准备-rust-依赖锁)。
+
 ### Android
 
 在 Android Studio 中打开本仓库。通过 SDK Manager 准备 SDK 与 NDK，在本机 `local.properties` 中设置 `sdk.dir`；也可使用 `ANDROID_HOME`，需要指定 NDK 时设置 `ANDROID_NDK_HOME`。
@@ -267,7 +269,11 @@ git switch codex/desktop-experimental
   -PlokiDesktopRoot=/absolute/path/to/LokiMetis
 ```
 
-macOS 应用目录为 `desktopApp/build/compose/binaries/main/app/LokiMetrisDisplay.app`，携带运行时和本机 Rust／JNI 库。构建配置提供 macOS DMG、Windows MSI、Linux DEB，需在对应系统构建；本次已验证 macOS arm64 应用目录，Windows／Linux 与各系统安装包尚未验证。Windows 使用 `gradlew.bat`，MSVC 构建需从 Visual Studio Native Tools 环境运行。详细依赖、私有数据位置与测试记录见 [Desktop 实验说明](docs/11-Desktop实验展示终端.md)。
+macOS 应用目录为 `desktopApp/build/compose/binaries/main/app/LokiMetrisDisplay.app`，携带运行时和本机 Rust／JNI 库。构建配置提供 macOS DMG、Windows MSI、Linux DEB，需在对应系统构建。本次已验证 macOS arm64 应用目录和实际配对；Windows x64 MSI 与 Linux amd64 DEB 已在对应 CI 宿主通过自动测试并生成。Windows／Linux 的交互式安装和真实局域网配对尚未验证，macOS DMG 也尚未生成验收。
+
+Windows 在 Visual Studio Native Tools 环境使用 `gradlew.bat :desktopApp:packageMsi`，JDK 21 生成 MSI 还需 WiX 3。若 `python3` 指向 Windows 商店占位程序，可添加 `"-PlokiPython=C:\path\to\python.exe"` 指定已安装的真实解释器。Linux 对应任务为 `:desktopApp:packageDeb`。
+
+本次 [Windows／Linux CI 运行已成功](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117)。可从运行详情的 Artifacts（构建产物）下载 [Windows x64 MSI](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/artifacts/12423464488) 或 [Linux amd64 DEB](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/runs/39775395117/artifacts/12424278490)，每份包含安装包和 `SHA256SUMS`。后续相关源码或构建文件推送到实验分支，会由 [构建工作流](https://github.com/ManonLoki/LokiMetisMobileDisplay/actions/workflows/desktop-build.yml) 在对应系统先测试再打包；这些产物不作为正式 Release 发布。完整命令、下载步骤、实际成功范围及校验方式见 [Desktop 实验说明](docs/11-Desktop实验展示终端.md)。
 
 ### iPhone / iPad
 
