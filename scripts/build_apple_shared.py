@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""在 Apple 宿主上串行构建 SharedLogic，供多个 Xcode target 共用。"""
+"""从 Xcode 的 SDK、架构与配置生成对应 SharedLogic 静态框架。
+
+App、Widget、Watch 共用 Gradle 输出目录；本文件与 Swift 测试入口使用同一进程锁。
+SDK/架构由 Xcode 环境提供；框架嵌入与所需签名交给 Gradle 的 Xcode 集成任务。
+"""
 
 from contextlib import contextmanager
 import fcntl
@@ -31,6 +35,7 @@ def run_gradle(task):
 
 
 def main():
+    """只接受完整的 Xcode 构建环境，再在锁内执行项目 Gradle Wrapper。"""
     if sys.platform != "darwin":
         raise SystemExit("Apple 框架必须在 macOS 上构建。")
     required = ("SDK_NAME", "ARCHS", "CONFIGURATION", "TARGET_BUILD_DIR", "FRAMEWORKS_FOLDER_PATH")

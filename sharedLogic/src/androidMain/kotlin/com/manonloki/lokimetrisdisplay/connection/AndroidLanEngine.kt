@@ -148,7 +148,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             catch (_: Exception) { fail(false, "连接状态异常，请重新选择桌面重试。") }
         }
     }
-    /** 真后台关闭浏览和会话；权限对话框及Activity旋转由应用层合并，不调用此分支。 */
+    /** 无可用权限或前台与常驻服务都退出时暂停；后台始终取消首次配对窗口。 */
     private fun syncForeground() {
         val (visible, permitted) = foreground.get()
         val visibilityChanged = foregroundVisible != visible
@@ -237,7 +237,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         } catch (_: Exception) { fail(false, "无法开始连接，请检查设备身份或配对存储后重试。") }
         publish()
     }
-    /** 新TCP每次都以已有Keystore秘密派生新的会话，不持久化手机或桌面IP。 */
+    /** 新 TCP 以 Keystore 中的配对秘密恢复认证；端点来自本轮发现，独立 HTTP 目标另行保存。 */
     private fun resumeSelected() {
         val id = view.selectedId ?: return
         if (!active || !intent.requested || id !in endpoints) return
@@ -379,7 +379,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         }
         publish()
     }
-    /** 切换目标或进入后台时取消整个配对窗口，仅保留图片磁盘缓存与系统凭据。 */
+    /** 取消会话与配对窗口并撤下实时展示；图片、组件裁剪摘要及系统凭据由各自存储管理。 */
     private fun cancelSession() {
         clearLiveDisplay()
         retryAt = null; socket?.close(); socket = null; deviceType.reset()
@@ -387,7 +387,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         cache?.close(); currentAsset = null; assetDeadline = null; pairingDeadline = null; deadline = null; offer = null
         failedAssets.clear(); phase = Phase.IDLE; view = view.copy(pairingCode = null, connected = false)
     }
-    /** 验证后的完整快照只进入本次连接的内存展示，不持久化Token与状态。 */
+    /** 完整图文只进入本轮内存展示，同时另存不含正文和图片的小组件摘要及独立读取目标。 */
     private fun acceptSnapshot(message: JSONObject) {
         val snapshot = AndroidDisplayJson.snapshot(message); val received = System.currentTimeMillis()
         deviceType.afterAuthenticatedSnapshot(AndroidDisplayJson.capabilities(message))?.let { type ->

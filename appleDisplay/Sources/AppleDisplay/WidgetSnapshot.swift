@@ -39,7 +39,7 @@ struct WidgetSnapshot: Codable, Equatable {
         return SnapshotFreshnessPolicy.shared.isCached(receivedAtMs: receivedAtMs, validUntilMs: validUntilMs ?? -1, nowMs: now)
     }
 
-    /// 当前连接仍要求45秒租约；可展示缓存不代表可以恢复认证连接的续期资格。
+    /// 检查 45 秒租约，供组件抑制重复 HTTP；有效不代表主 App 在线或恢复了连接续期资格。
     func isLive(atMs now: Int64) -> Bool {
         guard (try? validate()) != nil else { return false }
         return SnapshotFreshnessPolicy.shared.isLive(receivedAtMs: receivedAtMs, validUntilMs: validUntilMs ?? -1, nowMs: now)
@@ -314,7 +314,9 @@ struct ProviderQuotaEntry: Codable, Equatable {
 
 struct ProviderQuotaWindow: Codable, Equatable {
     let kind: String
+    /// 已用比例，以 0.1 个百分点计；共享模型验证 0...1000，并生成剩余额度文本。
     let usedTenths: Int
+    /// Unix 秒；Token 日界与快照接收时间的单位则为毫秒。
     let resetAtUnix: Int64?
     var sharedValue: SharedLogic.ProviderQuotaWindow {
         SharedLogic.ProviderQuotaWindow(kind: kind, usedTenths: Int32(clamping: usedTenths),

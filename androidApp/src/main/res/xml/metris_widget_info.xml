@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 组件不使用框架固定更新周期；15 分钟建议刷新由 AndroidRefreshScheduler 的系统任务申请。 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/metris_widget_description"
     android:initialLayout="@layout/metris_widget"

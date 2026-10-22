@@ -39,7 +39,7 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(WidgetSnapshot.self, from: Data(encoded.utf8)), value)
     }
 
-    /// 非规范整数、未知版本、重复槽位和不一致日界不能覆盖有效缓存。
+    /// 非规范整数、未知版本、越界观测时间及非法 Hook 状态/槽位都在解析时拒绝。
     func test_rejects_invalid_wire_values() throws {
         for invalid in [fixture.replacingOccurrences(of: "18446744073709551615", with: "18446744073709551616"),
                         fixture.replacingOccurrences(of: "18446744073709551615", with: "01"),

@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** 资源引用决策只比较宿主元信息；这里故意包含非协议长度，区分选择规则与格式校验。 */
 class AssetTransferPolicyTest {
     private val asset = AssetTransferDescriptor("a".repeat(64), "image/gif", ULong.MAX_VALUE.toString())
 

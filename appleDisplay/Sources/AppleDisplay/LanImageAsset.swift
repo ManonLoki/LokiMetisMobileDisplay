@@ -3,7 +3,7 @@ import CoreGraphics
 import ImageIO
 import SharedLogic
 
-/// 已在网络后台解码的展示图片；帧只保存一次，逐帧时间不靠重复位图近似。
+/// 在宿主的独立解码队列生成的展示图片；帧只保存一次，逐帧时间不靠重复位图近似。
 struct LanImageAsset {
     enum Failure: LocalizedError {
         case unsupportedFormat, invalidImage, resourceLimit
@@ -16,7 +16,8 @@ struct LanImageAsset {
         }
     }
 
-    /// 每张最多8MiB解码帧，最多十二个Hook约96MiB；编码正文仍限制32MiB。
+    /// 全部帧共用每张预算：iPhone/iPad 为 8MiB、512 像素边长，Watch 为 2MiB、256 像素。
+    /// 两端编码正文都限制 32MiB；动画按帧数继续缩图，保留全部帧及原始时长。
     struct Limits {
         var maxEncodedBytes = Int(LanDisplaySnapshot.Asset.maxLength)
         var maxSourcePixels = Int(ImageDecodePolicy.shared.MAX_SOURCE_PIXELS)
@@ -40,7 +41,7 @@ struct LanImageAsset {
     let duration: TimeInterval
     var isAnimated: Bool { frames.count > 1 }
 
-    /// 运行于连接owner后台队列；完整动画成功后才发布，不悄悄以首帧替代损坏动画。
+    /// 调用方须放在独立解码队列；完整动画成功后才发布，不以首帧替代损坏动画。
     static func decode(contentsOf url: URL, mime: String, id: String, limits: Limits = Limits()) throws -> Self {
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else { throw Failure.invalidImage }
@@ -153,6 +154,7 @@ struct LanImageAsset {
         guard let count = values[key] as? NSNumber else { return 1 }
         let value = count.intValue
         guard value > 0 else { return 0 }
+        // GIF 的正值是首次播放后的重复次数，APNG/WebP 则直接表示总播放次数。
         return mime == "image/gif" && value < Int.max ? value + 1 : value
     }
 }

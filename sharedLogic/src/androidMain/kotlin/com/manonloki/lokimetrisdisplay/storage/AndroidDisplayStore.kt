@@ -4,7 +4,7 @@ import android.content.Context
 import java.io.File
 import java.nio.file.Files
 
-/** 仅清理旧版本的Token/Hooks快照；当前展示不再读写磁盘，图片和配对存储独立保留。 */
+/** 清理旧版完整 Token/Hooks 快照；前台完整展示仅驻内存，小组件裁剪摘要、图片及配对分别存储。 */
 class AndroidDisplayStore(context: Context) {
     private val directory = context.filesDir
     /** 精确删除旧快照及AtomicFile遗留文件，不遍历目录、不跟随链接或删除图片。 */

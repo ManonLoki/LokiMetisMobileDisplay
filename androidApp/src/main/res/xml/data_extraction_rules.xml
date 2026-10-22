@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 设备身份与配对依赖本机密钥，不随云备份或设备迁移复制；组件摘要位于 noBackup 目录。 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="mdns_identity.xml" />

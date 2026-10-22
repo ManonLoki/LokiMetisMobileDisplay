@@ -7,6 +7,7 @@ import Glibc
 #endif
 @testable import AppleDisplay
 
+/// 原生地址解析与共享端点策略共同决定接纳范围；仅构造 URL，不连接这些地址。
 final class WidgetEndpointBoundaryTests: XCTestCase {
     private func target(_ host: String) throws -> WidgetRefreshTarget {
         try WidgetRefreshTarget(sourceId: "12345678-1234-4abc-8def-123456789abc",

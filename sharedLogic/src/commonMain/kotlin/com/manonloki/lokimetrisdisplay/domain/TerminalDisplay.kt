@@ -52,10 +52,10 @@ data class TerminalAmount(val total: String?, val availability: String, val comp
         require(confidence in listOf("exact", "derived", "suspected"))
         if (availability == "available") require(total != null && canonicalUnsigned(total)) else require(total == null)
     }
-    /** UI显示精确原值，不经Double或缩略换算。 */
+    /** 领域值保留精确十进制；K/M/B 缩写与分组符由展示层另行处理。 */
     val text: String get() = when (availability) { "available" -> total ?: "—"; "noRecords" -> "无记录"; else -> "不可用" }
     val hasNumericValue: Boolean get() = availability == "available" && total != null
-    /** 部分或推算质量始终可见，不把不完整统计当作精确总量。 */
+    /** 保留部分或推算质量供宿主展示；界面可通过辅助功能描述提供这些信息。 */
     val quality: String get() = UsageDisplayPolicy.amountQuality(completeness, confidence, " · ")
     fun isValid(): Boolean = runCatching { validate() }.isSuccess
 }

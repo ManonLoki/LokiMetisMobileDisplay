@@ -2,7 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import kotlin.test.*
 
-/** 半帧、阶段切换和自动发现覆盖真实连接中最高风险边界。 */
+/** 验证半帧累积、阶段切换和自动连接的纯策略；不建立真实 socket 或执行密码握手。 */
 class TerminalTransportTest {
     /** 四字节头与正文跨read累积，完整后恰好一次交付。 */
     @Test fun split_frame_delivers_once() {
@@ -31,7 +31,7 @@ class TerminalTransportTest {
         assertFalse(policy.requested); policy.enterForeground(); assertTrue(policy.requested)
         assertNull(policy.automaticSelection(null, emptySet(), listOf("new-desktop")))
     }
-    /** 后台连错误重试也不能启动网络，返回前台自动恢复已有信任。 */
+    /** 宿主撤销连接资格后，错误重试也不能重开；恢复资格后可自动选择已有信任。 */
     @Test fun background_pauses_and_foreground_resumes_paired_connection() {
         val policy = TerminalConnectionPolicy(); policy.enterForeground()
         assertEquals("trusted", policy.automaticSelection(null, setOf("trusted"), listOf("new", "trusted")))

@@ -3,6 +3,7 @@ package com.manonloki.lokimetrisdisplay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/** 主面板与小组件的单位上限各自验证，共用整数舍入并保留 u64 最大值精度。 */
 class TokenFormattingTest {
     @Test
     fun widgetUsesExtendedUnitsWithoutUnsignedOverflow() {

@@ -2,6 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import kotlin.test.*
 
+/** 以纯配置对象验证修订、防回退、撤销和来源绑定；地址解析及密钥存储由平台测试覆盖。 */
 class WatchConfigurationPolicyTest {
     private val phone = "12345678-1234-4abc-8def-123456789abc"
     private val desktop = "22345678-1234-4abc-8def-123456789abc"

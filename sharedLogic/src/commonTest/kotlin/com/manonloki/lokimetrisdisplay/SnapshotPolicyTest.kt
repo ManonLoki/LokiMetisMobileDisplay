@@ -2,6 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import kotlin.test.*
 
+/** 时间和来源接纳规则使用固定时刻，分别验证认证推送、迟到 HTTP 和租约过期。 */
 class SnapshotPolicyTest {
     private val first = SnapshotStamp("first", 100)
     @Test fun authenticatedSwitchesSourceButHeartbeatAndHttpCannot() {

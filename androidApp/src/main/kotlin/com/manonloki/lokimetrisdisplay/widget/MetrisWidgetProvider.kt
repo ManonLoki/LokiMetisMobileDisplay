@@ -43,7 +43,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) {
-        // 调度器同时考虑悬浮窗和其他后台入口，最后一个组件移除时由它决定是否保留任务。
+        // 周期任务取决于仍有效的独立读取目标，不以小组件数量或悬浮窗可见性决定。
         AndroidRefreshScheduler.ensureScheduled(context)
     }
 
@@ -182,7 +182,7 @@ class MetrisWidgetProvider : AppWidgetProvider() {
 
         private data class QuotaSummary(val text: CharSequence, val description: String, val rows: Int)
 
-        /** 按尺寸限制可见账户数；每个可见账户始终保留真实的每周、5h 两种窗口。 */
+        /** 按尺寸限制可见账户数；每个可见账户依次展示已有的每月、每周、5h 窗口。 */
         private fun quotaSummary(context: Context, quota: ProviderQuotaSnapshot?, providerLimit: Int, compact: Boolean, wide: Boolean): QuotaSummary? {
             val providers = quota?.providers.orEmpty().filter { it.windows.isNotEmpty() }
             if (providers.isEmpty()) return null

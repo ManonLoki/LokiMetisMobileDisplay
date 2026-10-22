@@ -9,7 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** 应用而非Activity持有连接；屏幕旋转不重开配对窗口，真后台才暂停。 */
+/** 应用持有连接；Activity 旋转不重开配对窗口，退入后台后由用户启动的前台服务决定是否续连。 */
 class DisplayApplication : Application(), Application.ActivityLifecycleCallbacks {
     @Volatile var settings: AndroidDeviceSettings? = null; private set
     var link: AndroidLanEngine? = null; private set
@@ -69,7 +69,7 @@ class DisplayApplication : Application(), Application.ActivityLifecycleCallbacks
         started++; delayedStop?.let(main::removeCallbacks); delayedStop = null
         link?.setForeground(true, permitted())
     }
-    /** 配置重建期间保留owner，真实离开应用则短暂合并后关闭局域网连接。 */
+    /** 配置重建期间保留 owner，离开应用 300 ms 后上报后台；是否续连由引擎结合前台服务决定。 */
     override fun onActivityStopped(activity: Activity) {
         if (activity !is MainActivity) return
         started = maxOf(0, started - 1)

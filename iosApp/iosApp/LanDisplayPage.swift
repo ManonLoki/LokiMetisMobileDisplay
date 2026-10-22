@@ -163,7 +163,7 @@ struct LanDisplayPage: View {
         }
     }
 
-    /// 一页 Hooks：单张或 2×2 网格，空位显示“空闲”。
+    /// 一页 Hooks：单张或 2×2 网格；全部为空显示“暂无活动”，未填满的格子显示“空闲”。
     private func hookPage(_ hooks: [LanDisplaySnapshot.Hook], page: Int, size: CGSize) -> some View {
         let columns = hookLayout.columns
         let gap: CGFloat = columns == 2 ? 8 : 0
@@ -622,7 +622,7 @@ private struct ProviderQuotaEntryRow: View {
         }.accessibilityIdentifier("quota-\(provider.provider)")
     }
 
-    /// 单个额度窗口：标签、百分比、进度条与重置时间。
+    /// 单个额度窗口显示标签、剩余百分比与进度条；重置时间放在读屏描述中。
     private func row(_ window: ProviderQuotaWindow, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {

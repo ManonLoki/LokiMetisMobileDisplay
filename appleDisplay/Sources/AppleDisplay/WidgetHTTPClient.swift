@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import SharedLogic
 
-/// Widget 独立读取桌面展示投影；凭据只进入加密请求，地址和响应都受固定边界约束。
+/// App、Widget 与 Watch 共用的独立只读摘要客户端；凭据只用于加密，地址和响应均有固定边界。
 struct WidgetHTTPClient {
     static let timeout = Double(WidgetHttpPolicy.shared.TIMEOUT_MS) / 1000
     static let maxResponseBytes = Int(WidgetHttpPolicy.shared.MAX_RESPONSE_BYTES)

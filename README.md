@@ -128,7 +128,7 @@ Android 悬浮窗需开启系统的“显示在其他应用上层”权限。拖
 
 Hooks 是编程工具发送的活动事件，卡片可显示空闲、运行、等待确认（界面显示“询问”）、出错四种状态。在手机或平板上点击卡片可查看正文和图片详情，查看结束后关闭详情返回展示台；卡片中的图片和动图由桌面提供，移动端下载并缓存。想专注看一张图时使用 1×1，想同时看多个工具时使用 2×2。
 
-正文、图片与 Agent 开关在桌面端配置。移动端暂不提供修改这些内容的入口；没有图片时仍显示状态和正文。小组件和 Android 悬浮窗使用精简摘要，不展示 Hooks 图片。
+正文、图片与 Agent 开关在桌面端配置。移动端暂不提供修改这些内容的入口；没有图片时卡片仍显示标题与状态，正文可在详情中查看。小组件只显示活动状态汇总；Android 悬浮窗显示当前连接的状态与正文首个非空行，两者均不展示 Hooks 图片。
 
 ### Android 后台实时同步与悬浮窗
 
@@ -170,7 +170,7 @@ Watch 的新图片经 iPhone 同步。手机不可达时，已获配置的 Watch
 
 Apple App、小组件与 Watch 的后台刷新申请间隔约为 **5 分钟**，Android 普通后台任务的申请间隔为 **15 分钟**。实际执行时间由系统调度与省电策略决定，不保证准时更新或持续实时连接。
 
-小组件的独立摘要包含用量、额度与活动状态，不包含 Hooks 正文和图片。离线缓存以原同步时间标识；电脑需要在线且局域网可达，才能取得新数据。
+小组件的独立摘要包含用量、额度与活动状态，不包含 Hooks 正文和图片。Android 为组件单独保存摘要与只读刷新目标，主展示台不会用这份摘要恢复旧面板；Apple 主 App 的完整缓存还可保留正文和图片引用。离线缓存以原同步时间标识；电脑需要在线且局域网可达，才能取得新数据。
 
 ## 从源码运行
 
@@ -183,7 +183,7 @@ Apple App、小组件与 Watch 的后台刷新申请间隔约为 **5 分钟**，
 | JDK 21 | Gradle 构建，仓库配置使用 Azul 21 |
 | Android Studio、SDK、NDK | Android 开发；需要 SDK Platform 37、Platform Tools，以及包含 API 31 Clang 的 NDK |
 | Xcode | iPhone、iPad、Watch 与 Widget 开发，需要对应系统的 SDK 和模拟器运行时 |
-| Rust / Cargo / rustup | 编译共享配对与加密核心，版本要求见所选桌面仓库的 `Cargo.toml` |
+| Rust / Cargo / rustup | 编译主通道配对与加密核心，版本要求见所选桌面仓库的 `Cargo.toml` |
 | Python 3 | 运行仓库自带的构建、签名及 Apple 测试脚本，无第三方 Python 依赖 |
 
 Gradle 使用项目的 `./gradlew`。完整移动 App 还依赖桌面仓库中的 Rust 源码，需同时准备两个仓库，并选择与移动版本兼容的桌面提交：
@@ -194,7 +194,7 @@ git clone https://github.com/ManonLoki/LokiMetis.git
 cd LokiMetisMobileDisplay
 ```
 
-下面的 `/absolute/path/to/LokiMetis` 请替换为桌面仓库的绝对路径。新环境应显式指定路径，不依赖脚本中的原开发环境默认值。
+下面的 `/absolute/path/to/LokiMetis` 请替换为桌面仓库的绝对路径。新环境应显式指定路径，不依赖脚本中的原开发环境默认值。构建脚本不安装开发工具；Gradle 与 Cargo 首次构建仍可能下载清单和锁文件声明的依赖。
 
 ### Android
 
@@ -230,6 +230,8 @@ lokiDesktopRoot=/absolute/path/to/LokiMetis
 
 构建 Release APK 时，将任务换为 `:androidApp:assembleRelease`，保留路径参数；输出为 `androidApp/build/outputs/apk/release/androidApp-release.apk`。
 
+当前 Android 的 Debug／Release 共用原生库生成任务，Rust 桥均使用脚本默认的 Cargo Debug 配置；APK 的 Release 名称不代表桥已采用 Cargo Release 优化。
+
 ### iPhone / iPad
 
 添加 Rust 编译目标并打开 Xcode 工程：
@@ -256,13 +258,13 @@ xcodebuild -project iosApp/iosApp.xcodeproj \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-这条命令禁用签名，用于验证构建。连接调试还需要可用的 Keychain（系统安全存储）及正确的 App / Widget 共享容器权限；本次未签名模拟器包无法保存设备身份，真实配对未验收，详见 [UI 验证记录](docs/09-v1.0.6发布与UI验证.md)。
+这条命令禁用签名，用于验证构建。连接调试还需要可用的 Keychain（系统安全存储）及正确的 App / Widget 共享容器权限。v1.0.6 的未签名模拟器验证遇到设备身份保存失败，未完成真实配对验收，具体环境与范围见 [UI 验证记录](docs/09-v1.0.6发布与UI验证.md)。
 
 ### Apple Watch
 
 在 Xcode 选择 **LokiMetrisWatch** scheme 和目标手表，点击 **Run** 或 **Debug**。同步需要已配对的 iPhone / Watch 组合，并先在 iPhone 完成电脑配对；实体 Watch 同样需开启开发者模式并连接 Xcode。
 
-Watch 应用使用 Swift，可单独构建模拟器目标：
+Watch 界面使用 SwiftUI，并链接 SharedLogic 共享规则，可单独构建模拟器目标：
 
 ```sh
 xcodebuild -project iosApp/iosApp.xcodeproj \
@@ -283,11 +285,11 @@ SharedLogic 同时编译到 Android、iOS 和 watchOS。Watch 真机保留 `arm6
 python3 scripts/test_apple_shared.py
 ```
 
-第二条命令先生成 macOS SharedLogic 框架，再让 Swift 测试真实调用共享业务规则。测试仍覆盖 Swift 数据编解码、文件事务和系统适配边界；新环境请通过此入口准备框架。
+第二条命令先生成 macOS SharedLogic 框架，再让 Swift 测试真实调用共享业务规则。测试覆盖 Swift 数据编解码、文件事务和系统适配边界，在 macOS 宿主运行，不代替 iOS／watchOS 模拟器或真机互通验证；可在脚本后追加 SwiftPM 参数，例如 `--filter WidgetSnapshotTests`。
 
 ## 技术与目录
 
-Android 使用 Kotlin + Compose，Apple 各端使用原生 SwiftUI；配对与加密核心由桌面仓库的 Rust 模块提供。Android、iOS、Watch 和 Widget 通过 SharedLogic 复用展示模型校验、Agent 筛选与排序、用量和额度规则、连接时限与帧容量、Watch 传输与配置、图片调度与缓存淘汰、解码预算，以及只读 HTTP 协议与局域网地址边界。系统网络、文件与图片解码仍由平台执行；Swift 保留原有数据编码格式与界面适配。
+Android 使用 Kotlin + Compose，Apple 各端使用原生 SwiftUI；主局域网通道的配对与加密核心由桌面仓库的 Rust 模块提供，只读 HTTP 使用独立密钥并由各平台密码 API 执行。Android、iOS、Watch 和 Widget 通过 SharedLogic 复用展示模型校验、Agent 筛选与排序、用量和额度规则、连接时限与帧容量、Watch 传输与配置、图片调度与缓存淘汰、解码预算，以及只读 HTTP 协议与局域网地址边界。系统网络、文件与图片解码仍由平台执行；Swift 保留原有数据编码格式与界面适配。
 
 ```text
 .
@@ -323,6 +325,18 @@ flowchart TD
 
 版本名和构建号分别见 [Android 配置](androidApp/build.gradle.kts) 与 [Apple 配置](iosApp/Configuration/Config.xcconfig)。
 
+当前发布为 **v1.0.7**：Android 构建号 **9**，Apple 构建号 **15**；变化与实际验证范围见 [发布记录](docs/10-v1.0.7发布与设备安装.md)。上方 UI 图片保留 v1.0.6 的演示来源说明。
+
+| 要修改的内容 | 先看哪里 |
+| --- | --- |
+| 展示规则、额度、排序、缓存与传输策略 | `sharedLogic/src/commonMain/` |
+| Android 界面、组件、悬浮窗与后台服务 | `androidApp/src/main/` |
+| Android 连接、配对、图片缓存与独立摘要 | `sharedLogic/src/androidMain/` |
+| Apple 网络、系统生命周期与各端界面 | `iosApp/` |
+| Apple 编解码、缓存、传输适配与跨语言测试 | `appleDisplay/` |
+
+完整文件职责、并发队列和存储边界见 [文档索引](docs/README.md) 与 [当前架构](docs/07-当前架构.md)。历史发布验证按版本保留，不能作为后续改动已验收的依据。
+
 ## 常见问题
 
 | 遇到的情况 | 检查方式 |
@@ -335,4 +349,4 @@ flowchart TD
 | 构建提示缺少 Rust bridge | 检查桌面源码是否完整，`lokiDesktopRoot` 或 `LOKI_DESKTOP_ROOT` 是否指向正确目录 |
 | Android 无法覆盖安装 | 确认沿用原签名；迁移方式见[签名说明](signing/README.md) |
 
-进一步阅读：[KMP 分层优化与后续路线](docs/08-KMP分层与优化路线.md)、[当前架构与 Archify 图](docs/07-当前架构.md)、[文件结构详解](docs/01-文件结构.md)、[技术架构](docs/02-技术架构.md)、[功能与交互](docs/03-业务需求整理.md)、[Android 签名](signing/README.md)。
+进一步阅读：[KMP 分层优化与后续路线](docs/08-KMP分层与优化路线.md)、[当前架构与源码导航](docs/07-当前架构.md)、[文件结构详解](docs/01-文件结构.md)、[技术架构](docs/02-技术架构.md)、[功能与交互](docs/03-业务需求整理.md)、[Android 签名](signing/README.md)。

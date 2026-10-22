@@ -12,9 +12,8 @@ extension EnvironmentValues {
     }
 }
 
-/// 全屏氛围背景：两团光晕缓慢漂移，网格静止；只是装饰，不持有任何应用状态。
-/// 漂移幅度 24pt、周期约 50 秒，最快每秒约 3pt，8 帧/秒已看不出跳动；
-/// 相比原来 24 帧/秒，全屏重绘次数降到三分之一。静态网格单独绘制一次，不随时间线重画。
+/// 全屏装饰背景：两团光晕以 24pt 幅度、约 50 秒周期漂移，时间线最多请求每秒 8 次更新。
+/// 静态网格在时间线外绘制；不可见、非当前页面、后台或减弱动态效果时暂停漂移。
 struct CyberBackdrop: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,7 +44,7 @@ struct CyberBackdrop: View {
     }
 }
 
-/// 静态 28pt 网格；作为 Shape 只在尺寸变化时重新生成路径。
+/// 静态 28pt 网格；路径仅依赖当前尺寸，不读取动画时间。
 private struct CyberGrid: Shape {
     func path(in rect: CGRect) -> Path {
         var grid = Path()
@@ -59,8 +58,8 @@ private struct CyberGrid: Shape {
     }
 }
 
-/// 卡片内容静止，只有一圈高光沿边框缓慢旋转（8 秒一圈）。
-/// 15 帧/秒时每帧约转 3°，细边框上看不出跳帧，比 24 帧/秒少约四成唤醒；未开启扫光的卡片时间线暂停。
+/// 卡片内容静止，边框高光每 8 秒旋转一圈，时间线最多请求每秒 15 次更新。
+/// 只有可见、位于当前页且允许动效的扫光卡片才启用时间线。
 private struct CyberSurface: ViewModifier {
     var tint: Color
     var sweeping: Bool

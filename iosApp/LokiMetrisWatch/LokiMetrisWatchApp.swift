@@ -348,7 +348,7 @@ private struct WatchRootView: View {
         .animation(allowsMotion ? .easeOut(duration: 0.2) : nil, value: hook.behavior)
     }
 
-    /// 只有当前可见页、当前卡片且允许动效时才播放动图，其余情况停在当前帧不唤醒。
+    /// 仅当前 Hooks 页的可见卡片播放动图；离页或常亮模式暂停，减弱动态效果时显示首帧。
     private func hookImage(_ hook: LanDisplaySnapshot.Hook) -> some View {
         let image = hook.image.flatMap { model.state.images[$0] }
         let placeholder = hook.image == nil ? "暂无图片" : "图片未缓存"

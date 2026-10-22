@@ -1,6 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
-/** 小组件与悬浮摘要只保留用量和四态；正文、图片及长期配对秘密不进入持久化。 */
+/** 系统小组件的持久化摘要只保留用量和 Hook 四态；正文、图片及长期配对秘密不进入此模型。 */
 data class TerminalWidgetSnapshot(val sourceId: String, val receivedAtMs: Long, val snapshot: TerminalSnapshot) {
     val stamp: SnapshotStamp get() = SnapshotStamp(sourceId, receivedAtMs)
 

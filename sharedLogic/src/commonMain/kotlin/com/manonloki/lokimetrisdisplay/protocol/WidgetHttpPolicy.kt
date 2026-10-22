@@ -1,6 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
-/** 仅保留既有请求容量与 Base64 接纳差异，不开放任意协议参数。 */
+/** Android 与 Apple 的请求容量、Base64 接纳规则不同，使用固定平台配置选择。 */
 enum class WidgetHttpClientProfile { ANDROID, APPLE }
 enum class WidgetHttpBinaryField { KEY, NONCE, RESPONSE_CIPHERTEXT }
 
@@ -43,7 +43,7 @@ object WidgetHttpPolicy {
     private fun canonicalRequired(field: WidgetHttpBinaryField, profile: WidgetHttpClientProfile): Boolean =
         field == WidgetHttpBinaryField.KEY || profile == WidgetHttpClientProfile.ANDROID
 
-    /** Android 原有解码前容量检查保留；Apple 响应继续由 Foundation 判断可解码性。 */
+    /** Android 在 Base64 解码前检查容量；Apple 响应由 Foundation 判断可解码性。 */
     fun acceptsBase64Input(characters: Long, field: WidgetHttpBinaryField, profile: WidgetHttpClientProfile): Boolean =
         characters >= 0 && (!canonicalRequired(field, profile) ||
             characters <= ((maximumDecodedBytes(field) + 2) / 3) * 4)

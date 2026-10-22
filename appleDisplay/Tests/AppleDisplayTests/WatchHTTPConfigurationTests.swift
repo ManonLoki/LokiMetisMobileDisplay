@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import AppleDisplay
 
+/// 配置修订、显式撤销与手机绑定在真实 Codable 边界验证；不访问表端 Keychain 或网络。
 final class WatchHTTPConfigurationTests: XCTestCase {
     private let phone = "12345678-1234-4abc-8def-123456789abc"
     private let desktop = "22345678-1234-4abc-8def-123456789abc"

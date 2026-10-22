@@ -4,6 +4,7 @@ import ImageIO
 import XCTest
 @testable import AppleDisplay
 
+/// 在临时目录走真实落盘、内容校验和解码；Watch 内存预算与历史文件淘汰分别断言。
 final class WatchAssetCacheTests: XCTestCase {
     private let transfer = "32345678-1234-4abc-8def-123456789abc"
 

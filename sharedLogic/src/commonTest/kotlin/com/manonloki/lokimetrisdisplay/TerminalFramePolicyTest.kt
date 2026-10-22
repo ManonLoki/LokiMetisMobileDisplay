@@ -2,6 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import kotlin.test.*
 
+/** 只检验帧容量、平台在途写计数与计时边界，不模拟操作系统 socket 调度。 */
 class TerminalFramePolicyTest {
     @Test fun queueLimitCountsPlatformInFlightFrameAndExactTimeoutBoundary() {
         assertTrue(TerminalWritePolicy.canEnqueue(7, false))

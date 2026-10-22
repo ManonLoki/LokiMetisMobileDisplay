@@ -12,10 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(command, env=None):
+    """捕获 keytool 输出并保留失败；密码通过专用环境变量传递，不拼进命令文本。"""
     return subprocess.run(command, env=env, check=True, capture_output=True, text=True).stdout
 
 
 def main():
+    """验证现有签名；缺失时默认迁移开发证书，只有 --new-key 才创建新证书。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--new-key", action="store_true", help="首次安装且无须沿用旧签名时生成新证书")
     args = parser.parse_args()

@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
-// Run from the repository root: swift scripts/generate_app_icons.swift
-// Uses only the macOS SDK. The desktop logo is preserved in branding/app-icon.png.
+// 在仓库根目录运行：swift scripts/generate_app_icons.swift，仅依赖 macOS SDK。
+// 读取 branding/app-icon.png 的桌面品牌原图，覆盖下列各端图标与资源清单，不修改原图。
 import Foundation
 import CoreGraphics
 import ImageIO
@@ -15,17 +15,19 @@ guard let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
     fatalError("Expected the 1024 × 1024 desktop logo at branding/app-icon.png")
 }
 
+/// 创建父目录，以 UTF-8 原子写入相对仓库根目录的资源清单。
 func write(_ content: String, to path: String) throws {
     let url = root.appendingPathComponent(path)
     try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try content.write(to: url, atomically: true, encoding: .utf8)
 }
 
+/// 将原图居中缩放到指定比例，补齐深色边缘，写出指定像素尺寸的不透明 PNG。
 func render(_ path: String, size: Int, artworkFraction: CGFloat) throws {
     let url = root.appendingPathComponent(path)
     try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-    // noneSkipLast removes the alpha channel required to be absent from Apple app icons.
+    // noneSkipLast 让所有生成图标都使用不含透明通道的画布。
     guard let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
                                   bytesPerRow: size * 4, space: colorSpace,
                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else {
@@ -37,8 +39,7 @@ func render(_ path: String, size: Int, artworkFraction: CGFloat) throws {
     let side = CGFloat(size) * artworkFraction
     let inset = (CGFloat(size) - side) / 2
     context.draw(source, in: CGRect(x: inset, y: inset, width: side, height: side))
-    // Blend only the original logo's empty outer border into the extended dark
-    // background, so adding safe margins does not leave a visible square seam.
+    // 只将原图外围 2.5% 的留白混入深色底，避免扩展边距后露出方形接缝。
     let pixels = context.data!.assumingMemoryBound(to: UInt8.self)
     let background: [CGFloat] = [28, 29, 30]
     let feather = side * 0.025
@@ -83,7 +84,7 @@ for (directory, platform) in [
     ("iosApp/iosApp/Assets.xcassets/AppIcon.appiconset", "ios"),
     ("iosApp/LokiMetrisWatch/Assets.xcassets/AppIcon.appiconset", "watchos")
 ] {
-    // A 5% inset protects the top and bottom points under the system's round mask.
+    // 原图占画布 90%，四边各留 5%，减少系统裁切时对上下尖角的影响。
     try render("\(directory)/AppIcon.png", size: 1024, artworkFraction: 0.90)
     try write(String(format: appleIcon, platform), to: "\(directory)/Contents.json")
 }
@@ -95,6 +96,6 @@ for (density, pixels) in [("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 
     try render("\(resources)/mipmap-\(density)/ic_launcher.png", size: pixels, artworkFraction: 0.90)
     try render("\(resources)/mipmap-\(density)/ic_launcher_round.png", size: pixels, artworkFraction: 0.90)
 }
-// Adaptive icons are 108 dp with a central 72 dp viewport. A 60% source image
-// becomes the same 90% artwork scale in that viewport and stays inside the safe circle.
+// 自适应图标前景按 108 dp 画布、中心 72 dp 视口计算；原图占全画布 60%，
+// 相当于中心视口的 90%，与上述图标保持相近的可见比例。
 try render("\(resources)/drawable-nodpi/ic_launcher_foreground.png", size: 432, artworkFraction: 0.60)

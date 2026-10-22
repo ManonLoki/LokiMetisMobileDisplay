@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** 使用 JVM 的数值地址解析器衔接共享分类规则，不查询桌面主机名或发起连接。 */
 class WidgetEndpointRulesAndroidTest {
     @Test fun nativeParserFeedsSharedAddressRulesWithoutAcceptingNamesOrNormalizingCase() {
         for (host in listOf("10.0.0.1", "172.31.255.255", "169.254.1.1", "::1", "fc00::1", "fdff::1",

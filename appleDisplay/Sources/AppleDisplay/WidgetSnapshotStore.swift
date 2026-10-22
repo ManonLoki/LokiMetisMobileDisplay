@@ -6,7 +6,8 @@ import Darwin
 import Glibc
 #endif
 
-/// 手机、组件共同写入最新状态和已缓存的插槽图片；图片的原接收时间独立保存。
+/// 手机、组件共同写入最新状态和插槽图片引用；图片字节仍在 App 私有缓存中。
+/// summaryOnly 为 true 时没有正文或图片引用；混入历史图片后为 false，且保留原接收时间。
 struct PhoneDisplayCache: Codable, Equatable {
     let envelope: WatchSnapshotEnvelope
     let summaryOnly: Bool
@@ -24,6 +25,7 @@ struct PhoneDisplayCache: Codable, Equatable {
         }
     }
 
+    /// HTTP 缺少图片只表示未知；同手机、同桌面、同槽位的历史图片按共享策略复用。
     static func summary(_ value: WidgetSnapshot, phoneId: String, preservingImagesFrom previous: Self? = nil) throws -> Self {
         try value.validate()
         let snapshot = LanDisplaySnapshot(version: value.snapshot.version, tokens: value.snapshot.tokens,
@@ -65,7 +67,7 @@ struct WidgetSnapshotStore {
         return cached
     } }
 
-    /// 只加载租约内摘要：App 正保持认证连接时为非空，小组件据此跳过重复的 HTTP 拉取。
+    /// 只加载 45 秒租约内的摘要，涵盖 App 推送和刚完成的 HTTP 拉取，供小组件跳过重复请求。
     func loadLive(atMs now: Int64) throws -> WidgetSnapshot? {
         let snapshot = try load(); return snapshot.isLive(atMs: now) ? snapshot : nil
     }

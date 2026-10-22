@@ -23,7 +23,7 @@ final class LanDisplaySnapshotTests: XCTestCase {
         XCTAssertNil(snapshot.tokens)
     }
 
-    /// 五种主流格式进入同一有界清单；JPEG的jpg/jpeg文件后缀均映射规范MIME。
+    /// 五种 MIME 均能进入同一有界资源清单；此处不测试文件后缀或实际图片解码。
     func test_main_image_mime_types_are_allowed() throws {
         for mime in ["image/bmp", "image/png", "image/jpeg", "image/webp", "image/gif"] {
             var raw = message(); var snapshot = raw["snapshot"] as! [String: Any]

@@ -10,7 +10,7 @@ struct WatchLinkView: Equatable {
     var summaryOnly = false
 }
 
-/// Watch独立串行owner，前台代次约束所有RPC，私有身份/缓存和文件均不在主线程操作。
+/// Watch 独立串行 owner，当前前台或系统后台窗口的代次约束即时 RPC；私有文件均在后台处理。
 // 所有可变状态均由 queue 拥有；异步 HTTP 只把不可变结果投回该队列。
 final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "LokiMetris.watch-link")
@@ -174,7 +174,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
         let data = try SharedJSON.encoder.encode(info); try data.write(to: path, options: [.atomic,.completeFileProtectionUntilFirstUserAuthentication])
         guard try Data(contentsOf: path) == data else { throw WidgetSnapshotError.unavailable }
     }
-    /// 手机有实时数据时优先；不可达、后台或超过等待期限时自行通过 HTTP 读取。
+    /// 优先读取手机缓存；手机不可达、未提供缓存或超时无进展时通过 HTTP 后备读取。
     private func requestSync() {
         guard canRefresh, view.info != nil else { return }
         guard let session, session.activationState == .activated, session.isReachable else { startHTTP(); return }
@@ -279,7 +279,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
         }
     }
 
-    /// 单个有界请求；前台、目标代次、手机快照版本和请求身份共同拒绝迟到响应。
+    /// 单个有界请求；执行窗口、前台代次、目标配置、手机快照版本和请求身份共同拒绝迟到响应。
     private func startHTTP() {
         guard canRefresh, httpTask == nil else { return }
         if snapshotTransfer != nil || assetTransfer != nil {
@@ -374,7 +374,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
         }
         publish()
     }
-    /// 仅接受当前前台代次，所有块按严格顺序保存后才回复下一偏移。
+    /// 仅接受当前前台或系统后台刷新窗口的代次，所有块按严格顺序保存后才回复下一偏移。
     private func receive(_ request: WatchRPC) throws -> WatchRPCReply {
         guard canRefresh, let info = view.info, let session = lease.session else { return WatchRPCReply("paused") }
         if lease.lastContact != nil && !lease.reachable(now: now) {
@@ -440,7 +440,7 @@ final class WatchLinkEngine: NSObject, WCSessionDelegate, @unchecked Sendable {
         if reply.status == "complete" || reply.status == "cached" { finishCacheRead() }
         return reply
     }
-    /// 加载时仍完整核验内容缓存，界面不会同步解码或访问图片正文。
+    /// owner 队列完整核验缓存，独立解码队列生成图片；主线程仅消费解码后的投影。
     private func loadImages() {
         guard let snapshot = view.envelope?.snapshot, let cache else { return }
         let hashes = Set(snapshot.hooks.compactMap(\.image))

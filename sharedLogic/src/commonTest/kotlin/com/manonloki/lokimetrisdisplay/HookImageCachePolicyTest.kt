@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** 纯元信息覆盖历史图片、身份更换和清图墓碑；同一规则也由 Swift 缓存集成测试执行。 */
+/** 用纯元信息验证历史图片、身份更换和清图墓碑，不依赖平台文件或解码器。 */
 class HookImageCachePolicyTest {
     private val image = "a".repeat(64)
     private fun fact(slot: Int = 1, agent: String = "codex", hash: String? = null,

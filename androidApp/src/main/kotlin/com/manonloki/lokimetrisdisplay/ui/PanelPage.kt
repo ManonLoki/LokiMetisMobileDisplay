@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-/** 展示台内容由两个模块等分，各自独立滚动。 */
+/** 两个模块同时启用时等分展示台；用量纵向滚动，Hooks 独立横向分页。 */
 @Composable
 internal fun PanelPage(state: TerminalLinkView, panel: PanelConfiguration, imageHashes: Set<String>,
                       image: @Composable (String, String, Int) -> Unit, onSettings: () -> Unit) {

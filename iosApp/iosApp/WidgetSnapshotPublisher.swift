@@ -142,7 +142,7 @@ final class WidgetSnapshotPublisher {
         }
     }
 
-    /// 暂停立即请求读取上次同步结果；持续连接最多每30秒请求更新。
+    /// 强制刷新或展示内容变化时立即请求更新；相同投影的常规请求间隔至少 30 秒。
     private func reload(_ value: WidgetDisplaySnapshot?, force: Bool = false) {
         let now = DispatchTime.now().uptimeNanoseconds
         if force || lastDisplay != value || now - lastReload >= 30_000_000_000 {

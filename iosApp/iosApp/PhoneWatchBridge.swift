@@ -12,7 +12,8 @@ struct PhoneWatchView: Equatable {
     var error: String?
 }
 
-/// 单个应用级WCSession owner；即时RPC逐块ACK，不排系统后台文件或context传输。
+/// 单个应用级 WCSession owner，状态由 queue 独占；即时 RPC 逐块 ACK，不排系统后台文件。
+/// 应用上下文另外下发最新只读配置、撤销标记与有界缓存，不作为实时通信或完整同步证明。
 final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     private let queue = DispatchQueue(label: "LokiMetris.phone-watch")
     private let phoneId: String
@@ -56,7 +57,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     private var jobLength: UInt64 = 0
     private var jobOffset: UInt64 = 0
 
-    /// 系统配套身份由OS保证，构造不访问局域网或桌面配对秘密。
+    /// 系统保证手机与表的配套关系；后台初始化核实本机信任，不向 Watch 传递桌面配对秘密。
     init(phoneId: String, changed: @escaping (PhoneWatchView, WatchCompanionFacts, UInt64) -> Void) {
         self.phoneId = phoneId; self.changed = changed
         self.cacheRevoked = UserDefaults.standard.bool(forKey: "watch-cache-revoked." + phoneId)
@@ -204,7 +205,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
         if wasRevoked { self.configureHTTPNow(self.httpConfiguration?.target, forceRevision: true) }
         self.publishHTTPConfiguration()
     } }
-    /// 只有当前iPhone认证连接可供实时同步，后台或断线撤销所有前台证明。
+    /// 当前 iPhone 认证连接提供实时同步资格；后台或断线撤销前台证明，仍可应答缓存请求。
     func setParent(active: Bool, generation: UInt64) { queue.async { self.setParentNow(active: active, generation: generation); self.publish() } }
     /// 引擎只在完整验证snapshot后调用，图片URL也仅来自已验证私有缓存。
     func update(_ snapshot: LanDisplaySnapshot, sourceId: String, receivedAtMs: Int64, generation: UInt64, paths: [String: URL]) {
@@ -266,13 +267,13 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             _ = flushPendingPause()
         }
     }
-    /// 真实Watch前台回复才续租，未响应或本地时钟倒退视作不可同步。
+    /// Watch 当前接收代次的有效回复才续租；未响应或本地时钟倒退视作不可同步。
     private func tick() {
         if watchSession != nil && !watchLease.reachable(now: now) { view.reachable = false; publish() }
         if parentActive && view.info != nil { publish() }
         startSync()
     }
-    /// WC可达只是发送前提，probe还必须取到Watch当前前台代次和身份。
+    /// WC 可达只是发送前提，probe 还必须取到 Watch 当前接收窗口的代次和身份。
     private func startSync() {
         if flushPendingPause() { return }
         guard mayTransfer, job == nil, physicalRPC == nil, let session,
@@ -368,7 +369,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             }
         } catch { failedJob() }
     }
-    /// 每个有效前台回执续通信租约，大图长传输不能因尚未整体完成而被误报离线。
+    /// 每个当前代次的有效回执续通信租约，大图长传输不会因尚未整体完成而被误报离线。
     private func contacted(synchronized: Bool = false) {
         let previouslyReachable = view.reachable
         guard let watchSession else { return }
@@ -431,7 +432,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     }
     /// 激活成功只允许尝试probe，不能直接产生Watch在线状态。
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) { queue.async { if error != nil { self.view.error = "Watch配套会话暂不可用。"; self.publish() }; self.publishHTTPConfiguration(); self.startSync() } }
-    /// 可达变化只作为通信触发或撤销提示，不能代替Watch前台回复。
+    /// 可达变化只作为通信触发或撤销提示，不能代替 Watch 当前代次的有效回复。
     func sessionReachabilityDidChange(_ session: WCSession) { queue.async { if !session.isReachable { self.view.reachable = false; self.publish() }; self.startSync() } }
     /// 系统安装清单或配套状态变化后重新探测；安装成功本身不能产生在线证明。
     func sessionWatchStateDidChange(_ session: WCSession) { queue.async { self.publishHTTPConfiguration(); self.startSync() } }
@@ -439,7 +440,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     func sessionDidBecomeInactive(_ session: WCSession) { queue.async { self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.view.reachable = false; self.publish() } }
     /// 系统切换到新配对Watch后重新激活，旧请求结果仍受epoch守卫。
     func sessionDidDeactivate(_ session: WCSession) { queue.async { self.epoch = UUID(); self.cacheSyncRequested = false; self.cancelJob(); self.watchLease.deactivate(); self.acknowledgedSnapshot = nil; self.acknowledgedManifest = nil; self.acknowledgedAssets = []; self.view = PhoneWatchView(); self.facts.clear(); self.lastContextHash = nil; self.publish(); session.activate() } }
-    /// 手表先读取手机最新持久缓存，手机后台也能答复；大快照由应用上下文补送。
+    /// 手表先读取手机最新持久缓存，手机后台也能答复；回执超限时转为有界上下文或分块补送。
     func session(_ session: WCSession, didReceiveMessageData data: Data, replyHandler: @escaping (Data) -> Void) {
         queue.async {
             guard let request = try? WatchProtocol.request(data) else { replyHandler((try? WatchProtocol.encode(WatchRPCReply("invalid"))) ?? Data()); return }
@@ -488,7 +489,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
             }
             if let bytes = try? WatchProtocol.encode(reply) { replyHandler(bytes) }
             else {
-                // 大快照不塞进小 RPC，最新 context 在系统允许时到达，前台仍可分块补齐。
+                // 回执放不下时移除缓存正文；有界 context 可异步送达，可通信窗口内也可分块补齐。
                 reply.snapshotCache = nil; reply.snapshotSummaryOnly = nil
                 reply.status = available || self.cachedDisplay != nil ? "accepted" : "http"
                 replyHandler((try? WatchProtocol.encode(reply)) ?? Data())
@@ -498,7 +499,7 @@ final class PhoneWatchBridge: NSObject, WCSessionDelegate {
     }
     /// 只有有界元信息进入页面，不发布传输正文、文件URL或秘密；事实随同交给引擎上报桌面。
     private func publish() { changed(view, facts, parentGeneration) }
-    /// 所有前台通信租约使用本机单调时间。
+    /// 即时通信租约使用本机单调时间，与缓存展示的墙钟时间分开。
     private var now: UInt64 { DispatchTime.now().uptimeNanoseconds }
     deinit { timer?.cancel(); timeout?.cancel(); try? jobFile?.close() }
 }

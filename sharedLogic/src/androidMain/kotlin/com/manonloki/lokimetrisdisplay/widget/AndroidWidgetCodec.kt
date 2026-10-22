@@ -110,7 +110,7 @@ internal object AndroidWidgetCodec {
         writeBoolean(value != null)
         value?.let { text(it.kind, 8); writeInt(it.usedTenths); writeBoolean(it.resetAtUnix != null); it.resetAtUnix?.let(::writeLong) }
     }
-    /** 旧格式不调用此入口，新格式仍受完整模型校验。 */
+    /** v1 无额度段，v2 起才读取窗口；所有版本解码后仍受完整模型校验。 */
     private fun DataInputStream.quotaWindow(): ProviderQuotaWindow? = if (flag())
         ProviderQuotaWindow(text(8), readInt(), if (flag()) readLong() else null) else null
     private fun DataOutputStream.amount(value: TerminalAmount) {

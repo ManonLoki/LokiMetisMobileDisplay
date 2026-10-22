@@ -1,6 +1,7 @@
 import XCTest
 @testable import AppleDisplay
 
+/// 核对整数格式器在单位晋级、舍入和 UInt64 最大值处的结果，并区分缺失与精确零。
 final class TokenNumberTests: XCTestCase {
     func testCompactThresholdsRoundingAndFullUInt64Range() {
         let cases = [

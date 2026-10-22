@@ -2,7 +2,8 @@ import Foundation
 import CryptoKit
 import SharedLogic
 
-/// Watch只缓存当前展示引用的内容，系统配套通道传来的文件同样需完整校验。
+/// Watch 只接收当前展示引用的图片；历史完整文件在容量内保留复用，所有正文均须完整校验。
+/// 可变接收状态由 WatchLinkEngine 的串行队列独占，静态解码入口使用独立队列。
 final class WatchAssetCache {
     private let directory: URL
     private var partial: URL?
@@ -85,7 +86,7 @@ final class WatchAssetCache {
         let limits = LanImageAsset.Limits(profile: .watch)
         return try LanImageAsset.decode(contentsOf: path, mime: asset.mime, id: asset.hash, limits: limits)
     }
-    /// 当前引用优先保留，旧缓存按最近复用时间收敛到512MiB和512个文件。
+    /// 保留全部当前引用，其余按最近复用时间淘汰，以 512 MiB／512 文件为目标；引用或删除失败可使其超标。
     func prune(keeping: Set<String>) {
         guard keeping != settledKeeping else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey,.contentModificationDateKey]) else { return }

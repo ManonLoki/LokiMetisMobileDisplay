@@ -11,7 +11,7 @@ final class IOSAssetCache {
     /// 上次完整收敛时保留的引用集；引用不变且没有新文件落盘时无需重新扫描目录。
     private var settledKeeping: Set<String>?
 
-    /// 固定缓存目录不参与备份；所有调用必须位于连接owner的后台串行队列。
+    /// 固定缓存目录不参与备份；实例接收与清理操作必须位于连接 owner 的后台串行队列。
     init() throws {
         let manager = FileManager.default
         var path = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -74,12 +74,12 @@ final class IOSAssetCache {
     }
 
     /// 后台保留动画的全部帧与时长；像素、帧数和总解码内存由共享解码器约束。
-    /// 纯函数，只在解码队列调用。
+    /// 读取指定文件但不访问实例接收状态，只在独立解码队列调用。
     static func image(_ path: URL, asset: LanDisplaySnapshot.Asset) throws -> LanImageAsset {
         try LanImageAsset.decode(contentsOf: path, mime: asset.mime, id: asset.hash)
     }
 
-    /// 保留当前正在展示的最多十二张图片，其余按最后复用顺序收敛到512MiB。
+    /// 保留当前引用的最多十二张图片，其余按最近复用顺序淘汰，以 512 MiB 为目标；删除失败可使其超标。
     func prune(keeping hashes: Set<String>) {
         guard hashes != settledKeeping else { return }
         let manager = FileManager.default

@@ -4,6 +4,7 @@ import ImageIO
 import XCTest
 @testable import AppleDisplay
 
+/// 真实 ImageIO 验证格式、全部动画帧及预算；独立播放时钟验证暂停不会消耗循环次数。
 final class LanImageAssetTests: XCTestCase {
     /// 自包含1×1 WebP位流；容器按RIFF规范构造，两帧分别使用lossless/lossy像素。
     private func webp(animated: Bool) -> Data {

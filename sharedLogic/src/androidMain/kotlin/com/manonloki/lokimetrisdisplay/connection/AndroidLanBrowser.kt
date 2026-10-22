@@ -16,7 +16,7 @@ import java.util.concurrent.Executor
 /** 解析后的临时候选；TXT只能选端点，授信仍唯一由Rust认证决定。 */
 data class AndroidLanEndpoint(val id: String, val name: String, val address: InetSocketAddress, val network: Network?)
 
-/** 前台DNS-SD浏览器；主线程拥有注册，迟到回调不能跨浏览代次复活端点。 */
+/** 应用连接有效期内的 DNS-SD 浏览器；主线程拥有注册，迟到回调不能跨浏览代次复活端点。 */
 class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanEndpoint>) -> Unit, private val failed: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
     private val executor = Executor { main.post(it) }

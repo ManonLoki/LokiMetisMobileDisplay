@@ -1,6 +1,6 @@
 # 08 KMP 分层与优化路线
 
-核对日期：2026-10-22。已完成五轮结构、业务共享与旧实现清理。本文说明当前边界、实际调用和剩余候选；验证范围见文末。
+核对日期：2026-10-22；当前源码基线为 `v1.0.7`。前半篇说明现有分层与待评估边界，后半篇保留发布前五轮共享层整理的历史记录。那些记录中的版本 `1.0.5`、测试数量和本机构建日志仍属于当时产物；本次文档核对未重新执行这些构建。模拟器 UI 历史证据见 [09](09-v1.0.6发布与UI验证.md)，本次发布验证见 [10](10-v1.0.7发布与设备安装.md)，当前架构图与源码索引见 [07](07-当前架构.md)。
 
 ## 官方依据与当前结构
 
@@ -19,7 +19,7 @@
 | 部分 | 当前处理 | 原因 |
 | --- | --- | --- |
 | `sharedUI` → `androidApp` | 已合并，Gradle 从三个模块减为两个 | 只有 Android 目标；消除中间模块、单目标 `expect/actual` 和通过 UI 间接暴露核心的依赖 |
-| `sharedLogic` | 保留，Android 显式依赖；Apple 各目标链接对应静态框架 | 承载真正跨平台的业务规则，不依赖 Compose 或系统视图 |
+| `sharedLogic` | 保留，Android 显式依赖；Apple 各目标链接对应静态框架 | 公共 `commonMain` 不依赖 Compose 或系统视图；`androidMain` 仍包含系统网络、存储及 `Drawable` 图片投影 |
 | iOS App、Watch App、Widget Extension | 保留三个 Xcode target | 权限、系统入口、生命周期和安装产物独立 |
 | `appleDisplay` | 仍为共享 Swift 源码与 SwiftPM 测试入口 | Xcode 按需编译源文件，SwiftPM 测试同时链接 macOS SharedLogic；未改成 Xcode package product 依赖 |
 | `WidgetShared` | 保留为文件目录 | 仅为 App Group 容器适配，没有需要合并的独立构建模块 |
@@ -35,7 +35,7 @@ SharedLogic 的 Apple 目标：
 | Watch 模拟器 | `watchosSimulatorArm64` | arm64 |
 | Swift 测试 | `macosArm64` | Apple Silicon macOS |
 
-[Kotlin/Native 官方支持表](https://kotlinlang.org/docs/native-target-support.html) 中的 watchOS 支持级别各异：arm64_32 和 ARM64 模拟器为 Tier 2，设备 arm64 为 Tier 3。保留当前 Watch 真机双架构；模拟器收敛到 Apple Silicon arm64，避免新增已弃用的 x86_64 Kotlin 目标。
+本项目实际目标以 [sharedLogic/build.gradle.kts](../sharedLogic/build.gradle.kts) 与 [Xcode 工程](../iosApp/iosApp.xcodeproj/project.pbxproj) 为准：保留 Watch 真机双架构，Apple 模拟器与 macOS 测试仅声明 arm64，没有配置 Intel 模拟器目标。平台支持级别会随工具链变化，查阅 [Kotlin/Native 官方支持表](https://kotlinlang.org/docs/native-target-support.html) 时应匹配项目的 Kotlin 版本，不能仅凭上游支持表推定本仓库已验证。
 
 ## 哪些业务已经只维护一份
 
@@ -55,7 +55,7 @@ SharedLogic 的 Apple 目标：
 | 无正文/图片摘要裁剪 | `TerminalWidgetSnapshot` | Android 现有二进制存储；Apple 仍使用既有 Swift 编码外壳 |
 | 来源与时间接纳、旧 HTTP 回复拒绝、完整度优先 | `SnapshotAcceptancePolicy` | 在原有锁中读取、完整 target 比较及原子提交 |
 | 同一读取配置保留代次 | `RefreshConnection` | 平台生成 UUID、主机解析和凭据存储 |
-| 45 秒在线租约、缓存资格、刷新到期 | `SnapshotFreshnessPolicy` | Android 15 分钟、Apple 5 分钟的系统调度约束仍由各端提供 |
+| 45 秒摘要租约、缓存资格、刷新到期 | `SnapshotFreshnessPolicy` | Android 15 分钟、Apple 5 分钟的系统调度约束仍由各端提供 |
 | 从唯一配对索引恢复身份 | `DeviceIdentityRules` | Keychain 读取/错误传播、UUID 生成、提交成功门禁 |
 | 图文完整度、历史图片复用、清图墓碑及迟到缓存接纳 | `HookImageCachePolicy` | Swift 映射 Hook、组装资源描述、执行 WatchConnectivity 与文件操作 |
 | Watch 前台代次、可达租约、ACK 与独立同步事实 | `WatchCommunicationPolicy` | 无符号纳秒位映射、系统通信与报告字典编码 |
@@ -75,13 +75,13 @@ Swift 的 `TokenNumber`、有实际消费的名称与额度属性保留为薄调
 
 身份恢复继续分阶段执行：已有稳定身份时不读配对索引；系统读取失败向上传递；明确缺失后才恢复或生成；写入成功后才返回有效身份。
 
-HTTP 接纳仍比较包括代次在内的完整目标，并保护请求期间到达的新摘要。Android 的目标与摘要在同一个加密原子文件中，缺少原记录不能接收；Apple 有独立目标文件，允许凭据存在且摘要缺失的合法恢复。
+HTTP 接纳仍比较包括代次在内的完整目标，并保护请求期间到达的新摘要。Android 的目标与摘要在同一个原子提交的二进制文件中，目标单独加密，缺少原记录不能接收；Apple 有独立目标文件，允许凭据存在且摘要缺失的合法恢复。
 
-连接超时共同优先级为：配对窗口 → 阶段期限 → 实时入站静默 → 图片响应。60 秒配对、15 秒握手、3 秒收尾、45 秒入站租约、10 秒图片等待由公共层提供；平台仅执行选定动作。保留已有差异：Android 在认证确认写完后重新开始 15 秒首快照预算，iOS 继续沿用连接起点；iOS 图片超时还要求存在在途资源。此轮未悄悄统一这些时机。
+连接超时共同优先级为：配对窗口 → 阶段期限 → 实时入站静默 → 图片响应。60 秒配对、15 秒握手、3 秒收尾、45 秒入站租约、10 秒图片等待由公共层提供；平台仅执行选定动作。保留已有差异：Android 在认证确认写完后重新开始 15 秒首快照预算，iOS 继续沿用连接起点；iOS 图片超时还要求存在在途资源。共享预算不表示这些平台时机已经统一。
 
 Watch 纳秒单调时间用高、低 32 位传递，Kotlin 内部保持 ULong；配置修订号用规范 u64 十进制传递，两者均不经 Double 或有符号 Long 截断。租约与事实状态不可变，Swift struct 副本继续持有原状态，后续 ACK 不会回改已捕获的事实。
 
-能力表统一有界、UTF-8 字节和规范等价去重校验。后台合法摘要仍可缓存，但畸形能力表会撤销独立 HTTP 授权；Android 与 Apple 采用相同门禁。
+能力表共用有界、UTF-8 字节和规范等价去重校验；共享规则不拥有已存 HTTP 授权。Android 生产入口先严格校验，坏表导致整份快照被拒绝，旧 Widget 目标不因此清除。Apple 前台先发起 Watch HTTP 撤销，再因坏表拒绝快照，App Group 旧目标保留；Apple 后台可接纳本身合法的快照，并以空目标进入提交、移除 App Group 旧目标。具体执行顺序见 [02 连接状态机](02-技术架构.md#连接状态机)。
 
 ## 文件分层
 
@@ -133,7 +133,7 @@ python3 scripts/test_apple_shared.py
 
 Watch 公共测试使用 `./gradlew :sharedLogic:watchosSimulatorArm64Test --device <Watch模拟器UUID>`；需要本机已有可用 Watch 模拟器设备，只有 SDK/runtime 而没有设备时，Kotlin 插件可能报出误导的 SDK 错误。
 
-第二条命令先生成 macOS SharedLogic，再将框架搜索及链接路径提供给 SwiftPM。它是本仓库实际验证的本地测试包装；[官方 SwiftPM 本地集成](https://kotlinlang.org/docs/multiplatform/multiplatform-spm-local-integration.html) 不提供通用的 `swift build` 支持，不能把该包装描述为官方原生 SwiftPM 构建方案。
+第二条命令先生成 macOS SharedLogic，再将框架搜索及链接路径提供给 SwiftPM。它是本仓库的测试包装；直接运行 `swift test --package-path appleDisplay` 缺少这些框架构建与链接参数时不能替代该入口。Xcode 产品仍按需编译 Swift 源文件，未改为 package product 依赖。Android 打包另需项目固定签名与桌面 Rust 源码，详见 [README](../README.md#从源码运行)。
 
 ## 仍应留在平台或继续评估的部分
 
@@ -143,22 +143,28 @@ Watch 公共测试使用 `./gradlew :sharedLogic:watchosSimulatorArm64Test --dev
 - Swift Codable 外壳继续兼容既有 JSON 与缓存格式。统一序列化引擎应作为另一个变更单独验证，不能顺带改存量文件。
 - WatchConnectivity 的分块、ACK 事实和前台租约规则已共享；真实 sendMessage、系统取消及后台完成回调仍在 Apple 适配层。
 - TCP 分帧的长度、读块、累计容量、写队列上限和写超时规则已共享；原生字节累积与切片继续留平台，避免为了共用存储缓冲而复制整个网络载荷。
-- 数字展示的单位策略由共享格式器显式区分：主面板 K/M/B，小组件 K/M/B/T/P/E；原 Android BigInteger 副本已删除，u64 最大值与 E 级舍入不使用浮点或可能溢出的余数乘法。
+- 数字展示的单位策略由共享格式器显式区分：主面板与 Apple 小组件 K/M/B，Android 小组件 K/M/B/T/P/E；原 Android BigInteger 副本已删除，u64 最大值与 E 级舍入不使用浮点或可能溢出的余数乘法。
 - Android `Drawable` 仍位于平台缓存和投影中；后续可将展示实例下移应用，数据层只返回已验证资源引用。
 
 Android 只读目标要求认证 TCP 的数值 IP，Apple 目标还支持 `.local`。共同的数值地址与字节分类通过 `WidgetEndpointRules` 验证，系统解析和域名差异继续由平台处理。
 
-第四轮完成此前列出的三组候选，并删除各端对应算法：
+独立 HTTP 目标会将认证连接得到的地址、端口和只读密钥持久化，不能把“配对记录不保存 IP”理解为全项目不保存地址。Apple 的 45 秒摘要租约用于抑制重复 HTTP：认证快照和 HTTP 新摘要均创建初始租约，主 App 心跳可续租；读取缓存不续租，组件也不据此证明实时在线。Watch 的前台与系统后台刷新窗口都可接受即时分块，后台执行资格仍由系统决定。
+
+当前图片与 HTTP 的共用范围如下：
 
 | 公共策略 | 实际消费者与规则 | 保留的既有差异 |
 | --- | --- | --- |
-| `ImageCachePolicy` | Android、iPhone、Watch：当前引用优先、最近复用排序、预算判断；删除成功后提交新的占用状态 | 三端 512 MiB；Android/Watch 另有 512 文件上限，iPhone 无此上限。删除失败不扣预算，下轮继续扫描 |
+| `ImageCachePolicy` | Android、iPhone、Watch：当前引用优先、最近复用排序、预算判断；删除成功后提交新的占用状态 | 三端以 512 MiB 为淘汰目标，Android/Watch 另以 512 文件为目标；当前引用全部保留，故可超过目标。删除失败不扣预算，下轮继续扫描 |
 | `ImageDecodePolicy` | Android 目标尺寸、Apple 分帧预算与实测行字节缩边、共同 16,777,216 源像素限制 | Android/iPhone 目标边长 512、Watch 256；Apple 最多 512 帧及 iPhone 8 MiB/Watch 2 MiB 总解码预算；Android 沿用系统动画解码，不增加 Apple 帧预算 |
 | `WidgetHttpPolicy` | Android Widget、iOS Widget、Watch：6 秒总期限、96 KiB 响应、固定端点与认证域、200/JSON/原 URL、增量容量、nonce/tag/密文边界及请求绑定 | 封闭的 Android/Apple 配置保留 Android 1024 字节请求与规范 Base64 限制；Apple 响应沿用 Foundation 可解码语义，密钥两端均要求规范编码 |
 
 解码前只共享尺寸和容量事实，不搬运图片；HTTP 认证只桥接 12 字节 nonce 和固定小型附加认证数据，不跨语言复制整个响应。原生网络取消、重定向处理、流式回调及文件锁继续由原 owner 执行。发布节流、投影的线程投递和异常分类也保留在平台边界。
 
-## 第四轮旧实现与残留清理
+## 发布前共享层整理记录（2026-10-22，v1.0.5 基线）
+
+以下五轮过程与验证结果保留为历史，不作为 `v1.0.6` 发布后本次核对的执行结果。仍适用的当前规则已列在上文；本机构建日志路径只是原始取证位置，未随文档一起提交，其他机器可能不存在。
+
+### 第四轮旧实现与残留清理
 
 - 删除已被公共规则取代的三端图片淘汰／解码计算，以及 HTTP 客户端和密码适配中的固定协议副本。
 - 删除无生产消费者的 Kotlin `agentDisplayName`、`providerQuotaKey`、`canonicalAgentKey` 顶层转发、`TerminalTokens.displayAgents`、`TerminalUsageRow.isZeroDefaultProvider`；实际调用直接使用 `UsageDisplayPolicy` 与生产用量投影。
@@ -169,7 +175,7 @@ Android 只读目标要求认证 TCP 的数值 IP，Apple 目标还支持 `.loca
 
 新增代码先判断是否为“同一输入应得到相同业务结果”的规则；规则放 `commonMain`，系统调用和序列化适配留平台。没有实际消费者或构建隔离收益时，先用文件与目录组织，不新增构建模块。
 
-## 第五轮最终筛查与收敛
+### 第五轮最终筛查与收敛
 
 本轮再次从 Android、iPhone／iPad、Watch、Widget 的生产调用、公共 API 引用及构建入口交叉筛查，完成最后几处收拢：
 
@@ -183,7 +189,7 @@ Android 只读目标要求认证 TCP 的数值 IP，Apple 目标还支持 `.loca
 
 Android Drawable 从平台数据投影下移到应用是可选的分层调整；它没有剩余的跨平台业务算法，不作为本轮未完成提取。Swift 叶子校验中仍有测试使用的错误适配，不增加第二份算法，也不为移除这些入口而扩大模型重写。
 
-**收敛结论**：按当前功能和生产调用范围，交叉复核后没有发现仍值得上提的重复业务规则，也没有待删除的无用旧生产入口。共享业务、平台执行与升级兼容路径已有明确边界，本轮可收尾。后续新增功能再按实际复用需求进入公共层。
+**当时的收敛结论**：那轮审计在已检查的生产调用范围内未发现需继续上提的重复业务规则，已处理发现的无消费者入口。这是当次代码复核结论，不保证后续代码或所有执行路径不存在重复与缺陷；新增功能继续按实际复用需求决定公共边界。
 
 | 最终检查 | 结果 |
 | --- | --- |
@@ -203,7 +209,7 @@ Android Drawable 从平台数据投影下移到应用是可选的分层调整；
 
 README 与 `01`、`02`、`03`、`07` 及本文已同步核对。Android 仍为 `1.0.5 (7)`、Apple 为 `1.0.5 (13)`；桌面 Rust 提交核实仍为 `94ed1b2f0624a66f3c1fffdd8a452fe515397c10`，复用现有本机 native 产物。未新增依赖、改变存储格式或发布版本。本轮未执行实体设备与真实局域网回归、模拟器 UI 冒烟、Release 签名归档，以及包体／内存／耗电测量；前轮证据保留原适用范围。
 
-## 第四轮验证与限制（历史记录）
+### 第四轮验证与限制（历史记录）
 
 | 检查 | 结果 |
 | --- | --- |
@@ -221,7 +227,7 @@ README 与 `01`、`02`、`03`、`07` 及本文已同步核对。Android 仍为 `
 
 README 以及 `01`、`02`、`07`、本文已按实际消费者和删除项核对；历史记录保留。版本仍为 Android `1.0.5 (7)`、Apple `1.0.5 (13)`，没有新增依赖、修改存储格式或做发布。本轮未执行实体设备与真实局域网配对回归，也未重复模拟器 UI 冒烟、Release 体积、内存或耗电测量；前轮相应证据仍只适用于当时产物。
 
-## 第三轮验证与限制（历史记录）
+### 第三轮验证与限制（历史记录）
 
 | 检查 | 结果 |
 | --- | --- |
@@ -237,7 +243,7 @@ README 以及 `01`、`02`、`07`、本文已按实际消费者和删除项核对
 
 版本保持 Android `1.0.5 (7)`、Apple `1.0.5 (13)`；未新增依赖、改密码协议、做发布或实体设备回归。此前 Debug 动态库体积记录见下一节，只对应第二轮产物，本轮未重新测量 Release 体积、内存或耗电。README 和架构文档已同步新增共享范围。
 
-## 第二轮验证与限制（历史记录）
+### 第二轮验证与限制（历史记录）
 
 第二轮最终源码验证：
 
@@ -271,7 +277,7 @@ README 以及 `01`、`02`、`07`、本文已按实际消费者和删除项核对
 尚未执行实体 Android / iPhone / Watch 安装与真实局域网配对回归。README 与 `01`、`02`、`07` 已按最终共享范围和测试入口同步；`04` 与下方第一轮记录作为历史保留。Archify 图稿未重新生成，文字已说明其旧依赖基线。
 
 
-## 第一轮验证（历史记录）
+### 第一轮验证（历史记录）
 
 此项为代码结构优化，未变更版本、创建发布标签或发布安装包。Android 配置仍为 `1.0.5 (7)`，Apple 配置仍为 `1.0.5 (13)`；它们的构建号独立。
 

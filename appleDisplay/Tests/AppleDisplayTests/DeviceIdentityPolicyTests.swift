@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import AppleDisplay
 
+/// 注入存储读写闭包验证身份恢复与失败关闭；不访问真实 Keychain，也不旋转已有身份。
 final class DeviceIdentityPolicyTests: XCTestCase {
     private let phone = "12345678-1234-4abc-8def-123456789abc"
     private let otherPhone = "22345678-1234-4abc-8def-123456789abc"

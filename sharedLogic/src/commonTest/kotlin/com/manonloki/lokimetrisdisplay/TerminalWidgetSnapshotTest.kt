@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** 摘要裁剪在 JVM 与 Kotlin/Native 运行同一组测试，不依赖 Android 存储。 */
+/** 共享测试覆盖摘要裁剪、数值质量和启用名单，不依赖 Android 存储或网络。 */
 class TerminalWidgetSnapshotTest {
     private val source = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     private fun full(enabled: List<String>? = null) = TerminalSnapshot(

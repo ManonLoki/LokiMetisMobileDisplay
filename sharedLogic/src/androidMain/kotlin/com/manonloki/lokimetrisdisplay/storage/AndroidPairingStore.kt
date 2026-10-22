@@ -11,7 +11,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** 所有调用由同一网络owner串行执行，只有commit成功才能回共享核心生成ACK。 */
+/** 写入由网络 owner 串行执行，commit 成功后才通知共享核心生成 ACK；后台入口可另建实例只读配对索引。 */
 class AndroidPairingStore(context: Context, private val deviceId: String) {
     private val preferences = context.applicationContext.getSharedPreferences("lan_pairing", Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

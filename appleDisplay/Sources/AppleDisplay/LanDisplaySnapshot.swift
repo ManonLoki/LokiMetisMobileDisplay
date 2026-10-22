@@ -49,6 +49,7 @@ struct LanDisplaySnapshot: Codable, Equatable {
     }
 
     /// Codable 字段保留原样，领域校验和展示模型由 Kotlin 共用。
+    /// Int 收窄采用饱和转换；越界版本、槽位仍超出领域范围，由 isValid 拒绝而不触发溢出。
     var sharedValue: TerminalSnapshot {
         TerminalSnapshot(version: Int32(clamping: version), tokens: tokens?.sharedValue, tokenError: tokenError,
             hooksAvailable: hooksAvailable, hooks: hooks.map {
@@ -74,7 +75,7 @@ extension LanDisplaySnapshot.Asset {
     static let supportedMimes: Set<String> = TerminalAsset.companion.SUPPORTED_MIMES
     /// 单张编码正文上限 32MiB。
     static let maxLength = UInt64(TerminalAsset.companion.MAX_LENGTH)
-    /// 摘要、公开 MIME 与长度都在协议边界内。
+    /// UInt64 收窄后仍须通过 32MiB 上限校验，不能仅凭成功构造共享对象接受资源。
     var sharedValue: TerminalAsset { TerminalAsset(hash: hash, mime: mime, length: Int64(clamping: length)) }
     var isValid: Bool { sharedValue.isValid() }
     /// 摘要之外再核对公开 MIME 与实际文件头，防止格式混淆。

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""用现有Cargo/NDK/Apple SDK构建本地桥，不下载或安装工具与依赖。"""
+"""用本机 Cargo/NDK/Apple SDK 构建主通道 Rust 桥，不安装开发工具。
+
+Cargo 仍按桌面工作区的清单和锁文件解析依赖，首次构建可能下载已声明的 crate。
+Android 输出两种 ABI 的动态库与 JNI 包装，iOS 输出当前 SDK 对应的静态库和 C 头文件。
+"""
 import argparse
 import os
 from pathlib import Path
@@ -33,7 +37,7 @@ def ndk_path(explicit):
 
 
 def build(args):
-    """SDK与架构单独决定Rust目标；Apple真机/模拟器的arm64绝不混用。"""
+    """Android 固定构建双 ABI；Apple 通过 SDK 区分 arm64 真机与模拟器目标。"""
     desktop = args.desktop_root.resolve(strict=True)
     manifest = desktop / "loki_metris_mobile_bridge/Cargo.toml"
     if not manifest.is_file():
@@ -44,6 +48,7 @@ def build(args):
     env = os.environ.copy()
     env["CARGO_TARGET_DIR"] = str(rust_out)
     release = args.configuration.lower() == "release"
+    # 只有显式 Release 配置才给 Cargo 加 --release；Android Gradle 任务当前沿用默认 Debug。
     if args.platform == "android":
         ndk = ndk_path(args.ndk)
         hosts = list((ndk / "toolchains/llvm/prebuilt").glob("*"))
@@ -81,7 +86,7 @@ def build(args):
 
 
 def main():
-    """项目构建入口显式传递路径，不依赖调用者的当前目录。"""
+    """由调用方指定桌面源码与输出路径；相对路径按调用时的工作目录解析。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--desktop-root", type=Path, required=True)
     parser.add_argument("--platform", choices=["android", "ios"], required=True)

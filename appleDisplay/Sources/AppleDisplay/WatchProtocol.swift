@@ -118,7 +118,7 @@ struct WatchRPCReply: Codable {
     var snapshotHash: String?
     /// 只读 HTTP 授权通过系统配套通道下发，nil target 表示明确撤销。
     var configuration: WatchHTTPConfiguration?
-    /// 已持久化的手机展示缓存；小快照直接回传，大快照通过最新应用上下文送达。
+    /// 已持久化的手机展示缓存；回执放不下时可由有界应用上下文或即时分块传输补送。
     var snapshotCache: Data?
     var snapshotCacheCleared: Bool?
     var snapshotSummaryOnly: Bool?
@@ -189,6 +189,7 @@ struct WatchAssembledSnapshot {
 }
 
 /// 一次只接收一份完整快照；精确偏移、长度及摘要均通过后才产生可保存投影。
+/// 无内部锁，由接收宿主的串行队列独占。
 final class WatchSnapshotAssembler {
     private var id: String?
     private var hash = ""

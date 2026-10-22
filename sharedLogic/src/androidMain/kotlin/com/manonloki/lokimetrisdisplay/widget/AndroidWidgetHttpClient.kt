@@ -21,7 +21,7 @@ import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-/** 短时只读 HTTP；同步执行交 JobService 的 worker，取消与总截止时间均立即断开在途连接。 */
+/** 短时只读 HTTP；JobService 的 worker 同步等待结果，取消或超时先结束等待，再异步断开连接。 */
 class AndroidWidgetHttpClient @JvmOverloads constructor(
     private val now: () -> Long = System::currentTimeMillis,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection(Proxy.NO_PROXY) as HttpURLConnection },
@@ -129,7 +129,7 @@ class AndroidWidgetHttpClient @JvmOverloads constructor(
         return JSONObject(text)
     }
 
-    /** HTTP 只含四态，补齐空的展示字段后复用领域校验；不能把远端正文/资源写进摘要。 */
+    /** HTTP 的 Hook 只取四态，补齐空的图文字段后复用领域校验；用量和额度仍保留。 */
     private fun summary(message: JSONObject): TerminalSnapshot {
         val source = message.obj("snapshot")
         val hooks = JSONArray()

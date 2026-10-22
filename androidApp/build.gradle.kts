@@ -33,8 +33,8 @@ android {
         applicationId = "com.manonloki.lokimetrisdisplay"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 8
-        versionName = "1.0.6"
+        versionCode = 9
+        versionName = "1.0.7"
         // 配对桥仅提供这两种架构，避免依赖库让 APK 误报支持 32 位设备。
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -77,6 +77,7 @@ val desktopSource = providers.gradleProperty("lokiDesktopRoot")
     .orElse(rootProject.layout.projectDirectory.dir("../../../my-work/ai/loki_metris").asFile.absolutePath)
 val nativeOutput = layout.buildDirectory.dir("generated/mobileNative/jniLibs")
 val nativeTask = tasks.register<Exec>("buildMobileNative") {
+    // 所有变体共用这一份原生输出；未传 --configuration，当前 Rust 桥始终采用脚本默认 Debug。
     inputs.files(rootProject.file("scripts/build_mobile_native.py"), file("src/main/c/loki_metris_jni.c"))
     inputs.dir(desktopSource.map { file("$it/loki_metris_pairing/src") })
     inputs.dir(desktopSource.map { file("$it/loki_metris_mobile_bridge") })
@@ -85,5 +86,6 @@ val nativeTask = tasks.register<Exec>("buildMobileNative") {
     commandLine("python3", rootProject.file("scripts/build_mobile_native.py"),
         "--desktop-root", desktopSource.get(), "--platform", "android", "--out", nativeOutput.get().asFile.absolutePath)
 }
+// 先生成外部 Rust 桥和本项目 JNI 库，再把两种 ABI 的目录交给 APK 打包。
 android.sourceSets.named("main") { jniLibs.directories.add(nativeOutput.get().asFile.absolutePath) }
 tasks.named("preBuild") { dependsOn(nativeTask) }

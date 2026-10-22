@@ -68,7 +68,7 @@ class AndroidAssetCache(context: Context) : AutoCloseable {
             decoder.setTargetSize(target.width, target.height)
         }
     } catch (_: Exception) { null }
-    /** 当前引用优先保留，其余按最近复用时间限制到512MiB及512个文件。 */
+    /** 保留全部当前引用，其余按最近复用时间淘汰，目标为 512 MiB / 512 个文件；引用本身可超预算。 */
     fun prune(keeping: Set<String>) {
         if (keeping == settledKeeping) return
         val files = directory.listFiles()?.filter { validHash(it.name) && it.isFile && !Files.isSymbolicLink(it.toPath()) } ?: return
@@ -81,6 +81,6 @@ class AndroidAssetCache(context: Context) : AutoCloseable {
         }
         settledKeeping = if (settled) keeping else null
     }
-    /** 网络失败只撤销未完成AtomicFile，已经完成的缓存继续可离线显示。 */
+    /** 网络失败只撤销未完成 AtomicFile；已完成文件保留，后续认证快照重新引用时可复用。 */
     override fun close() { stream?.let { pending?.failWrite(it) }; pending = null; stream = null; descriptor = null }
 }

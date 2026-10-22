@@ -16,7 +16,7 @@ data class ProviderQuotaSnapshot(val observedAtUnix: Long, val providers: List<P
     fun isValid(): Boolean = runCatching { validate() }.isSuccess
 }
 
-/** 各窗口独立可空，只有周或月额度也必须保留；月窗口只由 Cursor 提供。 */
+/** 各窗口独立可空，只有周或月额度也保留；当前上游仅 Cursor 提供月窗口，模型不按提供商限制窗口种类。 */
 data class ProviderQuotaEntry(val provider: String, val plan: String?, val fiveHour: ProviderQuotaWindow?, val weekly: ProviderQuotaWindow?, val monthly: ProviderQuotaWindow? = null) {
     /** 方案只允许桌面消毒后的短ASCII文本，不接受邮箱、路径或控制符。 */
     fun validate() {

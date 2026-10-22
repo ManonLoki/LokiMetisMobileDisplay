@@ -21,7 +21,7 @@ enum WatchHTTPConfigurationStore {
         return try WatchHTTPConfiguration.decode(data)
     }
 
-    /// 保存并读回核对，保证撤销或换代在重启后仍然生效。
+    /// 以 Keychain 更新或新增的返回状态确认提交；失败抛给引擎撤销旧持久授权。
     static func save(_ configuration: WatchHTTPConfiguration) throws {
         let data = try configuration.encoded()
         let attributes: [String: Any] = [

@@ -8,7 +8,7 @@ data class ImageCacheEntry(val key: String, val byteLength: Long, val lastUsed: 
 class ImageCacheOccupancy internal constructor(internal val byteHigh: ULong, internal val byteLow: ULong, val fileCount: Int)
 data class ImageCachePlan(val candidates: List<ImageCacheEntry>, val occupancy: ImageCacheOccupancy)
 
-/** 共享淘汰资格、顺序和预算；目录、链接检查、真实删除及失败重试仍归平台。 */
+/** 共享淘汰资格、顺序和预算；当前引用始终保留，预算不是硬上限，真实删除及失败重试归平台。 */
 object ImageCachePolicy {
     const val MAX_BYTES = 512L * 1024 * 1024
     const val MAX_FILES = 512
@@ -25,7 +25,7 @@ object ImageCachePolicy {
             ImageCacheOccupancy(high, low, entries.size))
     }
 
-    /** iPhone 保留原有的纯字节预算；Android 与 Watch 同时限制文件数。 */
+    /** iPhone 只按字节预算淘汰；Android 与 Watch 另外检查文件数。 */
     fun shouldEvict(occupancy: ImageCacheOccupancy, profile: ImageCacheProfile): Boolean =
         occupancy.byteHigh > 0UL || occupancy.byteLow > MAX_BYTES.toULong() ||
             profile != ImageCacheProfile.IPHONE && occupancy.fileCount > MAX_FILES

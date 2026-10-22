@@ -12,7 +12,7 @@ enum DeviceIdentityFailure: Error, Equatable {
 }
 
 enum DeviceIdentityPolicy {
-    /// 钥匙串身份优先；重装后钥匙串仍在时，从配对索引恢复唯一身份；两者都确定缺失才首次生成。
+    /// 钥匙串身份项优先；身份项缺失但配对索引仍在时恢复唯一身份，两者都确定缺失才首次生成。
     /// 所有读取错误向上传递，设备未解锁等临时失败不能被当成首次安装。
     static func load(
         readIdentity: () throws -> String?,

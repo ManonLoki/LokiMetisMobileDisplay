@@ -13,7 +13,7 @@ data class AndroidWidgetTarget(
     /** 诊断或断言意外格式化目标时也不暴露读取密钥、地址或设备身份。 */
     override fun toString(): String = "AndroidWidgetTarget(version=$version, generation=$generation)"
 
-/** 校验版本、身份、数值主机和 32 字节读取密钥。 */
+    /** 校验版本、身份、数值主机和 32 字节读取密钥。 */
     fun validate() {
         require(version == 1 && MdnsProtocol.isCanonicalDeviceId(sourceId) && MdnsProtocol.isCanonicalDeviceId(deviceId))
         require(sourceId != deviceId && MdnsProtocol.isCanonicalDeviceId(generation) && port in 1..65535)

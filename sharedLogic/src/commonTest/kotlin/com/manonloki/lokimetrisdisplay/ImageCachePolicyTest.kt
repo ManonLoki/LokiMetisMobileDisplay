@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** 覆盖引用保护、淘汰顺序、平台预算和超大长度求和；不执行实际文件删除。 */
 class ImageCachePolicyTest {
     @Test fun candidatesPreserveReferencesAndExactLastUseOrdering() {
         val entries = listOf(ImageCacheEntry("new", 1, 1000.0002), ImageCacheEntry("protected", 1, 0.0),

@@ -29,8 +29,8 @@ struct DisplayTimeline: TimelineProvider {
     /// 小组件库预览与快速展示只读本地缓存，不发网络请求。
     func getSnapshot(in context: Context, completion: @escaping (DisplayEntry) -> Void) { completion(load()) }
     /// 有凭据时先 HTTP 拉取并落盘，再按 `WidgetSnapshot.refreshInterval` 申请下次刷新。
-    /// App 正保持认证连接（摘要仍在 45 秒租约内）时数据已是最新，跳过 HTTP，
-    /// 避免前台每次 reloadTimelines 都让扩展再连一次桌面。
+    /// 摘要仍在 45 秒租约内时跳过 HTTP；App 心跳可续租，HTTP 刚拉取的摘要也有初始租约。
+    /// 这只用于抑制重复请求，不在组件界面中作为桌面实时在线的证明。
     func getTimeline(in context: Context, completion: @escaping (Timeline<DisplayEntry>) -> Void) {
         Task {
             let live = (try? WidgetContainer.store().loadLive(atMs: Date().epochMs)) != nil
@@ -179,7 +179,7 @@ struct DisplayWidgetView: View {
     private var quotaTrack: Color {
         renderingMode == .vibrant ? Color(white: 0.35) : .white.opacity(0.18)
     }
-    /// 剩余额度分级配色：耗尽红、偏低黄、充足绿。
+    /// 与共享模型阈值一致：剩余不超过 20% 为红、不超过 50% 为黄，其余为绿。
     private func quotaFill(_ window: ProviderQuotaWindow) -> Color {
         guard renderingMode == .fullColor else { return .white }
         return window.level == 0 ? .red : window.level == 1 ? .yellow : .green

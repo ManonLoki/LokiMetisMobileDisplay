@@ -46,7 +46,7 @@ class TerminalDeviceTypeTest {
         assertEquals(TerminalDeviceTypeDecision(false, null), report.evaluateAuthenticatedSnapshot(null))
     }
 
-    /** 迁自 Swift 形态报告测试：未知、旧主机、单连接一次与重新认证使用相同状态。 */
+    /** 宿主边界验证未知形态、旧主机、单连接一次及重新认证后的上报资格。 */
     @Test fun native_decision_preserves_live_capability_and_reconnection_rules() {
         val supported = listOf("deviceFormFactorV1", "watchCompanionV1")
         for (type in TerminalDeviceType.entries) {

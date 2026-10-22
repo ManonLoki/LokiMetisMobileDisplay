@@ -13,7 +13,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-/** 只读系统动画设置；跟随当前界面生命周期，不持有连接 owner。 */
+/** 读取系统动画开关并设置深色背景所需的系统栏外观；动画资格随当前界面生命周期变化。 */
 @Composable
 internal fun rememberCyberMotionEnabled(): Boolean {
     if (LocalInspectionMode.current) return false

@@ -2,6 +2,7 @@ package com.manonloki.lokimetrisdisplay
 
 import kotlin.test.*
 
+/** 验证 HTTP 元信息、Base64 平台差异及请求 nonce 绑定规则，不发送真实网络请求。 */
 class WidgetHttpPolicyTest {
     @Test fun protocolConstantsAndRequestCompatibilityRemainExplicit() {
         assertEquals("http", WidgetHttpPolicy.SCHEME)

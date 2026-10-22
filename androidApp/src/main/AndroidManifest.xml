@@ -12,6 +12,7 @@
 
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <!-- 小组件使用固定局域网 HTTP 端点，摘要正文另以 ChaCha20-Poly1305 认证加密；此开关仅允许 HTTP 传输。 -->
     <application
         android:name=".DisplayApplication"
         android:allowBackup="false"
