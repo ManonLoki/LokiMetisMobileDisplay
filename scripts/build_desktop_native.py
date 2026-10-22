@@ -169,6 +169,9 @@ def build(args):
 
 
 def main():
+    # Windows 的重定向输出可能沿用 ANSI 代码页；构建日志统一 UTF-8，避免中文进度导致失败。
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--desktop-root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)

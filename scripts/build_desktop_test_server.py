@@ -111,6 +111,8 @@ serde_json = "={serde_json}"
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--desktop-root", required=True, type=Path)
     parser.add_argument("--out", type=Path, default=ROOT / "build" / "desktop-test-server")
