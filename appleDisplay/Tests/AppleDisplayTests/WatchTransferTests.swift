@@ -15,12 +15,6 @@ final class WatchTransferTests: XCTestCase {
         let snapshot = LanDisplaySnapshot(version: 1, tokens: nil, tokenError: nil, hooksAvailable: true, hooks: hooks, assets: assets, catalogError: nil)
         return try JSONEncoder().encode(WatchSnapshotEnvelope(version: 1, phoneId: phone, sourceId: desktop, phoneReceivedAtMs: 1, snapshot: snapshot))
     }
-    /// 临时私有目录由测试创建并最终回收，不读取真实HOME或共享容器。
-    private func directory() throws -> URL {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: path) }; return path
-    }
     /// 多块完整后才产生可保存投影，原始传输字节不会因重编码改变哈希。
     func test_snapshot_blocks_produce_exact_bytes_only_after_final_hash() throws {
         let data = try envelopeData(large: true); XCTAssertGreaterThan(data.count, WatchProtocol.chunkSize)
@@ -51,18 +45,93 @@ final class WatchTransferTests: XCTestCase {
         lease.deactivate(); XCTAssertThrowsError(try lease.received(session: foreground, now: 50_000_000_000))
         try lease.activate(session: transfer); XCTAssertThrowsError(try lease.received(session: foreground, now: 50_000_000_000))
     }
-    /// 本前台内存记录仍校验原始摘要；清空后不从磁盘恢复历史状态。
-    func test_live_record_rejects_tampering_without_persisting_snapshot() throws {
+    /// 缓存记录仍校验原始摘要，篡改不能进入本机展示。
+    func test_cached_record_rejects_tampering() throws {
         let data = try envelopeData()
-        let good = WatchDisplayRecord(schemaVersion: 1, envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2)
+        let good = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2)
         XCTAssertNoThrow(try good.validate())
         let changed = Data(String(data: data, encoding: .utf8)!.replacingOccurrences(of: "内容", with: "变更").utf8)
-        let bad = WatchDisplayRecord(schemaVersion: 1, envelopeData: changed, snapshotHash: good.snapshotHash, receivedAtMs: 3)
+        let bad = WatchDisplayRecord(envelopeData: changed, snapshotHash: good.snapshotHash, receivedAtMs: 3)
         XCTAssertThrowsError(try bad.validate())
     }
+    /// 冷启动恢复原始正文、真实来源时间和摘要。
+    func test_watch_cache_survives_restart() throws {
+        let directory = try temporaryFolder()
+        let data = try envelopeData()
+        let record = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 50)
+        try WatchDisplayStore(directory: directory).save(record)
+        let reopened = WatchDisplayStore(directory: directory)
+        XCTAssertEqual(try reopened.load(), record)
+        XCTAssertEqual(try reopened.load()?.validate().phoneReceivedAtMs, 1)
+        try reopened.discard(); XCTAssertNil(try reopened.load())
+    }
+
+    /// 迟到完整手机数据不能覆盖更新HTTP摘要；相同时刻完整数据优先。
+    func test_watch_cache_rejects_older_data_and_preserves_full_on_equal_timestamp() throws {
+        let data = try envelopeData()
+        let full = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2)
+        let envelope = try full.validate()
+        let summary = LanDisplaySnapshot(version: 1, tokens: nil, tokenError: nil,
+            hooksAvailable: true, hooks: [], assets: [], catalogError: nil)
+        func summaryRecord(time: Int64) throws -> WatchDisplayRecord {
+            let value = WatchSnapshotEnvelope(version: 1, phoneId: phone, sourceId: desktop,
+                phoneReceivedAtMs: time, snapshot: summary)
+            let data = try SharedJSON.sortedEncoder.encode(value)
+            return WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data),
+                receivedAtMs: 99, summaryOnly: true)
+        }
+        XCTAssertFalse(try summaryRecord(time: envelope.phoneReceivedAtMs).supersedes(full))
+        XCTAssertTrue(try full.supersedes(summaryRecord(time: envelope.phoneReceivedAtMs)))
+        XCTAssertFalse(try full.supersedes(summaryRecord(time: envelope.phoneReceivedAtMs + 1)))
+        XCTAssertTrue(try summaryRecord(time: envelope.phoneReceivedAtMs + 1).supersedes(full))
+    }
+
+    /// 无效文件与链接不作为恢复缓存，也不会覆盖链接指向的外部文件。
+    func test_watch_cache_rejects_corruption_and_symlink() throws {
+        let directory = try temporaryFolder(), store = WatchDisplayStore(directory: try temporaryFolder())
+        let data = try envelopeData()
+        let record = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2)
+        try store.save(record)
+        let cacheFile = store.directory.appendingPathComponent("watch-display-v2.json")
+        try Data("broken".utf8).write(to: cacheFile)
+        XCTAssertThrowsError(try store.load())
+        try FileManager.default.removeItem(at: cacheFile)
+        let external = directory.appendingPathComponent("untouched.json")
+        try Data("original".utf8).write(to: external)
+        try FileManager.default.createSymbolicLink(at: cacheFile, withDestinationURL: external)
+        XCTAssertThrowsError(try store.load())
+        XCTAssertThrowsError(try store.save(record))
+        XCTAssertEqual(try Data(contentsOf: external), Data("original".utf8))
+    }
+
+    /// HTTP摘要不能伪装完整图文缓存，刷新申请保持5分钟且后台有截止。
+    func test_watch_cache_summary_validation_and_refresh_budget() throws {
+        let data = try envelopeData()
+        let invalid = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2, summaryOnly: true)
+        XCTAssertThrowsError(try invalid.validate())
+        XCTAssertEqual(WatchRefreshPolicy.interval, 300)
+        XCTAssertLessThan(WatchRefreshPolicy.backgroundBudget, 15)
+        let full = WatchDisplayRecord(envelopeData: data, snapshotHash: WatchProtocol.hash(data), receivedAtMs: 2)
+        XCTAssertTrue(full.matches(hash: full.snapshotHash, summaryOnly: false))
+        XCTAssertFalse(full.matches(hash: full.snapshotHash, summaryOnly: true))
+        XCTAssertFalse(invalid.matches(hash: invalid.snapshotHash, summaryOnly: true))
+    }
+
+    /// 新缓存暂不HTTP，恰好5分钟以及缺失/未来/异常时间都应重新读取。
+    func test_watch_refresh_age_boundaries_and_extreme_clocks() {
+        XCTAssertFalse(WatchRefreshPolicy.shouldRefresh(receivedAtMs: 100, nowMs: 100))
+        XCTAssertFalse(WatchRefreshPolicy.shouldRefresh(receivedAtMs: 100, nowMs: 300_099))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: 100, nowMs: 300_100))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: 0, nowMs: Int64.max))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: Int64.max, nowMs: 100))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: 0, nowMs: Int64.min))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: -1, nowMs: 0))
+        XCTAssertTrue(WatchRefreshPolicy.shouldRefresh(receivedAtMs: nil, nowMs: 0))
+    }
+
     /// 图片ACK成功后可按相同摘要复用，正文损坏不能命中。
     func test_asset_commit_cache_hit_and_corruption_detection() throws {
-        let root = try directory(); let cache = try WatchAssetCache(directory: root)
+        let root = try temporaryFolder(); let cache = try WatchAssetCache(directory: root)
         let data = Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")!
         let asset = LanDisplaySnapshot.Asset(hash: WatchProtocol.hash(data), mime: "image/gif", length: UInt64(data.count))
         XCTAssertNil(try cache.cached(asset)); try cache.begin(asset, id: transfer)
@@ -73,7 +142,7 @@ final class WatchTransferTests: XCTestCase {
     }
     /// 错偏移失败和取消不能把部分文件当缓存，也不能留下本次临时文件。
     func test_asset_cancel_discards_partial_without_overwriting_cached_body() throws {
-        let root = try directory(); let cache = try WatchAssetCache(directory: root)
+        let root = try temporaryFolder(); let cache = try WatchAssetCache(directory: root)
         let data = Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")!
         let asset = LanDisplaySnapshot.Asset(hash: WatchProtocol.hash(data), mime: "image/gif", length: UInt64(data.count))
         try cache.begin(asset, id: transfer)
@@ -105,7 +174,7 @@ final class WatchTransferTests: XCTestCase {
 
     /// 每块到达前用量都变化时，仍被引用的大图必须累计进度并最终通过完整摘要校验。
     func test_frequent_snapshots_do_not_restart_referenced_asset() throws {
-        let cache = try WatchAssetCache(directory: try directory())
+        let cache = try WatchAssetCache(directory: try temporaryFolder())
         let header = Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")!
         let data = header + Data(repeating: 0, count: 1_000_000)
         let asset = LanDisplaySnapshot.Asset(hash: WatchProtocol.hash(data), mime: "image/gif", length: UInt64(data.count))

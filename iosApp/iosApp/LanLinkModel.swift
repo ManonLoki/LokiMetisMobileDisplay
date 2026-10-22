@@ -17,6 +17,7 @@ final class LanLinkModel: ObservableObject {
         self.settings = settings
         createEngine()
     }
+    /// 按当前身份创建网络引擎；身份不可用时不创建，界面显示错误。
     private func createEngine() {
         generation &+= 1
         guard settings.identityError == nil, SharedValidation.validId(settings.deviceId) else {
@@ -37,6 +38,7 @@ final class LanLinkModel: ObservableObject {
         engine = LanLinkEngine(deviceId: settings.deviceId, formFactor: formFactor) { value in delivery.submit(value) }
     }
 
+    /// 导出加密的配对恢复材料，结果回到主线程。
     func exportPairingRecovery(completion: @escaping (Result<PairingRecovery.Exported, Error>) -> Void) {
         guard !recovering, let engine else { completion(.failure(WidgetSnapshotError.unavailable)); return }
         engine.exportPairingRecovery(completion: completion)

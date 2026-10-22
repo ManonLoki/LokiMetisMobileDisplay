@@ -5,16 +5,66 @@ import Darwin
 import Glibc
 #endif
 
+/// 手机、组件共同写入最新状态和已缓存的插槽图片；图片的原接收时间独立保存。
+struct PhoneDisplayCache: Codable, Equatable {
+    let envelope: WatchSnapshotEnvelope
+    let summaryOnly: Bool
+
+    func validate() throws {
+        try envelope.validate()
+        guard try SharedJSON.encoder.encode(envelope).count <= WatchProtocol.maxSnapshotBytes else {
+            throw WidgetSnapshotError.tooLarge
+        }
+        if summaryOnly {
+            guard envelope.snapshot.assets.isEmpty,
+                  envelope.snapshot.hooks.allSatisfy({ $0.content.isEmpty && $0.image == nil }) else {
+                throw WidgetSnapshotError.invalid
+            }
+        }
+    }
+
+    static func summary(_ value: WidgetSnapshot, phoneId: String, preservingImagesFrom previous: Self? = nil) throws -> Self {
+        try value.validate()
+        let snapshot = LanDisplaySnapshot(version: value.snapshot.version, tokens: value.snapshot.tokens,
+            tokenError: value.snapshot.tokenError, hooksAvailable: value.snapshot.hooksAvailable,
+            hooks: value.snapshot.hooks.map {
+                LanDisplaySnapshot.Hook(agent: $0.agent, slot: $0.slot, behavior: $0.behavior,
+                    content: "", contentTruncated: false, image: nil)
+            }, assets: [], catalogError: nil, providerQuota: value.snapshot.providerQuota)
+        let envelope = try WatchSnapshotEnvelope(version: 1, phoneId: phoneId,
+            sourceId: value.sourceId, phoneReceivedAtMs: value.receivedAtMs, snapshot: snapshot)
+            .preservingCachedHookImages(from: previous?.envelope, previousSummaryOnly: previous?.summaryOnly ?? true)
+        // 纯摘要不携带图文；附带历史图片的缓存继续走现有有界图片传输和验证。
+        let record = Self(envelope: envelope, summaryOnly: envelope.snapshot.assets.isEmpty)
+        try record.validate()
+        return record
+    }
+}
+
 /// App 与组件共享有界摘要及独立只读凭据；文件锁使撤销和在途 HTTP 提交跨进程有序。
 struct WidgetSnapshotStore {
     let directory: URL
     private var file: URL { directory.appendingPathComponent("display-widget-v1.json", isDirectory: false) }
+    private var displayFile: URL { directory.appendingPathComponent("display-phone-v1.json", isDirectory: false) }
     private var targetFile: URL { directory.appendingPathComponent("display-widget-refresh-v1.json", isDirectory: false) }
 
     /// 加锁读取并校验摘要，不判断租约或缓存时效。
     func load() throws -> WidgetSnapshot { try withLock { try loadSnapshot() } }
 
-    /// 连接 owner 只加载租约内摘要；过期缓存不能凭自身恢复认证连接。
+    /// 完整 App 快照与组件 HTTP 摘要共用来源和时间；过期结果仍保留真实采样时间。
+    func loadDisplayCache() throws -> PhoneDisplayCache? { try withLock {
+        let cached = try loadDisplay()
+        // 两个原子文件之间若进程结束，以较新状态恢复，并保留图片原接收时间。
+        if let summary = try? loadSnapshot(),
+           cached == nil || cached?.envelope.sourceId != summary.sourceId ||
+              summary.receivedAtMs > (cached?.envelope.phoneReceivedAtMs ?? -1),
+           let phoneId = try (cached?.envelope.phoneId ?? loadTarget()?.deviceId) {
+            return try PhoneDisplayCache.summary(summary, phoneId: phoneId, preservingImagesFrom: cached)
+        }
+        return cached
+    } }
+
+    /// 只加载租约内摘要：App 正保持认证连接时为非空，小组件据此跳过重复的 HTTP 拉取。
     func loadLive(atMs now: Int64) throws -> WidgetSnapshot? {
         let snapshot = try load(); return snapshot.isLive(atMs: now) ? snapshot : nil
     }
@@ -26,14 +76,6 @@ struct WidgetSnapshotStore {
 
     /// 加锁读取独立只读刷新凭据；未授权时返回 nil。
     func loadRefreshTarget() throws -> WidgetRefreshTarget? { try withLock { try loadTarget() } }
-
-    /// 已认证来源不再支持独立获取时撤销凭据，保留最近一次合法摘要。
-    func clearRefreshTarget(sourceId: String) throws {
-        guard SharedValidation.validId(sourceId) else { throw WidgetSnapshotError.invalid }
-        try withLock {
-            if (try? loadTarget())?.sourceId == sourceId { try remove(targetFile) }
-        }
-    }
 
     /// 成功认证后才调用。相同地址和密钥保留代次，改变服务地址会使旧请求失效。
     @discardableResult
@@ -47,8 +89,12 @@ struct WidgetSnapshotStore {
     }
 
     /// 摘要和独立获取能力在同一锁内提交；先撤销旧目标，进程中断也不会留下跨来源凭据。
-    func saveAuthenticatedSnapshot(_ snapshot: WidgetSnapshot, refreshTarget: WidgetRefreshTarget?) throws {
-        try snapshot.validate(); try refreshTarget?.validate()
+    func saveAuthenticatedSnapshot(_ snapshot: WidgetSnapshot, refreshTarget: WidgetRefreshTarget?, displayCache: PhoneDisplayCache? = nil) throws {
+        try snapshot.validate(); try refreshTarget?.validate(); try displayCache?.validate()
+        if let displayCache {
+            guard displayCache.envelope.sourceId == snapshot.sourceId,
+                  displayCache.envelope.phoneReceivedAtMs == snapshot.receivedAtMs else { throw WidgetSnapshotError.invalid }
+        }
         guard refreshTarget == nil || refreshTarget?.sourceId == snapshot.sourceId else { throw WidgetSnapshotError.invalid }
         let snapshotData = try SharedJSON.encoder.encode(snapshot)
         guard snapshotData.count <= WidgetSnapshot.maxBytes else { throw WidgetSnapshotError.tooLarge }
@@ -63,6 +109,19 @@ struct WidgetSnapshotStore {
             let current = try? loadSnapshot()
             if current?.sourceId != snapshot.sourceId || (current?.receivedAtMs ?? -1) <= snapshot.receivedAtMs {
                 try write(snapshotData, to: file, limit: WidgetSnapshot.maxBytes)
+                if let displayCache { try writeDisplayIfNotOlder(displayCache) }
+            } else if let current, let displayCache {
+                // 扩展先提交新状态时，迟到的完整 App 快照仍可补图，但不能回退状态或清图。
+                let cached = try? loadDisplay()
+                let currentIsFull = cached?.envelope.sourceId == current.sourceId &&
+                    cached?.envelope.phoneReceivedAtMs == current.receivedAtMs &&
+                    cached?.envelope.cachePriority(summaryOnly: cached?.summaryOnly ?? true) == 2
+                if !currentIsFull {
+                    let latest = try PhoneDisplayCache.summary(current, phoneId: displayCache.envelope.phoneId,
+                        preservingImagesFrom: cached)
+                    let merged = try latest.envelope.preservingCachedHookImages(from: displayCache.envelope)
+                    try writeDisplayIfNotOlder(PhoneDisplayCache(envelope: merged, summaryOnly: merged.snapshot.assets.isEmpty))
+                }
             }
             if let targetData, previous != next { try write(targetData, to: targetFile, limit: 4096) }
         }
@@ -86,6 +145,7 @@ struct WidgetSnapshotStore {
         try withLock {
             if FileManager.default.fileExists(atPath: targetFile.path), (try? loadTarget())?.sourceId != id { try remove(targetFile) }
             if FileManager.default.fileExists(atPath: file.path), (try? loadSnapshot())?.sourceId != id { try remove(file) }
+            if FileManager.default.fileExists(atPath: displayFile.path), (try? loadDisplay())?.envelope.sourceId != id { try remove(displayFile) }
         }
     }
 
@@ -95,6 +155,7 @@ struct WidgetSnapshotStore {
         try withLock {
             if (try? loadTarget())?.sourceId == id { try remove(targetFile) }
             if (try? loadSnapshot())?.sourceId == id { try remove(file) }
+            if (try? loadDisplay())?.envelope.sourceId == id { try remove(displayFile) }
         }
     }
 
@@ -113,17 +174,39 @@ struct WidgetSnapshotStore {
                 if let startedAtMs, current.receivedAtMs > startedAtMs { return false }
             }
             try writeSnapshot(snapshot)
+            try writeDisplayIfNotOlder(PhoneDisplayCache.summary(snapshot, phoneId: target.deviceId,
+                preservingImagesFrom: try? loadDisplay()))
             return true
         }
     }
 
     /// 明确撤销共享同时删除摘要和刷新凭据；不清理容器内其他文件。
-    func clear() throws { try withLock { try remove(targetFile); try remove(file) } }
+    func clear() throws { try withLock { try remove(targetFile); try remove(file); try remove(displayFile) } }
 
     /// 先校验再加锁原子写入，非法摘要不覆盖现有文件。
     func save(_ snapshot: WidgetSnapshot) throws {
         try snapshot.validate()
         try withLock { try writeSnapshot(snapshot) }
+    }
+
+    private func loadDisplay() throws -> PhoneDisplayCache? {
+        let data: Data
+        do { data = try read(displayFile, limit: WatchProtocol.maxSnapshotBytes + 1024) }
+        catch where SharedFiles.isMissing(error) { return nil }
+        let value = try SharedJSON.decoder.decode(PhoneDisplayCache.self, from: data)
+        try value.validate()
+        return value
+    }
+
+    /// 同源只接受更晚结果；同一时刻完整快照优先，旧 App 回调不能覆盖扩展的新摘要。
+    private func writeDisplayIfNotOlder(_ value: PhoneDisplayCache) throws {
+        if let current = try? loadDisplay(), current.envelope.sourceId == value.envelope.sourceId {
+            guard current.envelope.phoneReceivedAtMs <= value.envelope.phoneReceivedAtMs else { return }
+            if current.envelope.phoneReceivedAtMs == value.envelope.phoneReceivedAtMs,
+               current.envelope.cachePriority(summaryOnly: current.summaryOnly) >
+                value.envelope.cachePriority(summaryOnly: value.summaryOnly) { return }
+        }
+        try write(try SharedJSON.encoder.encode(value), to: displayFile, limit: WatchProtocol.maxSnapshotBytes + 1024)
     }
 
     private func loadSnapshot() throws -> WidgetSnapshot {
@@ -165,7 +248,7 @@ struct WidgetSnapshotStore {
         #else
         try data.write(to: url, options: .atomic)
         #endif
-        if url == targetFile {
+        if url == targetFile || url == displayFile {
             var target = url
             var values = URLResourceValues(); values.isExcludedFromBackup = true
             try target.setResourceValues(values)

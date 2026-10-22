@@ -16,7 +16,7 @@ enum HookLayout: String, CaseIterable, Identifiable {
     var pageSize: Int { columns * columns }
 }
 
-/// Local preferences never alter discovery or the accepted desktop snapshot.
+/// 面板偏好只影响本机显示，不改变发现、连接或桌面快照。
 struct PanelPreferencesView: View {
     @Binding var showUsage: Bool
     @Binding var showHooks: Bool
@@ -125,6 +125,7 @@ struct PanelPreferencesView: View {
         }
     }
 
+    /// 用量卡片样式的缩略预览。
     private func usagePreview(_ detail: UsageDetail) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Capsule().fill(Color.white.opacity(0.22)).frame(width: 30, height: 4)
@@ -148,6 +149,7 @@ struct PanelPreferencesView: View {
         .accessibilityHidden(true)
     }
 
+    /// Hooks 布局的缩略预览。
     private func hookPreview(_ layout: HookLayout) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: layout.columns), spacing: 5) {
             ForEach(0..<layout.pageSize, id: \.self) { _ in
@@ -204,7 +206,7 @@ private struct PanelChoiceTile<Preview: View>: View {
     }
 }
 
-/// Shared settings surfaces keep their hierarchy quieter than the live panel.
+/// 设置页通用卡片，视觉层级比实时展示台更克制。
 struct SettingsCard<Content: View>: View {
     @ViewBuilder let content: Content
 

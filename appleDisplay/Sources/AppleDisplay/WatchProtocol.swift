@@ -24,8 +24,67 @@ struct WatchSnapshotEnvelope: Codable, Equatable {
     /// 历史时间不能用来续前台租约，数值和图文共用完整快照校验。
     func validate() throws {
         guard version == 1, SharedValidation.validId(phoneId), SharedValidation.validId(sourceId), phoneId != sourceId,
-              phoneReceivedAtMs >= 0 else { throw WidgetSnapshotError.invalid }
+              phoneReceivedAtMs >= 0,
+              snapshot.hooks.allSatisfy({ ($0.cachedImageReceivedAtMs ?? 0) <= phoneReceivedAtMs &&
+                  ($0.cachedImageClearedAtMs ?? 0) <= phoneReceivedAtMs }) else { throw WidgetSnapshotError.invalid }
         try snapshot.validate()
+    }
+
+    /// 同一接收时刻，完整桌面快照优先于附带旧图的 HTTP 缓存，再优先于纯摘要。
+    func cachePriority(summaryOnly: Bool) -> Int {
+        if snapshot.hooks.contains(where: { $0.cachedImageReceivedAtMs != nil || $0.cachedImageClearedAtMs != nil }) { return 1 }
+        return summaryOnly ? 0 : 2
+    }
+
+    /// 仅用于 HTTP 投影补充历史图片；调用方不能用于完整桌面快照，以免覆盖明确清图。
+    func preservingCachedHookImages(from previous: Self?, previousSummaryOnly: Bool = false) throws -> Self {
+        try validate()
+        guard snapshot.hooks.allSatisfy({ $0.content.isEmpty && ($0.image == nil || $0.cachedImageReceivedAtMs != nil) }),
+              let previous, (try? previous.validate()) != nil,
+              phoneId == previous.phoneId, sourceId == previous.sourceId,
+              previous.phoneReceivedAtMs <= phoneReceivedAtMs else { return self }
+        let oldHooks = Dictionary(uniqueKeysWithValues: previous.snapshot.hooks.map { ($0.slot, $0) })
+        let oldAssets = Dictionary(uniqueKeysWithValues: previous.snapshot.assets.map { ($0.hash, $0) })
+        let currentAssets = Dictionary(uniqueKeysWithValues: snapshot.assets.map { ($0.hash, $0) })
+        let previousIsFull = previous.cachePriority(summaryOnly: previousSummaryOnly) == 2
+        var retainedAssets: [LanDisplaySnapshot.Asset] = []
+        var hashes: Set<String> = []
+        let hooks = snapshot.hooks.map { hook -> LanDisplaySnapshot.Hook in
+            var result = hook
+            var asset = hook.image.flatMap { currentAssets[$0] }
+            if let old = oldHooks[hook.slot], old.agent == hook.agent {
+                let oldAsset = old.image.flatMap { oldAssets[$0] }
+                let oldTime = old.cachedImageReceivedAtMs ?? old.cachedImageClearedAtMs ??
+                    ((old.image != nil || previousIsFull) ? previous.phoneReceivedAtMs : nil)
+                let currentTime = hook.cachedImageReceivedAtMs ?? hook.cachedImageClearedAtMs
+                if let oldTime, old.image == nil || oldAsset != nil,
+                   currentTime.map({ oldTime > $0 || (oldTime == $0 && old.image == nil) }) ?? true {
+                    result = LanDisplaySnapshot.Hook(agent: hook.agent, slot: hook.slot, behavior: hook.behavior,
+                        content: "", contentTruncated: false, image: old.image,
+                        cachedImageReceivedAtMs: old.image == nil ? nil : oldTime,
+                        cachedImageClearedAtMs: old.image == nil ? oldTime : nil)
+                    asset = oldAsset
+                }
+            } else if previous.snapshot.hooksAvailable {
+                // 上一轮确认过空槽或别的 Agent；更早同名 Agent 的图不能跨过这次分配复用。
+                let currentTime = hook.cachedImageReceivedAtMs ?? hook.cachedImageClearedAtMs
+                if currentTime.map({ $0 <= previous.phoneReceivedAtMs }) ?? true {
+                    result = LanDisplaySnapshot.Hook(agent: hook.agent, slot: hook.slot, behavior: hook.behavior,
+                        content: "", contentTruncated: false, image: nil,
+                        cachedImageClearedAtMs: previous.phoneReceivedAtMs)
+                    asset = nil
+                }
+            }
+            if let asset, hashes.insert(asset.hash).inserted { retainedAssets.append(asset) }
+            return result
+        }
+        let merged = LanDisplaySnapshot(version: snapshot.version, tokens: snapshot.tokens,
+            tokenError: snapshot.tokenError, hooksAvailable: snapshot.hooksAvailable, hooks: hooks,
+            assets: retainedAssets, catalogError: snapshot.catalogError, providerQuota: snapshot.providerQuota)
+        let value = Self(version: version, phoneId: phoneId, sourceId: sourceId,
+            phoneReceivedAtMs: phoneReceivedAtMs, snapshot: merged)
+        try value.validate()
+        return value
     }
 }
 
@@ -43,6 +102,7 @@ struct WatchRPC: Codable {
     var asset: LanDisplaySnapshot.Asset?
     var configurationRevision: UInt64?
     var configurationHash: String?
+    var snapshotSummaryOnly: Bool?
     /// 字段默认为缺省，具体操作在接收owner按阶段检查，不允许缺字段自动补真值。
     init(_ op: String) { version = 1; self.op = op }
 }
@@ -57,6 +117,10 @@ struct WatchRPCReply: Codable {
     var snapshotHash: String?
     /// 只读 HTTP 授权通过系统配套通道下发，nil target 表示明确撤销。
     var configuration: WatchHTTPConfiguration?
+    /// 已持久化的手机展示缓存；小快照直接回传，大快照通过最新应用上下文送达。
+    var snapshotCache: Data?
+    var snapshotCacheCleared: Bool?
+    var snapshotSummaryOnly: Bool?
     /// 稳定状态不携带系统路径、Hook正文或配对秘密。
     init(_ status: String) { self.status = status }
 }

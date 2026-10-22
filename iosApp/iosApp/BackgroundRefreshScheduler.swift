@@ -1,7 +1,7 @@
 import BackgroundTasks
 import UIKit
 
-/// 系统决定实际唤醒时间；`WidgetSnapshot.refreshInterval`（15 分钟）只是下一次允许执行的最早时间。
+/// 系统决定实际唤醒时间；`WidgetSnapshot.refreshInterval`（5 分钟）只是下一次允许执行的最早时间。
 @MainActor
 final class BackgroundRefreshScheduler {
     static let shared = BackgroundRefreshScheduler()
@@ -60,6 +60,7 @@ final class BackgroundRefreshScheduler {
         try? BGTaskScheduler.shared.submit(request)
     }
 
+    /// 执行一次后台刷新；若上一次仍在进行，先等旧连接清理完成再开始。
     private func refresh(_ execution: RefreshExecution) {
         // 尽早登记后续任务，保证本次成功、离线或到期后都仍有下一次机会。
         scheduleNextRefresh()
@@ -83,6 +84,7 @@ final class BackgroundRefreshScheduler {
         }
     }
 
+    /// 系统到期：撤销连接后再报告失败，避免挂起时仍持有网络资源。
     private func expire(_ execution: RefreshExecution) {
         if running === execution {
             running = nil

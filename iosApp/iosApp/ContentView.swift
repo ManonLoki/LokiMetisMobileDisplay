@@ -92,6 +92,7 @@ struct ContentView: View {
         }
     }
 
+    /// iPad 侧边栏的一项菜单。
     private func sidebarItem(_ menu: Menu, title: String, symbol: String) -> some View {
         Button { selected = menu } label: {
             Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
@@ -108,8 +109,8 @@ struct ContentView: View {
                              usageDetail: $usageDetail, hookLayout: $hookLayout)
     }
 
-    /// 主面板只投影当前LAN会话，不从组件文件恢复历史数字或状态。
-    private var panelSnapshot: LanDisplaySnapshot? { link.state.connected ? link.state.snapshot : nil }
+    /// 离线也展示引擎校验过的最近缓存，连接状态仍由当前认证会话决定。
+    private var panelSnapshot: LanDisplaySnapshot? { link.state.snapshot }
     private var panelState: LanLinkView { link.state }
 
 
@@ -174,6 +175,11 @@ struct ContentView: View {
                             Text(link.state.status).font(.subheadline).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityIdentifier("devices-status")
+                            if !link.state.connected, link.state.snapshot != nil, let received = link.state.receivedDate {
+                                Text("显示缓存 · 上次同步 \(received.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         Spacer(minLength: 0)
                         Circle().fill(link.state.connected ? DisplayStyle.accent : Color.secondary.opacity(0.5))
@@ -207,6 +213,7 @@ struct ContentView: View {
         }
     }
 
+    /// 首次配对时展示四位码，只在配对窗口内存在。
     private func pairingSettings(_ code: String) -> some View {
         settingsSection("完成配对") {
             SettingsCard {
@@ -287,10 +294,10 @@ struct ContentView: View {
             SettingsCard {
                 VStack(alignment: .leading, spacing: 18) {
                     DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 12) { watchSettings }
+                        VStack(alignment: .leading, spacing: 12) { watchStatus }
                             .padding(.top, 14)
                     } label: {
-                        SettingsLabel(title: "Apple Watch", subtitle: "同步到腕上查看", symbol: "applewatch")
+                        SettingsLabel(title: "Apple Watch", subtitle: "自动同步手机数据", symbol: "applewatch")
                     }
                     Divider().overlay(Color.white.opacity(0.04))
                     DisclosureGroup {
@@ -310,6 +317,7 @@ struct ContentView: View {
         }
     }
 
+    /// 设置页分组：标题加内容卡片。
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
@@ -323,6 +331,7 @@ struct ContentView: View {
         return cards.isEmpty ? "尚未选择卡片" : cards.joined(separator: " · ")
     }
 
+    /// 一台已发现或已配对的桌面，包含连接与忘记操作。
     private func desktopRow(_ host: LanHost) -> some View {
         let connected = link.state.connected && link.state.selectedId == host.id
         return VStack(alignment: .leading, spacing: 12) {
@@ -347,6 +356,7 @@ struct ContentView: View {
         }
     }
 
+    /// 桌面名称与配对状态。
     private func desktopIdentity(_ host: LanHost, connected: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "desktopcomputer").font(.system(size: 20)).foregroundStyle(.secondary)
@@ -361,6 +371,7 @@ struct ContentView: View {
         }
     }
 
+    /// 配对 / 连接按钮；当前已连接或暂未发现时禁用。
     private func desktopAction(_ host: LanHost, connected: Bool) -> some View {
         Button(connected ? "已连接" : host.paired ? "连接" : "配对") { link.select(host.id) }
             .font(.subheadline.weight(.semibold)).buttonStyle(.bordered).controlSize(.large)
@@ -369,7 +380,9 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var watchSettings: some View {
+    private var watchStatus: some View {
+        Text("用量、额度和 Hooks 默认显示。手表自动读取 iPhone 的缓存，应用内无需再次配对或设置。")
+            .font(.subheadline).foregroundStyle(.secondary)
         if let watch = link.state.watch.info {
             LabeledContent("名称", value: watch.name)
             Text(link.state.watch.reachable ? "手表应用可通信" : "手表应用暂不可通信")

@@ -18,6 +18,10 @@ struct LanDisplaySnapshot: Codable, Equatable {
         let content: String
         let contentTruncated: Bool
         let image: String?
+        /// HTTP 只更新状态时，沿用图片的原始接收时间，不冒充刚下载的新图片。
+        var cachedImageReceivedAtMs: Int64? = nil
+        /// 清图事实也保留观测时间，防止迟到的旧图片在下一次 HTTP 合并时复活。
+        var cachedImageClearedAtMs: Int64? = nil
     }
     let version: Int
     let tokens: WidgetTokens?
@@ -44,7 +48,11 @@ struct LanDisplaySnapshot: Codable, Equatable {
         guard value.version == 1, value.hooks.count <= 12, value.assets.count <= 64,
               Set(value.hooks.map(\.slot)).count == value.hooks.count,
               Set(value.assets.map(\.hash)).count == value.assets.count,
-              value.hooks.allSatisfy({ (1...12).contains($0.slot) && $0.content.utf8.count <= 512 }),
+              value.hooks.allSatisfy({ (1...12).contains($0.slot) && $0.content.utf8.count <= 512 &&
+                  ($0.cachedImageReceivedAtMs.map { $0 >= 0 } ?? true) &&
+                  ($0.cachedImageReceivedAtMs == nil || $0.image != nil) &&
+                  ($0.cachedImageClearedAtMs.map { $0 >= 0 } ?? true) &&
+                  ($0.cachedImageClearedAtMs == nil || ($0.image == nil && $0.cachedImageReceivedAtMs == nil)) }),
               value.assets.allSatisfy(\.isValid) else {
             throw WidgetSnapshotError.invalid
         }

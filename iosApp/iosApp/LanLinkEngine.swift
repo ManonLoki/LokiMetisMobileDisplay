@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 /// 广告只提供候选身份，只有保存凭据认证和真实snapshot才能建立连接状态。
-struct LanHost: Identifiable {
+struct LanHost: Identifiable, Equatable {
     let id: String
     let name: String
     var paired: Bool
@@ -10,7 +10,8 @@ struct LanHost: Identifiable {
 }
 
 /// 发布给主线程的展示状态不包含配对材料；四位码仅在当前显式窗口内存在。
-struct LanLinkView {
+/// 可比较：引擎只在内容真正变化时投递，心跳和重复回调不会让整页 SwiftUI 重算。
+struct LanLinkView: Equatable {
     var hosts: [LanHost] = []
     var selectedId: String?
     var status = "正在发现桌面端…"
@@ -33,6 +34,9 @@ final class LanLinkEngine {
     /// 只描述当前线协议阶段，密码判断与尝试预算仍唯一归共享Rust。
     enum Phase { case idle, pairHello, pairConfirmation, pairClose, resumeReply, metadata, streaming, pausing }
     let queue = DispatchQueue(label: "LokiMetris.lan-link")
+    /// 多帧解码与冷启动缓存校验可能耗时数百毫秒，放到独立低优先级串行队列，
+    /// 网络队列不必等待，心跳与认证回复不受影响；串行也限制同时解码的峰值内存。
+    let decoder = DispatchQueue(label: "LokiMetris.lan-decode", qos: .utility)
     let deviceId: String
     let store: PairingStore
     let backgroundTargets: BackgroundTargetStore
@@ -67,6 +71,8 @@ final class LanLinkEngine {
     var currentAsset: LanDisplaySnapshot.Asset?
     var assetDeadline: UInt64?
     var failedAssets: Set<String> = []
+    /// 已交给解码队列、结果尚未返回的图片摘要，避免重复校验和重复解码。
+    var decodingImages: Set<String> = []
     var assetPaths: [String: URL] = [:]
     /// init 末尾必定赋值；隐式解包只为让构造闭包可在其它属性就绪后捕获 self。
     var watch: PhoneWatchBridge!
@@ -75,17 +81,21 @@ final class LanLinkEngine {
     var watchCapability = false
     var watchNonce: NSNumber?
     var watchProjectionGeneration: UInt64?
+    /// Watch 通信事实只用于向桌面上报，不进入界面投影。
+    var watchFacts = WatchCompanionFacts()
+    /// 上次投递给主线程的状态；相同则跳过，减少无意义的主线程唤醒。
+    var lastPublished: LanLinkView?
 
     /// 构造不读凭据、不发网络；UI回调由薄模型映射到主线程。
     init(deviceId: String, formFactor: LanDeviceFormFactor?, changed: @escaping (LanLinkView) -> Void) {
         self.deviceId = deviceId; store = PairingStore(deviceId: deviceId); self.changed = changed
         backgroundTargets = BackgroundTargetStore(deviceId: deviceId)
         deviceType = LanDeviceFormFactorReport(formFactor: formFactor)
-        watch = PhoneWatchBridge(phoneId: deviceId) { [weak self] value, generation in
+        watch = PhoneWatchBridge(phoneId: deviceId) { [weak self] value, facts, generation in
             self?.queue.async { [weak self] in
                 guard let self, !self.retiredForRecovery, self.generation == generation else { return }
                 self.watchProjectionGeneration = generation
-                self.view.watch = value; self.publish()
+                self.view.watch = value; self.watchFacts = facts; self.publish()
                 if !value.reachable {
                     do { try self.reportWatch() } catch { self.fail(retry: true, message: "手表状态发送中断，正在重新连接。") }
                 }
@@ -144,7 +154,7 @@ final class LanLinkEngine {
             self.finishBackgroundRefresh(success: false)
             self.active = false; self.intent.leaveForeground()
             self.browser?.cancel(); self.browser = nil; self.endpoints = [:]
-            self.cancelSession(); self.clearLiveDisplay()
+            self.cancelSession(); self.clearLiveDisplay(clearCached: true)
             self.retry?.cancel(); self.retry = nil; self.setTickActive(false)
         }
     }
@@ -180,6 +190,7 @@ final class LanLinkEngine {
         queue.async { self.finishBackgroundRefresh(success: false); completion() }
     }
 
+    /// 结束本次后台刷新：撤销连接代次、清空端点，再回调系统任务。
     func finishBackgroundRefresh(success: Bool) {
         guard let run = backgroundRun else { return }
         backgroundRun = nil; run.timeout.cancel()
@@ -197,17 +208,15 @@ final class LanLinkEngine {
             self.active = active; self.name = name
             if active {
                 if self.phase == .pausing { self.cancelSession() }
-                do { try IOSDisplayCache.store().discardLegacy() }
-                catch { self.view.assetWarning = "旧展示快照未能清理，当前不会恢复或使用其中的数据。" }
                 do {
                     self.paired = try self.store.clientIds()
-                    try self.store.prepareForBackgroundRefresh()
                     self.view.backgroundRefreshError = nil
                     if self.view.selectedId == nil, let target = try self.backgroundTargets.load(), self.paired.contains(target.id) {
                         self.view.selectedId = target.id
                     }
                 }
-                catch { self.view.backgroundRefreshError = "后台刷新准备失败，请解锁设备后重新打开 App。" }
+                catch { self.view.backgroundRefreshError = "配对记录暂不可读取，请解锁设备后重新打开 App。" }
+                self.restoreCachedDisplay()
                 self.intent.enterForeground()
                 self.startBrowser()
             } else {
@@ -236,7 +245,7 @@ final class LanLinkEngine {
     func forget(_ id: String) {
         queue.async {
             guard !self.retiredForRecovery else { return }
-            if self.view.selectedId == id { self.cancelSession(); self.view.selectedId = nil }
+            if self.view.selectedId == id { self.cancelSession(); self.clearLiveDisplay(clearCached: true); self.view.selectedId = nil }
             do {
                 do { try self.backgroundTargets.forget(id) }
                 catch { try self.backgroundTargets.reset() }
@@ -252,8 +261,11 @@ final class LanLinkEngine {
         }
     }
 
-    /// 只有App投影进入主线程，完整材料和FFI结果不记录到日志。
-    func publish() { changed(view) }
+    /// 只有App投影进入主线程，完整材料和FFI结果不记录到日志；内容未变时不投递。
+    func publish() {
+        guard view != lastPublished else { return }
+        lastPublished = view; changed(view)
+    }
     /// 所有超时使用本机单调时间，墙钟变化不返还配对期限。
     var now: UInt64 { DispatchTime.now().uptimeNanoseconds }
 

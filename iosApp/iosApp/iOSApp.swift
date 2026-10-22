@@ -34,8 +34,8 @@ struct iOSApp: App {
             #if DEBUG
             if widgetHTTPProbe { return }
             #endif
-            // App-level phase aggregates all windows, so iPad windows share one
-            // advertisement and one inactive window cannot stop an active one.
+            // 使用 App 级生命周期（汇总所有窗口）：iPad 多窗口共用一条连接，
+            // 某个窗口失焦不会停掉仍在前台的另一个窗口。
             switch phase {
             case .active: link.setActive(true)
             case .background:

@@ -105,6 +105,7 @@ struct PairingRecoveryView: View {
         }
     }
 
+    /// 导出加密恢复文件与对应恢复码；页面已离开或有新操作时丢弃迟到结果。
     private func exportRecovery() {
         operationGeneration &+= 1
         let token = operationGeneration
@@ -118,6 +119,7 @@ struct PairingRecoveryView: View {
             }
         }
     }
+    /// 在后台用恢复码解密导入的文件，成功后进入确认步骤，不会直接覆盖现有配对。
     private func unlock() {
         guard let data = encryptedData else { return }
         let code = recoveryCode

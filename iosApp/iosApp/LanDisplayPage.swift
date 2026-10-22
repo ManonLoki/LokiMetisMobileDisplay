@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared visual tokens stay in the app target; extensions use their own native palette.
+/// App 内共用的配色；小组件与 Watch 各自定义同色值，不跨 target 共享。
 enum DisplayStyle {
     static let accent = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
     static let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
@@ -10,7 +10,7 @@ enum DisplayStyle {
     static let surface = Color(red: 17 / 255, green: 29 / 255, blue: 45 / 255)
 }
 
-/// Only accepted snapshots supply numbers and activity. Offline facts remain labeled as cache.
+/// 展示台：数字与活动只来自已认证快照；离线时继续显示缓存，并明确标注为缓存。
 struct LanDisplayPage: View {
     let state: LanLinkView
     let snapshot: LanDisplaySnapshot?
@@ -86,6 +86,7 @@ struct LanDisplayPage: View {
         }
     }
 
+    /// 横屏左右、竖屏上下平分用量与 Hooks 两张卡片。
     private func splitPanels(horizontal: Bool) -> some View {
         GeometryReader { geometry in
             let count = showUsage && showHooks ? 2 : 1
@@ -97,6 +98,7 @@ struct LanDisplayPage: View {
                 if showUsage {
                     UsagePanelCard(tokens: snapshot?.tokens, hasError: snapshot?.tokenError != nil,
                                    detail: usageDetail, quota: snapshot?.providerQuota,
+                                   cachedReceivedDate: state.connected ? nil : state.receivedDate,
                                    canRefresh: state.canQuerySnapshot && state.connected, onRefresh: refreshSnapshot)
                         .frame(width: size.width, height: size.height)
                         .accessibilityIdentifier("panel-usage-card")
@@ -112,6 +114,7 @@ struct LanDisplayPage: View {
         }.accessibilityIdentifier("panel-split")
     }
 
+    /// Hooks 区域：按布局分页，超过一页时提供左右翻页。
     private func hooksPane(size: CGSize) -> some View {
         let hooks = snapshot?.hooks.sorted(by: { $0.slot < $1.slot }) ?? []
         let warning = state.assetWarning ?? (snapshot?.catalogError != nil ? "图片配置暂不可用" : nil)
@@ -159,6 +162,7 @@ struct LanDisplayPage: View {
         }
     }
 
+    /// 一页 Hooks：单张或 2×2 网格，空位显示“空闲”。
     private func hookPage(_ hooks: [LanDisplaySnapshot.Hook], page: Int, size: CGSize) -> some View {
         let columns = hookLayout.columns
         let gap: CGFloat = columns == 2 ? 8 : 0
@@ -188,6 +192,7 @@ struct LanDisplayPage: View {
         }.frame(width: size.width, height: size.height)
     }
 
+    /// 没有 Hook 或 Hooks 不可用时的占位格。
     private func hookPlaceholder(_ title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: "tray").accessibilityHidden(true)
@@ -197,6 +202,7 @@ struct LanDisplayPage: View {
             .cyberSurface(tint: DisplayStyle.violet)
     }
 
+    /// 详情页顶部的状态胶囊。
     private func hookStatus(_ hook: LanDisplaySnapshot.Hook) -> some View {
         Text(hook.behavior.label).font(.caption.weight(.medium))
             .foregroundStyle(behaviorColor(hook.behavior))
@@ -228,6 +234,7 @@ struct LanDisplayPage: View {
             .foregroundStyle(.white).cyberSurface(sweeping: true)
     }
 
+    /// 活动状态到颜色的固定映射。
     private func behaviorColor(_ behavior: WidgetHook.Behavior) -> Color {
         switch behavior { case .running: return DisplayStyle.accent; case .asking: return DisplayStyle.amber; case .error: return .red; case .idle: return .secondary }
     }
@@ -239,7 +246,7 @@ private struct HookPreview: Identifiable {
     var id: Int { hook.slot }
 }
 
-/// The header is measured at its real text size; the image receives the tile's remaining viewport.
+/// 活动卡片：按标题的真实高度测量，剩余空间全部留给图片。
 private struct HookPanelTile: View {
     let hook: LanDisplaySnapshot.Hook
     let asset: LanImageAsset?
@@ -255,7 +262,7 @@ private struct HookPanelTile: View {
             let gap: CGFloat = grid ? 6 : 10
             let width = max(1, geometry.size.width - padding * 2)
             let available = geometry.size.height - padding * 2 - headerHeight - gap
-            // Only extremely short/a11y cards overflow; their image stays reachable by scrolling.
+            // 只有极矮或大字号辅助模式下才会溢出，此时图片仍可滚动查看。
             let imageHeight = max(min(44, width), available)
             ScrollView {
                 Button(action: openDetails) {
@@ -315,6 +322,7 @@ private struct UsagePanelCard: View {
     let hasError: Bool
     let detail: UsageDetail
     var quota: ProviderQuotaSnapshot? = nil
+    var cachedReceivedDate: Date? = nil
     var canRefresh = false
     var onRefresh: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var dynamicType
@@ -367,23 +375,33 @@ private struct UsagePanelCard: View {
     private var header: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
-                Text("Token 用量").font(.caption.weight(.medium)).fixedSize()
+                usageTitle.fixedSize()
                 if canRefresh { Button("刷新", action: onRefresh).font(.caption).accessibilityIdentifier("quota-refresh") }
                 Spacer(minLength: 8)
                 if let tokens { Text(tokens.day.date).font(.caption2.monospacedDigit()).fixedSize() }
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Token 用量").font(.caption.weight(.medium))
+                usageTitle
                 if canRefresh { Button("刷新", action: onRefresh).font(.caption).accessibilityIdentifier("quota-refresh") }
                 if let tokens { Text(tokens.day.date).font(.caption2.monospacedDigit()) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.foregroundStyle(.white.opacity(0.6))
     }
 
+    private var usageTitle: some View {
+        Text(cachedReceivedDate == nil ? "Token 用量" : "Token 用量 · 缓存")
+            .font(.caption.weight(.medium))
+            .accessibilityLabel(cachedReceivedDate.map {
+                "Token 用量，缓存，上次同步 \($0.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))"
+            } ?? "Token 用量")
+    }
+
+    /// 行距随卡片高度在 8～20pt 之间缩放。
     private func rowSpacing(_ size: CGSize) -> CGFloat {
         min(20, max(8, size.height * 0.035))
     }
 
+    /// 总量数字字号：同时受卡片宽高约束，并跟随系统字号缩放。
     private func numberSize(_ size: CGSize) -> CGFloat {
         let compact = detail == .compact
         let widthLimit = size.width * (compact ? 0.22 : 0.14)
@@ -392,6 +410,7 @@ private struct UsagePanelCard: View {
         return base * numberScale
     }
 
+    /// 总量大字与完整整数；大字号辅助模式下改为横向滚动，不截断。
     private func summary(_ tokens: WidgetTokens, size: CGSize) -> some View {
         VStack(spacing: detail == .detailed ? 2 : 5) {
             if dynamicType.isAccessibilitySize {
@@ -407,6 +426,7 @@ private struct UsagePanelCard: View {
         }.frame(maxWidth: .infinity)
     }
 
+    /// 详细模式下各 Agent 的用量与额度明细。
     private func agents(_ tokens: WidgetTokens, size: CGSize) -> some View {
         let spacing: CGFloat = dynamicType.isAccessibilitySize ? 8 : 6
         let columns = Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading),
@@ -429,7 +449,8 @@ private struct UsagePanelCard: View {
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: spacing) {
                 ForEach(rows) { row in
-                    if let tokenText = row.tokenText {
+                    switch row.presentation {
+                    case .headline(let tokenText):
                         VStack(alignment: .leading, spacing: 2) {
                             GeometryReader { geometry in
                                 ViewThatFits(in: .horizontal) {
@@ -444,7 +465,7 @@ private struct UsagePanelCard: View {
                                 agentDetailLine(row.tokenAmount, quota: row.quotaEntry)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                    } else if let entry = row.quotaEntry {
+                    case .quotaOnly(let entry):
                         ProviderQuotaEntryRow(provider: entry, detailed: true, contentWidth: rowWidth)
                     }
                 }
@@ -455,6 +476,7 @@ private struct UsagePanelCard: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 明细行标题：Agent 名称与压缩后的用量。
     private func agentHeadline(_ row: WidgetUsageRow, tokenText: String, size: CGSize) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             agentName(row.displayName, size: size).fixedSize(horizontal: true, vertical: false)
@@ -479,6 +501,7 @@ private struct UsagePanelCard: View {
         }.frame(height: exactLineHeight)
     }
 
+    /// 明细行第二行：额度条与完整用量。
     private func agentDetailContents(_ amount: WidgetAmount?, quota: ProviderQuotaEntry?, barWidth: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 6) {
             if let quota { inlineQuota(quota, barWidth: barWidth) }
@@ -489,6 +512,7 @@ private struct UsagePanelCard: View {
         }
     }
 
+    /// 紧凑的额度窗口：标签、百分比和细进度条。
     private func inlineQuota(_ entry: ProviderQuotaEntry, barWidth: CGFloat) -> some View {
         HStack(spacing: 6) {
             ForEach(entry.windows, id: \.kind) { window in
@@ -505,16 +529,19 @@ private struct UsagePanelCard: View {
         }
     }
 
+    /// Agent 名称字号随卡片宽度缩放。
     private func agentName(_ name: String, size: CGSize) -> some View {
         Text(name)
             .font(.system(size: min(24, max(16, size.width * 0.04)) * rowScale, weight: .bold))
             .foregroundStyle(.white.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
     }
 
+    /// 明细数字字号。
     private func agentNumberSize(_ size: CGSize) -> CGFloat {
         min(26, max(16, size.width * 0.045)) * rowScale
     }
 
+    /// 压缩显示的 Agent 用量，读屏仍读完整值。
     private func agentTotal(_ tokenText: String, size: CGSize) -> some View {
         Text(TokenNumber.compact(tokenText))
             .font(.system(size: agentNumberSize(size), weight: .medium).monospacedDigit())
@@ -537,6 +564,7 @@ private struct UsagePanelCard: View {
         }
     }
 
+    /// 总 Token 大字；数值变化时滚动过渡，动效关闭时直接替换。
     private func total(_ tokens: WidgetTokens, size: CGSize) -> some View {
         Text(tokens.all.compactText)
             .font(.system(size: numberSize(size), weight: .medium, design: .rounded).monospacedDigit())
@@ -546,6 +574,7 @@ private struct UsagePanelCard: View {
             .accessibilityLabel("总 Token \(tokens.all.text)")
     }
 
+    /// 完整整数，可选中复制。
     private func exactText(_ amount: WidgetAmount) -> some View {
         Text(amount.exactText + " Token").font(.caption2.monospacedDigit())
             .foregroundStyle(.white.opacity(0.65))
@@ -595,6 +624,7 @@ private struct ProviderQuotaEntryRow: View {
         }.accessibilityIdentifier("quota-\(provider.provider)")
     }
 
+    /// 单个额度窗口：标签、百分比、进度条与重置时间。
     private func row(_ window: ProviderQuotaWindow, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -614,6 +644,7 @@ private struct ProviderQuotaEntryRow: View {
     }
 }
 
+/// 额度数据的采样时间。
 private func quotaObservedTime(_ quota: ProviderQuotaSnapshot) -> some View {
     Text("额度更新 \(quota.observedDate.formatted(.dateTime.month().day().hour().minute()))")
         .font(.caption2).foregroundStyle(.white.opacity(0.5))

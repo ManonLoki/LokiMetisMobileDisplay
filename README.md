@@ -1,158 +1,259 @@
-# LokiMetrisDisplay
+# LokiMetrisDisplay · 诡秘神谕
 
-This is a Kotlin Multiplatform project targeting Android, iOS.
+诡秘神谕桌面客户端：[https://github.com/ManonLoki/LokiMetis](https://github.com/ManonLoki/LokiMetis)
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+把电脑上的 AI 编程工具用量、账户额度和运行状态，放到手机、平板、手表和小组件上，方便随时看一眼。
 
-* [/sharedLogic](./sharedLogic/src) is for the code that will be shared between app targets in the project.
-  The most important subfolder is [commonMain](./sharedLogic/src/commonMain/kotlin). If preferred, you
-  can add code to the platform-specific folders here too.
+数据由 [桌面端 LokiMetris](https://github.com/ManonLoki/LokiMetis) 采集，本项目负责显示。两端通过局域网连接，首次配对后自动重连。中文系统里的应用名是“诡秘神谕”，其他语言显示为“LokiMetris”。
 
-* [/sharedUI](./sharedUI/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./sharedUI/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./sharedUI/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./sharedUI/src/jvmMain/kotlin)
-    folder is the appropriate location.
+- 想直接使用：看 [安装与连接](#安装与连接)。
+- 想改代码：看 [从源码启动调试](#从源码启动调试)。
+- 想了解工程：看 [文件结构](#文件结构) 和 [项目架构](#项目架构)。
+- 准备发版：按 [发布检查清单](docs/06-发布检查清单.md) 核对文档。
 
-### 菜单与面板
+## 能做什么
 
-- **展示台**：导航入口统一命名为“展示台”，内容区不显示页面标题、连接／缓存状态栏或自定义按钮；面板配置统一从设置进入。用量与 Hooks 图文平分可用内容区，竖屏上下各半、横屏左右各半，不再显示槽位统计摘要或外层 Hooks 标题；断开、进入后台、切换桌面或重启后清空Token与Hooks，等待当前连接的新快照。连接与配对入口保留在设置中。
-- **设置**：使用低对比石墨分组、青色选中态和统一图标；Token 与 Hooks 的开关和显示选项各自归组，精简／详细和 1×1／2×2 带布局示意并即时保存。桌面连接集中展示发现、配对与连接状态，本机名称独立编辑、修改后显示保存按钮，设备信息折叠收纳。iOS 的 Watch 与小组件说明也收在此处，iOS 在无障碍字号下将选择项纵向排列。
-- 用量支持**精简**与**详细**。Token 与 Hooks 各占一半可用内容区，不再选择 1×1／2×2 卡片尺寸；只开启一个模块时占满内容区。两块内容独立滚动。Hooks 可独立选择 **1×1／2×2**：1×1 每页一张，图片使用标题和状态下方全部剩余空间；2×2 将 Hooks 区域等分成四张卡片，不足四张保留空位，超过四张按每页四张左右分页。卡片仅显示标题、状态与图片，点击可查看完整正文和图片；图片按比例完整显示。Token 主数字使用 K／M／B 近似值（最多两位小数），下方小字保留完整整数；精简款根据卡片可用宽高放大总量并居中展示，详细款自适应总量、间距与 Agent 明细排版，窄卡片或大字体下明细自动换行，内容较多仍可滚动。日期收在卡头，时区位于详细模式明细区首行；Agent 类型名称加粗放大，完整数字在对应简化数字下方右对齐。显示配置保存在本机，卡片可全部关闭。
-- 手机使用底部导航；Android 宽屏使用侧栏和双栏设置，iPad 使用侧栏与多列展示台。Hooks 图片随卡片剩余空间伸展，点击可查看详情。Watch 使用独立速览，主界面不显示设置齿轮；小组件按系统尺寸组织最近一次同步的摘要与时间。采用深色赛博主题：冷青与紫色光边、细网格、局部扫光、分层入场和数值更新过渡。手机保留原生触控反馈，平板增加悬停反馈；Watch 仅使用短促入场与更新反馈，小组件保持静态光边。持续装饰动画受前台、页面及滚动可见性控制，响应系统减弱动态效果／禁用动画设置。
-- 发现随前台生命周期自动运行，无开启/停止开关。首次配对仍需用户选择桌面；已保存的配对可自动认证重连。后台暂停，回到前台恢复，切换菜单不会重新配对。
+- **看 Token 用量**：Token 是模型处理内容的计量单位。可以查看总量和各工具的用量，选择大字精简模式或分项详细模式，同时保留完整整数和统计日期。
+- **看账户额度**：显示桌面提供的 Codex、Claude、Cursor、Grok 等账户剩余额度，包括实际存在的每月、每周、五小时（5h）周期。
+- **看 Agent 活动（Hooks）**：了解哪个工具正在运行、等你确认、出错或空闲，查看对应文字与图片。手机和平板支持每页一张或四张卡片，点开可看详情，也支持动图。
+- **自动连接电脑**：打开 App 自动寻找已配对电脑；首次选择电脑、完成四位码配对，之后自动认证连接。
+- **按屏幕调整布局**：适配手机、平板、横竖屏和大字号；展示台的用量与 Hooks 可以独立开关。
+- **备份配对**：Android 和 iOS 都能导出加密配对文件，配合单独保存的恢复码，在重装后恢复连接授权。
 
-### 配对身份、备份与重装
+各端还有自己的使用方式：
 
-iOS 将本机 UUID 与配对秘密分别保存在本机私有 Keychain，均不同步。已有 `Discovery/device-id` UUID 原值迁移；卸载后旧文件缺失时，只在旧配对记录归属于唯一合法本机身份时恢复，不按名称、IP 或时间猜测，也不改绑原密钥。多组身份、冲突、损坏或钥匙串不可访问时明确报错。Keychain 跨卸载保留是系统现有行为，不能代替备份，也不承诺抹机、换设备或签名访问组变化后仍可自动连接。
+| 入口 | 可以怎么用 |
+| --- | --- |
+| Android App | 手机、平板上看完整面板；可开启后台实时同步，并在通知栏保留运行通知 |
+| Android 桌面小组件 | 调整尺寸，查看最近一次同步的用量、额度和活动摘要，点击刷新 |
+| Android 悬浮窗 | 拖动、折叠小窗，在其他应用上方切换 Hooks、Token、额度三页 |
+| iPhone / iPad App | 看完整面板；断线、进入后台或重启后继续显示最近一次缓存 |
+| iOS 小组件 | 桌面小号／中号，以及锁屏单行／圆形／矩形摘要 |
+| Apple Watch | 左右切换 Hooks、Token、额度；自动沿用已配对的 iPhone，支持离线缓存和常亮显示（Always On） |
 
-Android 与 iOS 的设置均提供“配对备份与恢复”。卸载前导出加密 JSON 文件，并单独保管随机 256 位恢复码；重装后选择文件、输入恢复码、核对设备 ID 和桌面配对数量，再确认恢复。包只含原 UUID 及成对配对材料，不含 Token、Hooks 正文、图片、网络地址、组件或手表只读配置。两移动平台使用同一带版本的 AES-256-GCM 格式、固定域 AAD，拒绝篡改、错误恢复码、重复身份和越界记录。文件与恢复码共同持有即可恢复授权，应分开妥善保管。
+后台更新的节奏由系统决定：Apple 的 App 后台任务、小组件和 Watch 申请间隔为 **5 分钟**；Android 普通后台任务申请间隔为 **15 分钟**。这些都是申请时间，省电策略可能让实际更新更晚。Android 开启“后台实时同步”后，会尽量保持已配对电脑的连接。
 
-恢复仅允许没有不同配对的安装，不能静默覆盖现有信任。导入先停旧网络 owner，再提交持久化事务，成功后重新建立连接；Android 用新 Keystore 密钥重新加密，未完成事务在启动时先回放；iOS 只有完整材料读回验证后才提交身份，中断后可重新导入同一个包继续。恢复旧备份可能包含后来忘记的配对；对端已撤销的秘密仍不能通过认证。Android 系统备份不携带设备 UUID 或无法跨卸载解密的配对密文。
+离线时，iPhone、iPad、Watch 和小组件可以保留上次结果；**Android 主面板只显示当前连接的数据**，断线后清空，桌面小组件单独保留摘要。Watch 优先从手机获取数据，手机不可达时可直接向电脑读取摘要；新图片和正文仍需通过手机同步。电脑需在线且局域网可达，才能取得新数据。
 
-Android Debug 和 Release 均使用项目 `signing/` 中的固定签名；本机已将原开发证书保存到项目，保持现有签名兼容。私钥与随机密码文件被 Git 忽略，公开证书可以核对；换电脑需安全迁移原签名文件。首次配置及生成选项见 [签名说明](signing/README.md)。签名一致支持保留数据的覆盖安装；真正卸载后仍需要配对恢复文件，固定签名不能恢复已删除的 Keystore 密钥。
+## 支持哪些设备
 
-2026-10-21 验证：Android 54 项共享宿主测试（含7项恢复专项）、Apple 16项身份／恢复专项通过，Android Debug／Release 签名 APK 和 iOS／Watch 模拟器构建通过。两种 APK 的证书与原开发 APK 一致；跨移动端固定密码向量一致。中断回放使用临时目录与合成材料测试，未卸载真实设备应用、导入真实用户配对或宣称实机恢复验收通过。桌面正式／测试实例区分及其独立加密账本恢复已在桌面仓库实现，桌面恢复文件与移动端文件按角色区分。
+| 设备 | 最低系统 | 说明 |
+| --- | --- | --- |
+| Android 手机、平板 | Android 12（API 31） | 当前原生库包含 `arm64-v8a`、`x86_64`，可用于相应真机和模拟器 |
+| iPhone | iOS 18.2 | 原生 SwiftUI 应用 |
+| iPad | iPadOS 18.2 | 支持平板布局和多窗口共用连接 |
+| Apple Watch | watchOS 11.0 | iPhone 配套应用，首次配置需要已配对的 iPhone；Always On 由表款和系统设置决定 |
 
-### iOS 局域网接线
+本仓库目前提供上述移动端及其小组件。电脑端在独立的 [LokiMetis 仓库](https://github.com/ManonLoki/LokiMetis)，Wear OS、电视和网页端尚无对应构建目标。
 
-iPhone在前台自动浏览桌面`_loki-host._tcp.local.`服务，在手机设置中选择桌面。首次选择候选时手机显示四位码，桌面自动弹出配对窗口供用户输入。候选广告没有授信作用；共享Rust验证、真实Keychain保存和ACK完成后，手机另开TCP认证，收到首个真实snapshot才显示已连接。
+## 安装与连接
 
-`LanLinkEngine`串行拥有Network浏览/连接、一个共享密码桥、Keychain及图片接收。窗口内的socket重试不重开四位码或返还次数；密码窗口60秒/5次由共享Rust唯一控制。进入后台尽力发送pause后关闭，前台自动重新发现和认证，无需开启发现。网络重试最多8次，真正前台恢复/目标新广告可开启新一轮。切菜单与保存名称不启停网络。
+当前发布版本为 **1.0.3**：Android 构建号 **5**，iPhone／iPad、Watch 与 Widget 构建号 **11**。改动和验证结果见 [v1.0.3 发布说明](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/tag/v1.0.3)。
 
-App主线程只接收最新投影，写队列最多8帧；坏帧、认证失败或半写失败关闭socket，不跳过已经消耗的加密序号。Keychain失败不发送ACK；单边保存后仍支持“忘记”再重新配对。当前可见的名字来自发现广告，UUID/信任及在线结果以认证连接为准。
+### 直接安装
 
-Token与Hooks只存在当前认证连接的内存中，不保存或恢复历史展示快照；升级时精确清理旧`DisplayCache/display-lan-v1.json`。图片只按内容哈希保存在私有`lan-assets-v1`，逐16KiB块由共享Rust验证，最后同步磁盘并重新核验，再原子提交；缓存命中不请求正文。只下载当前Hook实际引用的图片，保留当前引用并按复用时间收敛到512MiB，启动精确回收上次崩溃的部分文件。图片支持 BMP、PNG、JPEG、WebP、GIF。后台 ImageIO 解码保留 GIF、动态 PNG、动态 WebP 的帧时长与循环次数；展示边长最多512像素，原图最多16MP、动画最多512帧、每图已解码帧最多8MiB，超限明确提示。
+**Android**：到 [Releases](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases) 下载该版本的 APK，允许安装后打开。发布包附带 `SHA256SUMS` 可供校验。升级时使用同签名 APK 覆盖安装，可以保留本机数据。
 
-本次 iOS 模拟器完整 App 构建通过，已检查面板配置和既有真实缓存的展示。Swift 测试覆盖自动发现、后台恢复、五格式解码、动画时长与资源边界；不把这些检查等同于新的桌面到手机配对互通验收。
+**iPhone / iPad / Apple Watch**：当前采用 Xcode 开发签名安装，按下文的源码调试步骤运行。Apple 包随开发者签名与设备配置安装；iPhone 宿主同时包含 Widget 与 Watch 应用。实体 Watch 是否安装成功，要在手表上单独确认。
 
-### Android 局域网接线
+### 第一次连接电脑
 
-`DisplayApplication`持有一个串行`AndroidLanEngine`，`MainActivity`只订阅投影和申请权限。旋转屏幕、菜单切换和保存名称不重开密码窗口；未开启后台实时同步时，真实进入后台尽力发送加密pause并关闭连接。首次进入前台自动发现，系统本地网络权限满足后继续浏览。设备ID和名称沿用原`mdns_identity`位置，损坏身份失败关闭。
+1. 在电脑上启动桌面端 LokiMetris，让电脑和移动设备处于同一局域网，并允许系统提示的本地网络访问权限。
+2. 打开移动 App，进入“设置”，在发现的电脑列表中选择要连接的电脑。
+3. 手机显示四位码后，在电脑弹出的配对窗口输入该码。
+4. 等待显示“已连接”，回到“展示台”查看数据。以后打开 App 会自动连接保存的配对。
 
-手机主动浏览桌面`_loki-host._tcp.local.`；旧的只能接受后立即关闭的广播owner已移除。API34及以上持续订阅服务信息，旧版一次只做一个解析并定期刷新；只在前台发现期间持有旧系统需要的多播锁。临时地址来自实际SRV结果，不持久化IP；TXT不授信。局域网的访客隔离、VPN和系统权限可能影响发现。[NSD官方合同](https://developer.android.com/reference/android/net/nsd/NsdManager)（2026-10-21核对）。
+Android 小组件可从设置快捷添加，也可长按桌面，从“诡秘神谕／LokiMetris”的小组件列表添加。iOS 安装后先打开一次 App、完成同步，再在桌面或锁屏添加小组件。
 
-显式选择才开启共享Rust配对窗口；Keystore加密的私有记录同步提交成功、且commit仍有效后才发送ACK。SharedPreferences提交失败也会更新其系统内存，因此应用只发布已成功提交的权威映射，下一次写入完整映射，防止失败保存/忘记改变信任。新TCP认证、裸DeviceInfo、加密心跳与完整快照沿用桌面协议。最多8次传输重试，不重置密码预算。
+Watch 使用系统已配对的 iPhone，打开手表应用即可自动同步，无需再和电脑配对。想让抬腕后的界面停留更久，可在手表“设置 → 通用 → 返回表盘”中为本应用调整返回时间。
 
-完整快照只保留在当前连接内存，断开/后台/换目标立即清空，启动精确清理旧`lan-display-v1.json`及其`.new/.bak`，配对凭据保留。图片按摘要保存在`lan-assets-v1`。每次复用和落盘完成均由Rust核验真实正文，AtomicFile静默提交失败也必须读回发现并清理部分文件。当前Hook引用优先保留，其余缓存收敛到512MiB/512文件。后台使用系统 ImageDecoder 解码最多512像素的图片，原图最多16MP；原生 Drawable 保留 GIF/WebP 动画，离开面板或进入后台停止播放。网络及缓存JSON进入系统解析器前检查严格语法与64层深度上限。
+Watch 后台刷新以展示数据为主，缺失的新图片在手表回到前台后继续通过手机补齐。
 
-Android APK 构建与共享宿主测试通过。模拟器检查覆盖两菜单、显示偏好持久化、横竖屏等分、精简/详细、独立滚动与模块开关；这些属于本次 UI 回归，不替代真实桌面配对互通验收。
+卸载前可在“设置 → 配对备份与恢复”导出文件，并分开保存恢复码。覆盖升级与卸载重装对配对数据的影响不同，具体见 [签名说明](signing/README.md)。
 
-### Android 小组件、悬浮窗与后台同步
+## 从源码启动调试
 
-设置中的“小组件与后台”提供添加桌面小组件、立即同步、后台实时同步和悬浮窗入口。该分组位于面板显示、桌面连接和本机设置下方，占满内容区；三张功能卡片按实际宽度及字号排为一至三列，同行等高，窄屏按顺序纵向排列。小组件使用系统 `AppWidgetProvider` / `RemoteViews`，支持横竖尺寸调整，显示 Token 缩写及精确值、日期、Hooks 四态和上次同步时间；点击主体打开 App，刷新按钮提交一次后台任务。启动器不支持快捷添加时，可长按桌面，在“诡秘神谕”（非中文环境为 LokiMetris）的小组件列表添加。组件内容始终表示上次同步摘要，断线不会伪装成实时在线。
+以下命令在仓库根目录执行，以 macOS 为例。Apple 端当前只配置了 arm64 真机与模拟器构建，完整开发流程使用 **Apple Silicon Mac**。
 
-普通后台由系统 `JobScheduler` 持久化申请每 15 分钟执行一次加密 HTTP 读取，重启后仍由系统调度；立即同步使用独立的一次性任务。网络约束只要求 Wi-Fi 或以太网，不要求互联网验证；客户端根据实际目标的本地路由选择网络。桌面需支持 `widgetHttpV1` 并曾在前台完成认证同步，以授予组件专用只读配置。固定路径 `POST /api/widget/v1/snapshot` 使用独立32字节密钥及 ChaCha20-Poly1305；响应绑定本次请求 nonce 与桌面身份，拒绝代理、重定向和越界正文，总期限6秒。离线或失败保留上次摘要，不更新同步时间。系统省电、配额和厂商策略可能延后任务，不保证准点或息屏实时更新。[JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler)。
+### 1. 准备工具和源码
 
-需要更及时的更新时，可显式开启“后台实时同步”。`connectedDevice` 前台服务显示持续通知，复用同一个 LAN owner 接收已配对桌面的认证快照推送；关闭服务后恢复普通后台模式。首次配对仍只能在 App 前台开启，离开前台会撤销尚未完成的配对窗口。服务不在开机或进程结束后自动启动；系统休眠仍可能暂停网络，不以常驻通知承诺不被回收，也不接入云推送。[前台服务类型](https://developer.android.com/develop/background-work/services/fgs/service-types#connected-device)。
+| 工具 | 用途与要求 |
+| --- | --- |
+| JDK 21 | Gradle 构建；仓库的后台进程配置指定 Azul 21 |
+| Android Studio、Android SDK、NDK | Android 开发；安装 SDK Platform 37、Platform Tools 和 NDK，NDK 需包含 API 31 的 Clang |
+| Xcode | Apple 开发；需包含符合上表系统要求的 SDK 和模拟器运行时，选为当前命令行工具目录 |
+| Rust / Cargo / rustup | 编译共享配对与加密核心，工具链版本满足所选桌面仓库 `Cargo.toml` 的要求 |
+| Python 3 | 运行仓库自带的构建与签名脚本，脚本只使用标准库 |
 
-悬浮窗使用系统“显示在其他应用上层”授权，可拖动标题、折叠、关闭；关闭窗口后后台同步继续，停止后台同步则窗口和连接一并关闭。小窗按 Hooks、Token、额度分成三页，首次显示中间的 Token 页，左滑看额度、右滑看 Hooks，保存最后所在页；标题仍用于拖动，内容区纵向滚动。窗口显示当前认证连接的数值及同步时间，断线清空实时数值；锁屏或息屏时移除，解锁后按用户原意恢复，权限撤销时安全关闭窗口。窗口尺寸与位置限制在屏幕安全区域内。
+Gradle 使用仓库的 `./gradlew`，依赖版本由清单和 Wrapper 管理。首次构建会下载所需的 Gradle、Kotlin 和 Cargo 依赖。
 
-普通 App 面板仍只接收当前连接的完整快照。小组件专用 `noBackupFilesDir/android-widget-v1/summary-v1.bin` 仅保存用量与 Hooks 四态，不保存正文和图片；读取配置由 Android Keystore 的 AES-GCM 密钥加密，不包含长期配对秘密。同进程多入口使用同一把锁原子提交，来源、端点或只读密钥变化会撤销旧代次；迟到 HTTP 不能覆盖较新推送、换桌面或忘记配对后的状态。损坏摘要可以由新合法快照重建，撤销组件缓存不依赖读取损坏内容。无额外第三方运行依赖。
+**完整 App 还依赖桌面仓库的 Rust 源码。** 把两个仓库都准备好，并选用与目标移动版本兼容的桌面提交：
 
-2026-10-21 验证：Debug / Release APK 构建、Lint（零错误）和47项共享宿主测试通过；API31真实系统的9项HTTP/密码探针覆盖成功、篡改/错源、重定向、大小/深度、取消与总期限，包含阻塞disconnect时约6秒返回。API31联想平板收到真实桌面推送，悬浮窗拖动和息屏隐藏通过。API37模拟器完成真实桌面→App→小组件，以及通知权限、connectedDevice常驻服务启停；App退后台且无常驻服务时，强制触发周期任务和点击组件刷新按钮均独立拉取并推进摘要接收时间。强制触发不代表自然15分钟调度、Doze或厂商省电验收。联想启动器快捷添加的实时预览曾触发其自身ClassCastException，已改用静态空态预览；该机随后断开ADB，兼容修复尚待同机复测。
+```sh
+git clone https://github.com/ManonLoki/LokiMetisMobileDisplay.git
+git clone https://github.com/ManonLoki/LokiMetis.git
+cd LokiMetisMobileDisplay
+```
 
-### 手机与平板类型上报
+下面的 `/absolute/path/to/LokiMetis` 都要替换成你本机桌面仓库的绝对路径。默认路径是原开发环境的目录，新环境应显式指定。
 
-Android在应用级owner创建时读取系统最小宽度配置（≥600dp为平板尺寸类，未知配置不报告）；iOS在主线程从UIKit取得phone/pad类别。名称和页面宽度不参与类型选择。每条认证连接只有收到实时snapshot的`deviceFormFactorV1`能力后，才发一次`deviceFormFactor`报告；旧桌面无能力时不发，缓存不能启用能力，重新连接重新协商。桌面未取得报告时使用中性图标。Android尺寸类别不能保证所有折叠/桌面窗口模式的物理形态识别。
+### 2. Android：编译、安装、打断点
 
-形态协商的Kotlin测试3项、Swift类型与既有Watch能力回归14项通过；未据此声明新包安装或平板真机互通通过。
+在 Android Studio 中打开本仓库，通过 SDK Manager 准备 SDK 与 NDK。SDK 路径放在本机 `local.properties` 的 `sdk.dir` 中；也可以设置 `ANDROID_HOME`，需要指定 NDK 时设置 `ANDROID_NDK_HOME`。这些路径无需提交到仓库。
 
-### Apple Watch配套接线
+准备 Rust 的 Android 编译目标：
 
-同一Xcode工程包含现代单target `LokiMetrisWatch`，随iPhone宿主嵌入；Watch不链接Kotlin/Rust，也不创建独立TCP或Bonjour服务。Hooks、Token和额度使用原生水平分页，首次默认中间的Token总量页，向左滑看额度、向右滑看Hooks；保存最后所在页，重新打开时恢复。主界面不显示设置齿轮。Hooks 固定每屏一张卡片，上下滚动或转动表冠吸附切换；类型与状态以较小字号合并在顶部一行，其余可用空间全部用于等比完整显示图片，不显示外层 Hooks 标题、槽位编号或数量。账户额度页只显示账户类型、各周期剩余额度及细进度条，不显示顶部标题、更新时间或重置时间。Hooks 卡片直接停留在当前页，点击不进入详情。稳定安装UUID与名称保存在Watch私有不备份目录，系统Watch配对与桌面四位码各自独立。
+```sh
+rustup target add aarch64-linux-android x86_64-linux-android
+```
 
-手机实时连接可用时，`PhoneWatchBridge`通过`sendMessageData`按16KiB块逐块确认，单RPC最多32KiB；Watch完整验证后接纳到当前前台内存，相同图片摘要可复用，复用手机端的多帧解码与播放器，支持 GIF、动态 PNG 和动态 WebP 的原始帧时序与循环；每张限制256像素及2MiB解码帧内存。仅当前可见的 Hooks 图片播放，切页、离屏、减弱动态效果或低亮度时暂停。手机通道不可达、后台或请求超时后，Watch自动用`URLSession`直接调用电脑已有的`POST /api/widget/v1/snapshot`；无需手机App保持前台，也不启动手机后台长连接。首次仍需在iPhone连接支持`widgetHttpV1`的桌面，由认证快照授予独立只读配置。手机通过最新`applicationContext`及请求回执下发配置，Watch将其保存在本机Keychain，不传主连接配对秘密；修订号防旧消息复活被撤销的目标，换桌面／忘记配对明确撤销旧配置。电脑地址变化后需由手机同步新配置。
+Debug 与 Release 都使用项目固定签名。换电脑时迁移原有 `signing/lokimetris.keystore` 和 `signing/signing.properties`；本机已有原开发证书时执行：
 
-HTTP复用现有ChaCha20-Poly1305、来源与请求nonce绑定、有界正文、拒绝代理／重定向及6秒总期限，只提供Token精确值／统计质量、日期和Hooks插槽四态，不包含正文或图片；手机恢复完整同步时替换摘要。Watch活跃期间使用原15秒心跳尝试刷新，每次只有一个HTTP请求，持续有效的手机分块优先于HTTP后备。手机暂停或刷新失败保留本次前台内存中的最近成功结果与原接收时间，设置披露连接方式及上次同步；退出Watch前台、换来源或撤销配置清空，Token与Hooks不落盘。请求捕获前台代次、配置与手机同步版本，退出、换目标或新手机数据到达后迟到HTTP结果不能覆盖。系统可能通过手机网络代理或手表Wi-Fi承载HTTP；需要电脑在线且局域网可达，不保证息屏更新，不启用APNs。
+```sh
+python3 scripts/prepare_android_signing.py
+```
 
-当前已完成移动源码与桌面独立Watch状态投影接线；只有实时认证快照广告watchCompanionV1后，手机才上送无IP的Watch回执事实，并引用桌面心跳作保守时间锚。相同ACK序号不能续期，父连接撤销会立即撤销手表可达。两端完整图文互通仍待运行验证。运行Watch开发目标可使用Xcode同名scheme；独立构建命令为`xcodebuild -project iosApp/iosApp.xcodeproj -target LokiMetrisWatch -configuration Debug -sdk watchsimulator CODE_SIGNING_ALLOWED=NO build`。不要把独立Watch构建或空态交互当作桌面到手表的完整E2E通过。
+真正首次安装、无需兼容旧签名时，用 `python3 scripts/prepare_android_signing.py --new-key` 初始化。签名材料的保存和迁移见 [signing/README.md](signing/README.md)。
 
-2026-10-21 历史验证（当时版本）：92 项 Swift 测试通过，iPhone／Watch 模拟器构建通过；42mm 模拟器的 Token、Hooks 1×1 与 2×2 布局截图均无裁切。隔离副本在无 iPhone 时，使用真实 Watch owner 与加密 HTTP 客户端成功取测试服务摘要并显示；仅在测试副本绕过未签名模拟器不可用的 Keychain 加载，正式源码无测试配置。Keychain 持久化与真实手机／手表之间的配置下发、通道切换仍待实机验收。
+将 Android SDK 的 `platform-tools` 加入 `PATH`，以便终端找到 `adb`。真机先开启“开发者选项 → USB 调试”，连接电脑后允许调试授权；模拟器从 Android Studio 的 Device Manager 启动。
 
-### iOS 桌面与锁屏小组件
+编译并安装到已连接的设备或已启动的模拟器：
 
-`iosApp`工程包含独立的`LokiMetrisWidgets`扩展，支持桌面小号/中号和锁屏单行/圆形/矩形。安装后先启动App，再在系统小组件列表添加“诡秘神谕”。常亮显示由设备和系统决定；组件优先读取最近一次合法本地摘要，系统唤醒Timeline时可独立通过HTTP向已配对桌面拉取；断连、后台和重新启动后保留，并标明“上次同步”与统计日期；切换桌面或忘记当前配对时清除。Timeline使用`.after`统一申请 15 分钟后再次执行，Debug 与 Release 相同；前台同步与App后台认证短时拉取继续保留；实际执行可能明显晚于申请时间；电脑需在线且局域网可达，不保证息屏实时更新，也不启用云推送或组件长连接。[WidgetKit刷新规则](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date)（2026-10-21核对）。
+```sh
+./gradlew :androidApp:assembleDebug \
+  -PlokiDesktopRoot=/absolute/path/to/LokiMetis
 
-App与扩展的entitlements及Info.plist引用`Configuration/Config.xcconfig`中的同一`LOKI_WIDGET_APP_GROUP`。使用实际Apple开发团队签名时，需要该团队的App ID/扩展ID与App Group权限一致；当前没有代用户注册或修改开发者账号。共享容器不可用、首次尚未同步或文件损坏时，组件显示真实空态，不回退普通偏好存储。
+adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+adb shell am start -n com.manonloki.lokimetrisdisplay/.MainActivity
+```
 
-共享快照只保存来源UUID、接收时间、Token日期/十进制数字/质量和Hooks四态摘要；另一个有界文件保存Widget专用只读密钥、当前服务地址及代次，不共享长期配对密钥、Hook正文/图片或宿主路径。共享格式schema 2保留45秒连接租约，认证心跳才续期；组件作为上次同步结果读取，租约过期不删除摘要，旧格式、损坏或未来时间均显示空态。Timeline不再预排45秒后的空条目。失效请求和待发布快照共用最新待办槽，明确清除意图不会被暂停请求覆盖，写入失败会披露。`LanLinkEngine`只把成功`open`且通过完整展示解析的snapshot交给单一后台组件发布器；中间消息与主线程投递都只保留最新一份。正文仅在当前会话内存，图片在App私有目录，App Group包含最近一次摘要与独立读取配置；主App不从共享文件恢复Token或状态。iOS网络owner已接入，完整模拟器 App 构建通过；没有将空态或测试夹具当作已连接。
+需要断点调试时，选择 Android Studio 的 `androidApp` 运行配置和目标设备，点击 **Debug**。IDE 构建同样需要桌面源码路径，可在本机用户级 `~/.gradle/gradle.properties` 中设置：
 
-后台刷新使用 `BGAppRefreshTask`，任务标识为 `com.manonloki.lokimetrisdisplay.widget-refresh`。App 启动即注册，进入后台或每次任务开始时申请下一次刷新；与小组件 Timeline 共用 `WidgetSnapshot.refreshInterval`，Debug 与 Release 均申请 15 分钟间隔，这仅为最早执行时间，实际唤醒可能明显更晚。系统禁用后台刷新时不强行运行。任务复用唯一 LAN owner，使用最近一次成功认证桌面的 Bonjour 服务名重新解析地址，读取已有配对并完成加密认证；仅接收一份快照、写入 App Group 并请求组件刷新后结束，不下载图片、不同步 Watch、不在后台开启配对或持续重试。25 秒本地超时和系统 expiration 都会撤销连接代次；前台接管优先。离线或失败保留上次摘要，任务完成成功必须等待共享文件实际提交，不能仅以接收消息宣告成功。[后台任务配置](https://developer.apple.com/documentation/uikit/using-background-tasks-to-update-your-app)。
+```properties
+lokiDesktopRoot=/absolute/path/to/LokiMetis
+```
 
-配对秘密仍仅在 App 私有、不同步的 Keychain 中；访问级别为 `AfterFirstUnlockThisDeviceOnly`，已有 `WhenUnlockedThisDeviceOnly` 记录在前台逐条验证双端身份后迁移，只修改访问属性，保留秘密原字节。设备重启后需先解锁一次才能锁屏认证。后台目标只保存来源 UUID 与 Bonjour 服务名/类型/本地域，不保存固定 IP、配对秘密或完整快照，按设备身份隔离、首次解锁后可读并排除备份；换桌面或忘记配对时撤销旧目标，损坏元数据可在显式选择时精确清理。组件不读取配对秘密。新版桌面在认证快照中提供`widgetHttpV1`及`widgetEndpoint {version,port,key}`，手机将系统实际连接的对端地址与该端口组合，每次认证同步后更新；旧桌面缺少能力时清除独立读取配置，保留App原有同步。Widget每次Timeline执行只发起一次固定路径`POST /api/widget/v1/snapshot`，6秒总超时、有界响应、拒绝重定向。使用独立派生32字节密钥及ChaCha20-Poly1305加密请求/响应，响应绑定本次随机nonce与来源UUID；桌面在当前账本验证权限后短暂唤醒统计发布器，响应不含Hook正文或图片。离线/超时/坏响应不改变上次同步时间。共享文件锁保证换桌面、忘记配对和服务地址换代之后，旧在途响应不能写回；较新App摘要也不能被旧HTTP请求或心跳覆盖。[Keychain 可访问性](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly)。
+打 Release APK 时，把任务换成 `:androidApp:assembleRelease` 并保留路径参数；输出位于 `androidApp/build/outputs/apk/release/androidApp-release.apk`。
 
-`appleDisplay`使用SwiftPM运行共享投影/缓存的隔离单元测试，零第三方依赖。App与扩展直接编译该目录同一份Swift源码；扩展不链接Kotlin/Rust。开发测试：`swift test --package-path appleDisplay`。iPhone 前台同步与退到后台后的缓存保留已实机验证；独立自然后台刷新尚未完成排除主 App 唤醒影响的验收。15 分钟是统一的刷新申请间隔，系统自然调度的后台唤醒间隔、锁屏遮蔽和实际常亮由系统与设备决定，不能从调试触发或前台同步推断准点更新。
+### 3. iPhone / iPad：用 Xcode 运行
 
-Bonjour 返回的 IPv4 对端可能包含 `%en0` 等接口后缀。保存组件刷新目标时，IPv4 从原始四字节生成规范地址；IPv6 保留路由所需的接口作用域，避免已连接但 HTTP 目标校验失败。组件每次真实 Timeline 执行会在 App Group 的 `Library/Caches/WidgetRefresh/timeline.json` 记录开始时间、完成时间、结果及错误域/码，不记录地址、身份或密钥；没有目标会标记 `missingTarget`，网络失败保留旧摘要。Debug 构建使用启动参数 `--widget-http-probe` 可在不启动前台 LAN 连接的情况下运行同一 HTTP 路径，结果写入该目录的 `appProbe.json`；此探针不代表系统已自然调度组件。
+准备 Rust 的 Apple 编译目标并打开工程：
 
-### Running the apps
+```sh
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+open iosApp/iosApp.xcodeproj
+```
 
-Android、iOS、Apple Watch 及小组件的显示名称随系统语言选择：中文（含简体与繁体地区）为“诡秘神谕”，其他语言默认“LokiMetris”；项目名、应用标识与配对身份不参与名称本地化。Android、iOS 与 Apple Watch 统一使用桌面版的黑金眼睛图标。原始母版保存在 `branding/app-icon.png`；在 macOS 仓库根目录运行 `swift scripts/generate_app_icons.swift` 可重新生成各端资源，仅使用系统 SDK，不需要桌面仓库或第三方图像工具。Watch 使用独立的资源目录，并由同一 Xcode 工程编译图标。
+1. 在 Xcode 选择 **iosApp** scheme，选择 iPhone 或 iPad 模拟器。
+2. 在项目 Build Settings 添加用户自定义设置 `LOKI_DESKTOP_ROOT`，值为桌面仓库绝对路径；也可在本机修改 `iosApp/Configuration/Config.xcconfig`。
+3. 点击 **Run** 启动，设置断点后继续运行即可调试。Xcode 会自动编译 Kotlin framework 和 Rust 桥。
+4. 使用真机时，在 `Config.xcconfig` 配置自己的 `TEAM_ID`，并准备对应开发签名与设备描述文件。主 App 与 Widget 的 App Group（共享容器）配置要一致，Watch 的签名和配套应用标识也需匹配。继续覆盖已有安装时沿用原团队与应用标识。
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+`TEAM_ID` 会参与生成 Bundle ID 和 App Group，仅在 Signing 面板选择团队还不足以完成本项目配置。Xcode 的构建进程还需能找到 JDK、`python3` 和 `cargo`。
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+真机调试前，在 iPhone／iPad 开启开发者模式并信任这台 Mac，在 Xcode 的 Devices and Simulators 中确认设备可用。
 
-### Running tests
+只做完整模拟器构建，可使用：
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+```sh
+xcodebuild -project iosApp/iosApp.xcodeproj \
+  -scheme iosApp -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  LOKI_DESKTOP_ROOT=/absolute/path/to/LokiMetis \
+  CODE_SIGNING_ALLOWED=NO build
+```
 
-- Android tests: `./gradlew :sharedUI:testAndroidHostTest :sharedLogic:testAndroidHostTest`
-- iOS tests: `./gradlew :sharedLogic:iosSimulatorArm64Test`
+### 4. Apple Watch：选择手表目标
 
-广播协议测试覆盖桌面端要求的服务类型、TXT 字段、UUID 格式，以及中文／emoji 名称的 UTF-8 长度和控制字符边界。
+Xcode 选择 **LokiMetrisWatch** scheme 与 Watch 设备，点击 Run / Debug。验证手机同步时，使用已配对的 iPhone／Watch 模拟器组合或实体设备，先在 iPhone 完成桌面配对。
 
-### 发布与真机安装
+实体 Watch 同样需要开启开发者模式，并在 Xcode 的设备列表完成开发配对、确认可运行。
 
-当前发布版本为 `v1.0.2`：Android、iOS、Watch 与 Widget 统一为 `1.0.2`，构建号为 `4`。首个 GitHub Release 为 `v1.0.0`（版本 `1.0.0`，构建号 `2`）。Release 附件提供项目固定签名的 Android APK 及 `SHA256SUMS`；Apple 开发签名包用于本机设备安装，不作为公开附件或 App Store 发布。
+单独检查 Watch 能否编译：
 
-构建依赖桌面仓库的共享 Rust bridge。本次发布使用桌面提交 `2f75130524a94e38cc5386dfc4524ee1e7d2b5ed`；其 bridge、pairing 与 `Cargo.lock` 相对 `v1.0.1` 使用的桌面提交 `403401d76bfd24a42129f1c5bcdff2962b29d0c9` 无变化，仅工作区 `Cargo.toml` 版本从 `0.7.5` 变为 `0.7.10`。Android 可通过 `-PlokiDesktopRoot=/absolute/path/to/loki_metris` 指定源码位置，iOS 可通过 Xcode 构建设置 `LOKI_DESKTOP_ROOT=/absolute/path/to/loki_metris` 指定。Android 运行 `./gradlew :androidApp:assembleRelease`，签名配置见 [签名说明](signing/README.md)。iOS 使用 `iosApp` scheme 的 Release 配置，并显式提供原有 `TEAM_ID` 以保持应用标识和配对数据；同一包嵌入 Widget 和 Watch。实体 Watch 的安装与版本需单独核实，不能由 iPhone 安装成功推断。
+```sh
+xcodebuild -project iosApp/iosApp.xcodeproj \
+  -scheme LokiMetrisWatch -configuration Debug \
+  -sdk watchsimulator \
+  -destination 'generic/platform=watchOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO build
+```
 
----
+Watch 目标本身只依赖 Swift。端到端同步需要手机、电脑及有效配对，单独编译成功只能证明手表代码可构建。
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+### 5. 运行测试
 
+```sh
+# Apple 共享数据、缓存、传输与恢复逻辑，在 Mac 上运行
+swift test --package-path appleDisplay
 
-### 提供商额度与主动查询
+# Kotlin 共享逻辑和 Android 界面逻辑的宿主测试
+./gradlew :sharedLogic:testAndroidHostTest :sharedUI:testAndroidHostTest
 
-手机、平板、手表、悬浮窗及各尺寸组件均不显示“部分、估算、范围未知、待核对、完整／精确”等统计质量标签；底层质量字段保留，可用状态、真实数值、额度和时间照常显示。
+# Kotlin iOS 逻辑，在 Apple Silicon 模拟器运行
+./gradlew :sharedLogic:iosSimulatorArm64Test
+```
 
-桌面新版通过现有认证快照提供Codex、Claude、Cursor、Grok的额度：Cursor为每月，其它为每周及5h。Android手机／平板和iPhone／iPad继续在原Token卡片内整合额度：精简模式显示账户摘要；详细模式每个Agent使用两行，第一行名称与缩写总量左右排列，第二行在左侧按每月、每周、5h顺序放剩余百分比与细进度条，右侧保留完整Token整数。先给数字留足宽度再分配进度条长度，极窄或大字号时整条明细可横向查看。没有对应Token分项的账户仍单独保留，不重复铺设匹配额度分组。iOS 与 Android 详细面板按 Codex、Claude Code、Cursor、Grok、其他类型原有稳定顺序、WorkBuddy 排列；Cursor 缺少 Token 数据时仍保留在 WorkBuddy 前，Token 显示默认0；默认值仅用于展示，不写回统计总量或原始数据，也不补造额度窗口。WorkBuddy 固定最后，可滚动查看。明细首行采用左“设备时区”、右来源时区结构。Watch与Android悬浮窗采用独立额度页以适应小屏，和Token、Hooks左右切换并记住最后页。各面板的窗口文字统一为每月、每周、5h，按此顺序显示剩余百分比及细条，缺失窗口单独隐藏，只有周或月额度也保留，零余额显示0%。除 Watch 外，各模式标明额度自身的上游更新时间；内联条的读屏保留重置时间，Android 悬浮窗独立额度页可显示当地时间的重置时刻。Watch 额度页只显示类型、周期剩余额度和细条；同一账户的每周与5h额度在同一行等分宽度，只有一个周期时占满该行。不显示标题、更新时间或重置时间；无Token时有效额度仍可查看。Agent展示名统一为Codex、Claude Code、Grok、WorkBuddy、Cursor等标准写法，原始身份与未知自定义名称不改动。手机展示台的“刷新”仅在当前桌面广告snapshotQueryV1后出现，沿同一加密连接读取最新已知快照；桌面上游读取仍按约五分钟节流，不把查询时刻当作新上游观测。
+## 文件结构
 
-2026-10-21 起额度协议直接升级：provider 增加 `claude`（位于 codex 与 cursor 之间），窗口增加 `monthly`（当前只由 Cursor 提供），旧版终端会拒收新桌面的额度，需与桌面同版升级；Android 组件私有格式升级为 v3，仍可读取 v2 与更早格式。
+```text
+LokiMetrisDisplay/
+├── androidApp/       Android 入口、小组件、后台同步服务、悬浮窗、JNI 包装
+├── sharedUI/         Android 使用的 Compose 展示台和设置界面
+├── sharedLogic/      Kotlin 公共模型、协议与校验，以及 Android 网络和存储
+├── iosApp/
+│   ├── iosApp/                  iPhone / iPad 原生 SwiftUI 应用
+│   ├── LokiMetrisWatch/          Apple Watch 应用
+│   ├── LokiMetrisWidgets/        iOS 桌面与锁屏小组件
+│   ├── WidgetShared/            App 与小组件的共享容器入口
+│   ├── Configuration/          Apple 端版本、签名和应用标识配置
+│   └── iosApp.xcodeproj/        Xcode 工程
+├── appleDisplay/      Apple 各端共用的 Swift 模型、缓存、传输规则与测试
+├── scripts/           Rust 桥构建、Android 签名准备、应用图标生成
+├── signing/           Android 签名说明；本地私钥和密码被 Git 忽略
+├── branding/          应用图标母版
+├── docs/              架构、需求、历史记录和发布清单
+└── gradle/            Wrapper、JDK 配置与依赖版本目录
+```
 
-主App只在当前连接内存保留额度，失联或换目标随完整投影清空；现有组件摘要保留最近同步额度和原观测时间，HTTP及Watch投影不会裁掉额度。终端不接收提供商凭据，不根据Token推算额度。旧桌面无能力时不发送新请求，旧快照缺少额度字段仍可读取。Android组件私有格式升级后兼容读取旧格式。iOS小／中尺寸组件显示全部已提供账户（最多四个），各自显示实际存在的每月、每周、5h窗口与静态细进度条；待机沿用小尺寸，不再只保留第一个账户。组件单色渲染使用明暗轨道区分比例，保留百分比文字。Android组件按高度显示一至三个账户，每个可见账户同时保留实际存在的每月、每周、5h窗口；隐藏账户以数量提示，最小窄款保留Token和真实同步时间。两端均不因额度覆盖完整整数；锁屏最小组件不强塞额度。
+要定位某个功能的具体文件，见 [文件结构详解](docs/01-文件结构.md)。
 
-2026-10-21 额度卡片整合验证：Apple 97 项测试、Android 共享逻辑 47 项及共享UI 4 项宿主测试通过，Android Debug APK 和 iPhone／Watch 模拟器构建通过。42mm Watch 隔离预览覆盖首屏Token、滚动到额度及无Token但有额度；iOS小／中桌面组件使用生产视图和测试数据离屏检查，精确值、质量、窗口、更新时间均可读取。预览不等于真实账户或上游提供商取数验收。
+## 项目架构
 
-同日追加三页与内联布局：42mm Watch 隔离预览确认首次Token、独立额度页和重启恢复；Android模拟器确认悬浮窗双向手势、边界不循环及服务销毁重建后恢复最后页。详细卡片移除重复额度分组和总量下方的强制留白，手机、Pad、大字号以生产视图配合测试数据检查。97项Apple与51项Android共享测试再次通过，Android Debug及iPhone／Watch真机签名构建通过，最新iPhone包已保留数据覆盖安装；嵌入Watch签名有效不等于实体手表已安装。真实桌面认证HTTP已取到Codex与Grok周额度，移动端当前保存的旧桌面身份与运行实例不同，真实移动显示仍需连接对应桌面后验收。
+**电脑负责采集，移动端负责显示；手机再把数据交给手表和小组件。**
 
-2026-10-22 `v1.0.1` 发布前验证：118 项 Apple 测试、60 项 Android 测试通过，Watch 模拟器构建、Android sharedUI 编译与 iOS 真实 SwiftUI 类型检查通过；Watch 模拟器已实测 Hooks 单卡上下吸附切换与 Hooks／Token／额度左右分页。上述结果不替代 Release 真机签名构建或实体 iPhone／Watch 安装验证。
+```mermaid
+flowchart TD
+    desktop["电脑 LokiMetris：用量、额度、Hooks"] -->|局域网加密连接| android["Android App"]
+    desktop -->|局域网加密连接| ios["iPhone / iPad App"]
+    android --> androidWidget["Android 桌面小组件"]
+    android --> floating["Android 悬浮窗"]
+    ios -->|App Group 共享缓存| widget["iOS 小组件"]
+    ios -->|WatchConnectivity| watch["Apple Watch"]
+    desktop -->|只读加密 HTTP 摘要| androidWidget
+    desktop -->|只读加密 HTTP 摘要| widget
+    desktop -->|只读加密 HTTP 摘要| watch
+```
 
-2026-10-22 `v1.0.2` 验证：122 项 Apple 测试、63 项 Android 共享逻辑测试通过；iPhone／Watch 模拟器构建、Android 共享 UI 编译通过。42mm Watch 隔离预览确认 Hooks 类型与状态同行、图片占用剩余空间、动图播放与切页暂停／恢复、点击不跳转详情；周额度与5h同行等宽，单周期占满整行。手机生产视图预览确认缺少 Cursor 用量时显示0并位于 WorkBuddy 前。Android Release APK 及固定签名验证通过；iPhone、Watch、Widget Release 签名构建及逐包严格签名验证通过。上述构建、模拟器与测试数据验证不替代真机安装验收。
+- **Android 用 Kotlin + Compose**。`sharedLogic` 管数据、连接和存储，`sharedUI` 管界面，`androidApp` 接入系统的小组件、服务和悬浮窗。
+- **Apple 用原生 SwiftUI**。iPhone、iPad、Watch 和 Widget 共用 `appleDisplay` 里的部分 Swift 源码；Xcode 直接编译这些文件，SwiftPM 提供独立测试入口。Kotlin 在 Apple 主 App 中主要用于名称等公共校验。
+- **配对与加密核心用 Rust**。源码放在桌面仓库，构建时编进 Android 和 iOS 主 App，Watch 与 Widget 使用各自的只读刷新能力。
+- **缓存按使用场景保存**。iOS 主 App 与小组件共享 App Group，Watch 保存自己的缓存；小组件和 Watch 获取独立只读配置，主连接的配对秘密留在手机。HTTP 只带摘要，图片走完整同步通道。
+
+线程、缓存更新规则与安全边界见 [技术架构详解](docs/02-技术架构.md)，产品行为见 [业务需求整理](docs/03-业务需求整理.md)。
+
+## 常见问题
+
+| 遇到的情况 | 先检查什么 |
+| --- | --- |
+| 找不到电脑 | 电脑端是否运行、是否在同一局域网、是否允许本地网络访问；访客 Wi-Fi 隔离、VPN 和防火墙可能影响发现 |
+| 构建提示缺少 Rust bridge | 桌面仓库是否完整，`lokiDesktopRoot` 或 `LOKI_DESKTOP_ROOT` 是否指向正确目录 |
+| Android 签名失败或无法覆盖安装 | 固定签名的两个文件是否齐全，是否沿用了原签名；详见签名文档 |
+| App 有数据，小组件却是空的 | 先完成一次前台认证同步；Apple 检查 App Group 与签名，电脑端需支持只读 HTTP 摘要能力 |
+| 小组件或 Watch 没有准点更新 | 看上次同步时间与网络状态；后台申请受系统调度，已有图片可保留，新图片仍需手机同步 |
+
+## 每次发布必须做的文档检查
+
+每次发布版本都必须按当前代码核对并更新 README：**安装与调试、实际能力、设备与最低系统、文件结构、项目架构**，并同步受影响的 `docs/`。文档核对是发布完成条件，具体步骤见 [发布检查清单](docs/06-发布检查清单.md)，执行规则记录在 [AGENTS.md](AGENTS.md)。
+
+版本名与构建号分别以 [Android 配置](androidApp/build.gradle.kts) 和 [Apple 配置](iosApp/Configuration/Config.xcconfig) 为准；发布说明记录该版本使用的桌面 Rust 提交、产物和验证结果。历史实现与测试记录保留在 [历史开发与验证记录](docs/05-历史开发与验证记录.md)，更深入的说明从 [文档索引](docs/README.md) 阅读。

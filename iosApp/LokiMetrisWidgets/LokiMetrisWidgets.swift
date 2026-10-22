@@ -24,16 +24,22 @@ struct DisplayEntry: TimelineEntry {
 
 /// 本地缓存优先；Timeline唤醒时独立HTTP读取，系统决定实际执行时间。
 struct DisplayTimeline: TimelineProvider {
+    /// 系统占位：不读磁盘，直接显示未同步状态。
     func placeholder(in context: Context) -> DisplayEntry { DisplayEntry(date: Date(), snapshot: nil) }
+    /// 小组件库预览与快速展示只读本地缓存，不发网络请求。
     func getSnapshot(in context: Context, completion: @escaping (DisplayEntry) -> Void) { completion(load()) }
     /// 有凭据时先 HTTP 拉取并落盘，再按 `WidgetSnapshot.refreshInterval` 申请下次刷新。
+    /// App 正保持认证连接（摘要仍在 45 秒租约内）时数据已是最新，跳过 HTTP，
+    /// 避免前台每次 reloadTimelines 都让扩展再连一次桌面。
     func getTimeline(in context: Context, completion: @escaping (Timeline<DisplayEntry>) -> Void) {
         Task {
-            if !context.isPreview { _ = await WidgetContainer.refresh(origin: "timeline") }
+            let live = (try? WidgetContainer.store().loadLive(atMs: Date().epochMs)) != nil
+            if !context.isPreview, !live { _ = await WidgetContainer.refresh(origin: "timeline") }
             let entry = load()
             completion(Timeline(entries: [entry], policy: .after(Date(timeIntervalSinceNow: WidgetSnapshot.refreshInterval))))
         }
     }
+    /// 读取最近一次合法摘要；过期仍显示，并标注真实同步时间。
     private func load() -> DisplayEntry {
         let now = Date()
         return DisplayEntry(date: now, snapshot: try? WidgetContainer.store().loadCached(atMs: now.epochMs))
@@ -78,6 +84,7 @@ struct DisplayWidgetView: View {
         }
     }
 
+    /// 小尺寸：总 Token；有额度时附各账户剩余额度，并压缩日期与同步时间为一行。
     private func small(_ record: WidgetSnapshot) -> some View {
         let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
         return VStack(alignment: .leading, spacing: hasQuota ? 2 : 4) {
@@ -105,6 +112,7 @@ struct DisplayWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// 中尺寸：左侧总量，右侧额度（无额度时为前两个 Agent），底部 Hooks 摘要与同步时间。
     private func medium(_ record: WidgetSnapshot) -> some View {
         let hasQuota = record.snapshot.providerQuota?.providers.isEmpty == false
         return VStack(alignment: .leading, spacing: hasQuota ? 6 : 7) {
@@ -171,6 +179,7 @@ struct DisplayWidgetView: View {
     private var quotaTrack: Color {
         renderingMode == .vibrant ? Color(white: 0.35) : .white.opacity(0.18)
     }
+    /// 剩余额度分级配色：耗尽红、偏低黄、充足绿。
     private func quotaFill(_ window: ProviderQuotaWindow) -> Color {
         guard renderingMode == .fullColor else { return .white }
         return window.level == 0 ? .red : window.level == 1 ? .yellow : .green
@@ -199,6 +208,7 @@ struct DisplayWidgetView: View {
         .lineLimit(1).minimumScaleFactor(0.8)
     }
 
+    /// 供读屏使用的额度完整描述。
     private func quotaDescription(_ provider: ProviderQuotaEntry, quota: ProviderQuotaSnapshot) -> String {
         var parts = [provider.displayName]
         for window in provider.windows { parts.append("\(window.label)剩余 \(window.percentText)") }
@@ -240,6 +250,7 @@ struct DisplayWidgetView: View {
         }
     }
 
+    /// 一行 Hooks 摘要：上次同步的 Hook 数量与首个插槽的 Agent 和状态。
     private func hookSummary(_ record: WidgetSnapshot) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(accent)
@@ -250,6 +261,7 @@ struct DisplayWidgetView: View {
         }.font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
     }
 
+    /// 锁屏矩形：统计日期、总量与上次同步时间。
     private func rectangular(_ record: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
@@ -302,10 +314,12 @@ struct DisplayWidgetView: View {
                 + "上次同步于 \(cacheDescription(record))")
     }
 
+    /// 简短的同步时间戳，用于空间受限的样式。
     private func cacheStamp(_ record: WidgetSnapshot) -> String {
         record.receivedDate.formatted(.dateTime.locale(SyncTimeFormat.locale).month(.twoDigits).day(.twoDigits).hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
 
+    /// 完整的同步时间文本，供读屏标签使用。
     private func cacheDescription(_ record: WidgetSnapshot) -> String {
         record.receivedDate.formatted(SyncTimeFormat.full)
     }

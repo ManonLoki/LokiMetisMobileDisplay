@@ -24,9 +24,7 @@ final class WidgetRefreshStoreTests: XCTestCase {
     }
 
     private func isolated(_ body: (WidgetSnapshotStore) throws -> Void) throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        let directory = try temporaryFolder()
         try body(WidgetSnapshotStore(directory: directory))
     }
 
@@ -88,19 +86,12 @@ final class WidgetRefreshStoreTests: XCTestCase {
         }
     }
 
-    func test_clear_revokes_credentials_and_clear_target_keeps_cached_summary() throws {
+    func test_clear_revokes_credentials_and_cached_summary() throws {
         try isolated { store in
             let initial = try store.saveRefreshTarget(target())
             try store.save(record())
             try store.selectSource(source)
             XCTAssertEqual(try store.loadRefreshTarget(), initial)
-            try store.clearRefreshTarget(sourceId: other)
-            XCTAssertEqual(try store.loadRefreshTarget(), initial)
-            try store.clearRefreshTarget(sourceId: source)
-            XCTAssertNil(try store.loadRefreshTarget())
-            XCTAssertEqual(try store.load().receivedAtMs, 3000)
-            XCTAssertFalse(try store.saveFetchedSnapshot(record(at: 5000), for: initial))
-            try store.saveRefreshTarget(initial)
             try store.clear(); try store.clear()
             XCTAssertNil(try store.loadRefreshTarget())
             XCTAssertThrowsError(try store.load())
@@ -147,6 +138,63 @@ final class WidgetRefreshStoreTests: XCTestCase {
             XCTAssertEqual(try store.loadRefreshTarget(), selected)
             XCTAssertTrue(try store.saveIfNotOlder(record(at: 6000)))
             XCTAssertEqual(try store.load().receivedAtMs, 6000)
+        }
+    }
+
+    func test_full_phone_cache_survives_expiry_and_extension_refresh_updates_the_same_cache() throws {
+        try isolated { store in
+            let summary = try record(at: 3000)
+            let snapshot = LanDisplaySnapshot(version: 1, tokens: nil, tokenError: nil,
+                hooksAvailable: true, hooks: [], assets: [], catalogError: nil)
+            let full = PhoneDisplayCache(envelope: WatchSnapshotEnvelope(version: 1, phoneId: device,
+                sourceId: source, phoneReceivedAtMs: 3000, snapshot: snapshot), summaryOnly: false)
+            try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
+            XCTAssertEqual(try store.loadDisplayCache(), full)
+            XCTAssertNotNil(try store.loadCached(atMs: 3000 + WidgetSnapshot.leaseMs * 100))
+            let selected = try XCTUnwrap(store.loadRefreshTarget())
+            XCTAssertTrue(try store.saveFetchedSnapshot(record(at: 5000), for: selected))
+            let refreshed = try XCTUnwrap(store.loadDisplayCache())
+            XCTAssertTrue(refreshed.summaryOnly)
+            XCTAssertEqual(refreshed.envelope.phoneReceivedAtMs, 5000)
+            XCTAssertEqual(refreshed.envelope.phoneId, device)
+            try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
+            XCTAssertEqual(try store.loadDisplayCache(), refreshed)
+        }
+    }
+
+    func test_equal_timestamp_prefers_full_cache_and_switch_or_forget_removes_it() throws {
+        try isolated { store in
+            let summary = try record()
+            let full = PhoneDisplayCache(envelope: try PhoneDisplayCache.summary(summary, phoneId: device).envelope,
+                summaryOnly: false)
+            try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
+            let selected = try XCTUnwrap(store.loadRefreshTarget())
+            XCTAssertTrue(try store.saveFetchedSnapshot(summary, for: selected))
+            XCTAssertEqual(try store.loadDisplayCache(), full)
+            try store.selectSource(source)
+            XCTAssertEqual(try store.loadDisplayCache(), full)
+            try store.forgetSource(other)
+            XCTAssertEqual(try store.loadDisplayCache(), full)
+            try store.selectSource(other)
+            XCTAssertNil(try store.loadDisplayCache())
+            try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
+            try store.forgetSource(source)
+            XCTAssertNil(try store.loadDisplayCache())
+        }
+    }
+
+    func test_summary_commit_recovery_never_relabels_old_full_content_with_new_time() throws {
+        try isolated { store in
+            let summary = try record()
+            let full = PhoneDisplayCache(envelope: try PhoneDisplayCache.summary(summary, phoneId: device).envelope,
+                summaryOnly: false)
+            try store.saveAuthenticatedSnapshot(summary, refreshTarget: target(), displayCache: full)
+            // 模拟两次原子写之间进程结束：摘要已更新，完整投影仍旧。
+            try store.save(record(at: 8000))
+            let recovered = try XCTUnwrap(store.loadDisplayCache())
+            XCTAssertTrue(recovered.summaryOnly)
+            XCTAssertEqual(recovered.envelope.phoneReceivedAtMs, 8000)
+            XCTAssertEqual(recovered.envelope.snapshot.assets, [])
         }
     }
 

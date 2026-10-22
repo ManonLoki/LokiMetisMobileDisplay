@@ -2,7 +2,8 @@ import Foundation
 
 /// 应用私有内容寻址缓存；未完成文件只属于本次接收，不作为命中或展示来源。
 final class IOSAssetCache {
-    private let directory: URL
+    /// 固定缓存目录；只读校验与解码可在解码队列直接使用该路径。
+    let directory: URL
     private var partial: URL?
     private var writer: FileHandle?
     private var descriptor: LanDisplaySnapshot.Asset?
@@ -21,15 +22,17 @@ final class IOSAssetCache {
         try LanAssetFiles.removeOrphanPartials(in: path)
     }
 
-    /// 缓存复用先检查实际完整长度、魔数和SHA-256；损坏文件留待原子替换。
-    func cached(_ asset: LanDisplaySnapshot.Asset, bridge: NativeLinkBridge) throws -> URL? {
+    /// 缓存复用先检查实际完整长度、魔数和SHA-256；缺失、损坏或不可读都按未命中处理，随后重新下载并原子替换。
+    func cached(_ asset: LanDisplaySnapshot.Asset) -> URL? { Self.verifiedPath(asset, in: directory) }
+
+    /// 无状态实现，也供解码队列在冷启动时校验；不触碰实例的在途接收文件。
+    /// 映射读取：校验最大32MiB的文件时不在堆上整份复制。
+    static func verifiedPath(_ asset: LanDisplaySnapshot.Asset, in directory: URL) -> URL? {
         let path = directory.appendingPathComponent(asset.hash)
-        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
-        let values = try path.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .fileSizeKey])
-        guard values.isSymbolicLink != true, values.isRegularFile == true,
-              values.fileSize == Int(asset.length) else { return nil }
-        let bytes = try Data(contentsOf: path)
-        guard try bridge.validAsset(asset.json, bytes: bytes) else { return nil }
+        guard let values = try? path.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .fileSizeKey]),
+              values.isSymbolicLink != true, values.isRegularFile == true, values.fileSize == Int(asset.length),
+              let bytes = try? Data(contentsOf: path, options: .mappedIfSafe),
+              (try? NativeLinkBridge.validAsset(asset.json, bytes: bytes)) == true else { return nil }
         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path.path)
         return path
     }
@@ -56,8 +59,8 @@ final class IOSAssetCache {
         try writer.write(contentsOf: bytes)
         if !complete { return (offset.uint64Value, nil) }
         try writer.synchronize(); try writer.close(); self.writer = nil
-        let actual = try Data(contentsOf: partial)
-        guard try bridge.validAsset(descriptor.json, bytes: actual) else { throw WidgetSnapshotError.invalid }
+        let actual = try Data(contentsOf: partial, options: .mappedIfSafe)
+        guard try NativeLinkBridge.validAsset(descriptor.json, bytes: actual) else { throw WidgetSnapshotError.invalid }
         let destination = directory.appendingPathComponent(descriptor.hash)
         if FileManager.default.fileExists(atPath: destination.path) {
             let values = try destination.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
@@ -70,8 +73,9 @@ final class IOSAssetCache {
     }
 
     /// 后台保留动画的全部帧与时长；像素、帧数和总解码内存由共享解码器约束。
-    func image(_ path: URL, mime: String) throws -> LanImageAsset {
-        try LanImageAsset.decode(contentsOf: path, mime: mime)
+    /// 纯函数，只在解码队列调用。
+    static func image(_ path: URL, asset: LanDisplaySnapshot.Asset) throws -> LanImageAsset {
+        try LanImageAsset.decode(contentsOf: path, mime: asset.mime, id: asset.hash)
     }
 
     /// 保留当前正在展示的最多十二张图片，其余按最后复用顺序收敛到512MiB。

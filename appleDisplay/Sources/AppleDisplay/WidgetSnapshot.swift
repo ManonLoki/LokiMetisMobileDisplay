@@ -11,8 +11,8 @@ struct WidgetSnapshot: Codable, Equatable {
     /// 仅当前认证连接可续期；租约到期后仍可作为最近同步摘要展示。
     var validUntilMs: Int64? = nil
     static let leaseMs: Int64 = 45_000
-    /// BGAppRefresh 与 Timeline 统一申请 15 分钟间隔；实际唤醒仍由系统调度。
-    static let refreshInterval: TimeInterval = 15 * 60
+    /// BGAppRefresh 与 Timeline 统一申请 5 分钟目标间隔；实际唤醒仍由系统调度。
+    static let refreshInterval: TimeInterval = 5 * 60
 
     /// 仅由成功解密的snapshot消息创建；解析失败不能触发文件覆盖。
     static func authenticatedMessage(_ data: Data, sourceId: String, receivedAtMs: Int64) throws -> Self {
@@ -166,9 +166,6 @@ struct WidgetTokens: Codable, Equatable {
     let all: WidgetAmount
     let agents: [Agent]
 
-    /// 仅调整展示顺序，原始列表、Agent 标识与精确数值保持上游结果。
-    var displayAgents: [Agent] { orderedAgentsForDisplay(agents, name: { $0.agent }) }
-
     /// 额度独立存在时仍参与排序；Cursor 缺值只在 UI 行中显示 0，不改变统计快照。
     func displayRows(quota: ProviderQuotaSnapshot?) -> [WidgetUsageRow] {
         let matchedKeys = Set(agents.compactMap { providerQuotaKey(for: $0.agent) })
@@ -180,10 +177,9 @@ struct WidgetTokens: Codable, Equatable {
         }
         let quotaRows: [WidgetUsageRow] = (quota?.providers ?? [])
             .filter { !matchedKeys.contains($0.provider) }
-            .map { $0.provider == "cursor" ? .cursorDefault(quota: $0) : .quota($0) }
+            .map { .quota($0) }
         let rows = tokenRows + quotaRows
-        let cursorRow: [WidgetUsageRow] = rows.contains { providerQuotaKey(for: $0.sourceName) == "cursor" }
-            ? [] : [.cursorDefault(quota: nil)]
+        let cursorRow: [WidgetUsageRow] = rows.contains(where: \.isZeroDefaultProvider) ? [] : [.cursorDefault]
         return orderedAgentsForDisplay(rows + cursorRow, name: { $0.sourceName })
     }
 
@@ -203,7 +199,8 @@ struct WidgetTokens: Codable, Equatable {
 enum WidgetUsageRow: Equatable, Identifiable {
     case agent(WidgetTokens.Agent, quota: ProviderQuotaEntry?)
     case quota(ProviderQuotaEntry)
-    case cursorDefault(quota: ProviderQuotaEntry?)
+    /// 缺少任何Cursor数据时的占位行。
+    case cursorDefault
 
     var id: String {
         switch self {
@@ -217,7 +214,7 @@ enum WidgetUsageRow: Equatable, Identifiable {
         switch self {
         case .agent(let agent, _): agent.agent
         case .quota(let quota): quota.provider
-        case .cursorDefault: "cursor"
+        case .cursorDefault: zeroDefaultProvider
         }
     }
 
@@ -225,7 +222,7 @@ enum WidgetUsageRow: Equatable, Identifiable {
         switch self {
         case .agent(let agent, _): agent.displayName
         case .quota(let quota): quota.label
-        case .cursorDefault: "Cursor"
+        case .cursorDefault: agentDisplayName(sourceName)
         }
     }
 
@@ -236,17 +233,39 @@ enum WidgetUsageRow: Equatable, Identifiable {
 
     var quotaEntry: ProviderQuotaEntry? {
         switch self {
-        case .agent(_, let quota), .cursorDefault(let quota): quota
+        case .agent(_, let quota): quota
         case .quota(let quota): quota
+        case .cursorDefault: nil
         }
     }
 
-    /// 默认值仅供展示，不写回 Token amount 或总量，也不补造额度窗口。
-    var tokenText: String? {
-        if providerQuotaKey(for: sourceName) == "cursor", tokenAmount?.hasNumericValue != true { return "0" }
-        return tokenAmount?.text
+    /// Token标题行与纯额度行两种展示，界面按此穷举而不靠可选值组合推断。
+    enum Presentation: Equatable {
+        case headline(tokenText: String)
+        case quotaOnly(ProviderQuotaEntry)
     }
+
+    /// 与Kotlin `TerminalUsageRow.tokenText` 同一规则：默认零提供方缺数字时显示0。
+    /// 默认值仅供展示，不写回 Token amount 或总量，也不补造额度窗口。
+    var presentation: Presentation {
+        if isZeroDefaultProvider, tokenAmount?.hasNumericValue != true { return .headline(tokenText: "0") }
+        switch self {
+        case .agent(let agent, _): return .headline(tokenText: agent.amount.text)
+        case .quota(let quota): return .quotaOnly(quota)
+        case .cursorDefault: return .headline(tokenText: "0")
+        }
+    }
+
+    var tokenText: String? {
+        if case .headline(let text) = presentation { return text }
+        return nil
+    }
+
+    fileprivate var isZeroDefaultProvider: Bool { providerQuotaKey(for: sourceName) == zeroDefaultProvider }
 }
+
+/// 缺少Token数字时仍显示0的提供方；缺失整行时补占位行。
+private let zeroDefaultProvider = "cursor"
 
 /// 主要账户靠前，WorkBuddy 在末尾；相同优先级保持原始相对顺序。
 private func orderedAgentsForDisplay<Element>(_ values: [Element], name: (Element) -> String) -> [Element] {

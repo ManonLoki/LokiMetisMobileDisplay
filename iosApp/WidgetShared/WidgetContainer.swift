@@ -62,6 +62,7 @@ enum WidgetContainer {
         return value
     }
 
+    /// 错误域同样只保留短 ASCII 标识，其余记为 unknown。
     private static func diagnosticErrorDomain(_ value: String) -> String {
         guard !value.isEmpty, value.utf8.count <= 128,
               value.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) ||

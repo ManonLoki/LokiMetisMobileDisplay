@@ -31,8 +31,12 @@ android {
         applicationId = "com.manonloki.lokimetrisdisplay"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 4
-        versionName = "1.0.2"
+        versionCode = 5
+        versionName = "1.0.3"
+        // 配对桥仅提供这两种架构，避免依赖库让 APK 误报支持 32 位设备。
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
     // 固定使用项目内签名；缺失时不悄悄切换为另一台机器的默认 debug 证书。
     val signingProperties = Properties().apply {

@@ -7,13 +7,14 @@ final class DeviceIdentityStore {
     private let service = (Bundle.main.bundleIdentifier ?? "com.manonloki.lokimetrisdisplay") + ".lan-identity-v1"
     private let account = "device-id"
     private let recoveryAccount = "pending-recovery-v1"
-    private let manager = FileManager.default
 
+    /// 读取本机身份；进程内加锁，避免并发首次创建出两个 UUID。
     func load() throws -> String {
         Self.lock.lock(); defer { Self.lock.unlock() }
         return try loadUnlocked()
     }
 
+    /// 先收尾未完成的恢复事务，再按策略读取或创建身份。
     private func loadUnlocked() throws -> String {
         if let pending = try readRecovery() {
             let saved = try readIdentity()
@@ -21,15 +22,14 @@ final class DeviceIdentityStore {
             guard saved == pending.targetId else { throw DeviceIdentityFailure.recoveryPending }
             do { try PairingStore(deviceId: pending.targetId).verifyRecovery(fingerprint: pending.fingerprint) }
             catch { throw DeviceIdentityFailure.recoveryPending }
-            try removeLegacyFile(allowedIds: [pending.previousId, pending.targetId])
             try clearRecovery()
         }
-        return try DeviceIdentityPolicy.load(readIdentity: readIdentity, readLegacyFile: readLegacyFile,
-            legacyPairingAccounts: PairingStore.legacyIdentityAccounts, saveIdentity: saveIdentity)
+        return try DeviceIdentityPolicy.load(readIdentity: readIdentity,
+            pairingAccounts: PairingStore.identityAccounts, saveIdentity: saveIdentity)
     }
 
     /// 调用方必须先停止网络 owner。可在后台队列执行，不依赖 MainActor 或界面状态。
-    /// 空库检查→记录无秘密日志→配对逐条写入读回→移除旧文件→原子提交身份→清日志。
+    /// 空库检查→记录无秘密日志→配对逐条写入读回→原子提交身份→清日志。
     func restore(payload: PairingRecovery.Payload, currentDeviceId: String) throws -> String {
         Self.lock.lock(); defer { Self.lock.unlock() }
         return try restoreUnlocked(payload: payload, currentDeviceId: currentDeviceId)
@@ -49,8 +49,9 @@ final class DeviceIdentityStore {
         return try verifyRestoredPayloadUnlocked(payload)
     }
 
+    /// 恢复失败后的兜底核对：只有整包材料与已存身份完全一致才算成功。
     private func verifyRestoredPayloadUnlocked(_ payload: PairingRecovery.Payload) throws -> String {
-        // 失败兜底不得借 load 的首次安装/迁移路径生成或选取一个身份。
+        // 失败兜底不得借 load 的首次安装/重装恢复路径生成或选取一个身份。
         guard try readIdentity() == payload.deviceId else { throw DeviceIdentityFailure.recoveryConflict }
         let identity = try loadUnlocked()
         guard identity == payload.deviceId, try readRecovery() == nil else { throw DeviceIdentityFailure.recoveryPending }
@@ -59,6 +60,7 @@ final class DeviceIdentityStore {
         return identity
     }
 
+    /// 恢复事务本体：先写日志，再导入配对，最后原子切换身份。
     private func restoreUnlocked(payload: PairingRecovery.Payload, currentDeviceId: String) throws -> String {
         let fingerprint = try PairingStore.recoveryFingerprint(deviceId: payload.deviceId, materials: payload.materials)
         let saved = try readIdentity()
@@ -70,21 +72,17 @@ final class DeviceIdentityStore {
             pending = existing
         } else {
             if saved == nil, currentDeviceId.isEmpty {
-                guard try readLegacyFile() == nil else { throw DeviceIdentityFailure.conflictingIdentity }
                 try store.verifyExistingRecoverySelection(materials: payload.materials)
                 try saveIdentity(payload.deviceId)
                 guard try readIdentity() == payload.deviceId else { throw DeviceIdentityFailure.recoveryWriteFailed }
                 return payload.deviceId
             }
             guard let saved, currentDeviceId == saved else { throw DeviceIdentityFailure.recoveryConflict }
-            let legacy = try readLegacyFile()
-            guard legacy == nil || legacy == saved else { throw DeviceIdentityFailure.conflictingIdentity }
             try store.checkRecoveryDestination(materials: payload.materials, resuming: false)
             pending = try DeviceIdentityRecovery(previousId: saved, targetId: payload.deviceId, fingerprint: fingerprint)
             try saveRecovery(pending)
         }
         try store.importRecoveryMaterials(payload.materials)
-        try removeLegacyFile(allowedIds: [pending.previousId, pending.targetId])
         try commitRestoredIdentity(pending)
         try clearRecovery()
         return payload.deviceId
@@ -95,6 +93,7 @@ final class DeviceIdentityStore {
          kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false]
     }
 
+    /// 读取钥匙串中的设备身份，格式不符视为损坏而不是缺失。
     private func readIdentity() throws -> String? {
         guard let data = try readKeychainData(account: account, maximumBytes: 36) else { return nil }
         guard data.count == 36, let identity = String(data: data, encoding: .utf8), SharedValidation.validId(identity)
@@ -102,6 +101,7 @@ final class DeviceIdentityStore {
         return identity
     }
 
+    /// 按账户读取私有钥匙串条目，并核对可访问属性与长度上限。
     private func readKeychainData(account: String, maximumBytes: Int) throws -> Data? {
         var search = query
         search[kSecAttrAccount as String] = account
@@ -133,6 +133,7 @@ final class DeviceIdentityStore {
         } else if status != errSecSuccess { throw DeviceIdentityFailure.keychainWriteFailed }
     }
 
+    /// 读取未完成的恢复日志（不含任何秘密）。
     private func readRecovery() throws -> DeviceIdentityRecovery? {
         guard let data = try readKeychainData(account: recoveryAccount, maximumBytes: 1024) else { return nil }
         guard let pending = try? SharedJSON.decoder.decode(DeviceIdentityRecovery.self, from: data)
@@ -141,6 +142,7 @@ final class DeviceIdentityStore {
         return pending
     }
 
+    /// 写入恢复日志并读回核对，后续步骤中断后可继续同一恢复包。
     private func saveRecovery(_ pending: DeviceIdentityRecovery) throws {
         try pending.validate()
         var addition = query
@@ -151,12 +153,14 @@ final class DeviceIdentityStore {
               try readRecovery() == pending else { throw DeviceIdentityFailure.recoveryWriteFailed }
     }
 
+    /// 恢复完成后删除日志。
     private func clearRecovery() throws {
         var search = query; search[kSecAttrAccount as String] = recoveryAccount
         let status = SecItemDelete(search as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw DeviceIdentityFailure.recoveryWriteFailed }
     }
 
+    /// 把设备身份从旧值原子切换为恢复包中的目标值。
     private func commitRestoredIdentity(_ pending: DeviceIdentityRecovery) throws {
         let saved = try readIdentity()
         if saved == pending.targetId { return }
@@ -165,42 +169,6 @@ final class DeviceIdentityStore {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         guard SecItemUpdate(query as CFDictionary, update as CFDictionary) == errSecSuccess,
               try readIdentity() == pending.targetId else { throw DeviceIdentityFailure.recoveryWriteFailed }
-    }
-
-    private func removeLegacyFile(allowedIds: Set<String>) throws {
-        guard let identity = try readLegacyFile() else { return }
-        guard allowedIds.contains(identity) else { throw DeviceIdentityFailure.conflictingIdentity }
-        do {
-            let support = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                appropriateFor: nil, create: false)
-            try manager.removeItem(at: support.appendingPathComponent("Discovery/device-id"))
-        } catch where SharedFiles.isMissing(error) {}
-        catch { throw DeviceIdentityFailure.legacyStorageUnavailable }
-    }
-
-    /// 旧文件只读迁移：缺失和读取失败不同，拒绝链接、目录、超长文本与非规范 UUID。
-    private func readLegacyFile() throws -> String? {
-        do {
-            let support = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                appropriateFor: nil, create: false)
-            let directory = support.appendingPathComponent("Discovery", isDirectory: true)
-            let directoryAttributes = try manager.attributesOfItem(atPath: directory.path)
-            guard directoryAttributes[.type] as? FileAttributeType == .typeDirectory else {
-                throw DeviceIdentityFailure.legacyStorageInvalid
-            }
-            let file = directory.appendingPathComponent("device-id")
-            let attributes = try manager.attributesOfItem(atPath: file.path)
-            guard attributes[.type] as? FileAttributeType == .typeRegular,
-                  (attributes[.size] as? NSNumber)?.intValue == 36 else {
-                throw DeviceIdentityFailure.legacyStorageInvalid
-            }
-            let data = try Data(contentsOf: file)
-            guard data.count == 36, let identity = String(data: data, encoding: .utf8), SharedValidation.validId(identity)
-            else { throw DeviceIdentityFailure.legacyStorageInvalid }
-            return identity
-        } catch where SharedFiles.isMissing(error) { return nil }
-        catch let error as DeviceIdentityFailure { throw error }
-        catch { throw DeviceIdentityFailure.legacyStorageUnavailable }
     }
 }
 
@@ -211,15 +179,13 @@ extension DeviceIdentityFailure {
             return "无法访问本机身份钥匙串。请先解锁设备，再重新打开应用；不会创建替代身份。"
         case .keychainWriteFailed:
             return "未能将设备身份保存到钥匙串。请解锁设备并检查可用空间后重试；原配对未修改。"
-        case .ambiguousLegacyIdentity:
+        case .ambiguousPairedIdentity:
             return "发现多组旧设备身份。请导入对应身份的恢复包及恢复码，明确选择与全部旧配对精确匹配的一组；原配对未修改。"
         case .conflictingIdentity:
-            return "钥匙串身份与旧设备身份不一致。恢复包不能覆盖此冲突，请保留现有数据并检查原身份文件；不会自动改绑原配对。"
+            return "钥匙串中已存在另一个设备身份。恢复包不能覆盖此冲突，请保留现有数据后重新打开应用；不会自动改绑原配对。"
         case .invalidPairingIndex:
             return "旧配对身份记录不完整或格式异常，无法安全恢复设备身份；原配对未修改。"
-        case .legacyStorageUnavailable:
-            return "无法读取原设备身份文件。请解锁设备并检查存储后重新打开应用；不会创建替代身份。"
-        case .invalidIdentity, .legacyStorageInvalid:
+        case .invalidIdentity:
             return "设备身份记录损坏，无法继续连接。恢复包不能覆盖损坏的身份记录，请保留现有数据并检查身份存储。"
         case .recoveryPending:
             return "上次配对恢复尚未完成。请重新导入同一个恢复包及恢复码以继续；完成前不会自动连接。"

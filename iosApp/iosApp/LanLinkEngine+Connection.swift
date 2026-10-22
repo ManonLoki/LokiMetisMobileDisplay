@@ -79,8 +79,13 @@ extension LanLinkEngine {
             view.error = "未能更新后台刷新目标，请检查存储空间后重试。"; publish(); return
         }
         WidgetSnapshotPublisher.shared.selectSource(id)
-        if view.selectedId != id { watch.configureHTTP(nil) }
+        if view.selectedId != id {
+            clearLiveDisplay(clearCached: true)
+            watch.configureHTTP(nil)
+        }
+        watch.selectSource(id)
         cancelSession(); view.selectedId = id; view.error = nil; intent.connected()
+        restoreCachedDisplay()
         do {
             bridge = try NativeLinkBridge(deviceId: deviceId, name: name)
             cache = try? IOSAssetCache()

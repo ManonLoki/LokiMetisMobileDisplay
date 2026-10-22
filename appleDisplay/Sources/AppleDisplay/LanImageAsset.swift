@@ -23,7 +23,8 @@ struct LanImageAsset {
         var maxDecodedBytes = 8 * 1024 * 1024
         var maxPixelSize = 512
     }
-    let id = UUID()
+    /// 内容摘要即播放身份；同一图片重复解码不会让界面从头重播。
+    let id: String
     let frames: [CGImage]
     let frameDurations: [TimeInterval]
     /// 0表示无限循环，其它值为总播放次数，统一GIF/PNG/WebP各自的循环语义。
@@ -32,18 +33,17 @@ struct LanImageAsset {
     private let frameEnds: [TimeInterval]
     let duration: TimeInterval
     var isAnimated: Bool { frames.count > 1 }
-    var minimumFrameDuration: TimeInterval { frameDurations.min() ?? 0.1 }
 
     /// 运行于连接owner后台队列；完整动画成功后才发布，不悄悄以首帧替代损坏动画。
-    static func decode(contentsOf url: URL, mime: String, limits: Limits = Limits()) throws -> Self {
+    static func decode(contentsOf url: URL, mime: String, id: String, limits: Limits = Limits()) throws -> Self {
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else { throw Failure.invalidImage }
         guard let size = values.fileSize, size > 0, size <= limits.maxEncodedBytes else { throw Failure.resourceLimit }
-        return try decode(Data(contentsOf: url, options: .mappedIfSafe), mime: mime, limits: limits)
+        return try decode(Data(contentsOf: url, options: .mappedIfSafe), mime: mime, id: id, limits: limits)
     }
 
     /// 按白名单 MIME 与尺寸限制解码，超限或格式不符即拒绝。
-    static func decode(_ data: Data, mime: String, limits: Limits = Limits()) throws -> Self {
+    static func decode(_ data: Data, mime: String, id: String, limits: Limits = Limits()) throws -> Self {
         guard LanDisplaySnapshot.Asset.supportedMimes.contains(mime) else { throw Failure.unsupportedFormat }
         guard !data.isEmpty, data.count <= limits.maxEncodedBytes,
               limits.maxFrames > 0, limits.maxPixelSize > 0, limits.maxDecodedBytes >= 4 else { throw Failure.resourceLimit }
@@ -65,6 +65,8 @@ struct LanImageAsset {
         let perFramePixels = perFrameBytes / 4
         let pixelSize = min(limits.maxPixelSize, Int(Double(perFramePixels).squareRoot()))
         guard pixelSize >= 1 else { throw Failure.resourceLimit }
+        // 缩小后的边长沿用到后续帧，同尺寸画布不再逐帧重复超限解码。
+        var edge = pixelSize
         for index in 0..<count {
             try autoreleasepool {
                 guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
@@ -72,7 +74,6 @@ struct LanImageAsset {
                       let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
                       width.doubleValue > 0, height.doubleValue > 0,
                       width.doubleValue * height.doubleValue <= Double(limits.maxSourcePixels) else { throw Failure.resourceLimit }
-                var edge = pixelSize
                 var frame = try thumbnail(source, index: index, pixelSize: edge)
                 // ImageIO行字节含对齐开销；按实际占用缩小，不能把可缩放动画误判为超限。
                 while frame.bytesPerRow * frame.height > perFrameBytes {
@@ -87,7 +88,7 @@ struct LanImageAsset {
                 bytes += size; total += delay; images.append(frame); delays.append(delay); ends.append(total)
             }
         }
-        return Self(frames: images, frameDurations: delays, playCount: plays(metadata, mime: mime),
+        return Self(id: id, frames: images, frameDurations: delays, playCount: plays(metadata, mime: mime),
                     decodedByteCount: bytes, frameEnds: ends, duration: total)
     }
 
@@ -108,6 +109,15 @@ struct LanImageAsset {
         if playCount > 0, elapsed / duration >= Double(playCount) { return frames.count - 1 }
         let time = elapsed.truncatingRemainder(dividingBy: duration)
         return frameEnds.firstIndex(where: { time < $0 }) ?? frames.count - 1
+    }
+
+    /// 仅在下一帧到来时唤醒；有限循环完成后不再创建播放任务。
+    func timeUntilNextFrame(at elapsed: TimeInterval) -> TimeInterval? {
+        guard isAnimated, duration > 0 else { return nil }
+        let elapsed = elapsed.isFinite ? max(0, elapsed) : 0
+        if playCount > 0, elapsed / duration >= Double(playCount) { return nil }
+        let time = elapsed.truncatingRemainder(dividingBy: duration)
+        return (frameEnds.first(where: { time < $0 }) ?? duration) - time
     }
 
     private static func delayTime(_ properties: [CFString: Any], mime: String) -> TimeInterval {
@@ -136,5 +146,42 @@ struct LanImageAsset {
         let value = count.intValue
         guard value > 0 else { return 0 }
         return mime == "image/gif" && value < Int.max ? value + 1 : value
+    }
+}
+
+/// 内容摘要相同即同一张图（同一进程内解码参数固定），比较时不必逐帧比对位图。
+extension LanImageAsset: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+/// 只累计实际播放时长；使用单调时钟，系统校时不会让动画停在某一帧。
+struct LanImagePlaybackClock {
+    private(set) var assetID: String?
+    private var accumulated: TimeInterval = 0
+    private var started: ContinuousClock.Instant?
+
+    func elapsed(at instant: ContinuousClock.Instant) -> TimeInterval {
+        guard let started else { return accumulated }
+        let interval = started.duration(to: instant).components
+        let seconds = Double(interval.seconds) + Double(interval.attoseconds) / 1e18
+        return accumulated + max(0, seconds)
+    }
+
+    mutating func update(assetID: String, playing: Bool, at instant: ContinuousClock.Instant) {
+        if self.assetID != assetID {
+            self.assetID = assetID
+            accumulated = 0
+            started = nil
+        }
+        setPlaying(playing, at: instant)
+    }
+
+    mutating func setPlaying(_ playing: Bool, at instant: ContinuousClock.Instant) {
+        if playing {
+            if started == nil { started = instant }
+        } else {
+            accumulated = elapsed(at: instant)
+            started = nil
+        }
     }
 }

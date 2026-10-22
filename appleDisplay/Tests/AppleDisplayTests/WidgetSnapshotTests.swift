@@ -14,9 +14,7 @@ final class WidgetSnapshotTests: XCTestCase {
 
     /// 每个文件测试使用独立目录，并只清理自身创建的目录。
     private func isolated(_ body: (WidgetSnapshotStore) throws -> Void) throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        let directory = try temporaryFolder()
         try body(WidgetSnapshotStore(directory: directory))
     }
 

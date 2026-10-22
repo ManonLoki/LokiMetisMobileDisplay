@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 页面级动效开关：不在当前菜单、正在看详情时由上层关闭，所有装饰动画随之暂停。
 private struct CyberMotionEnabledKey: EnvironmentKey {
     static let defaultValue = true
 }
@@ -11,7 +12,9 @@ extension EnvironmentValues {
     }
 }
 
-/// One low-frequency canvas supplies the ambient layer; it never owns application state.
+/// 全屏氛围背景：两团光晕缓慢漂移，网格静止；只是装饰，不持有任何应用状态。
+/// 漂移幅度 24pt、周期约 50 秒，最快每秒约 3pt，8 帧/秒已看不出跳动；
+/// 相比原来 24 帧/秒，全屏重绘次数降到三分之一。静态网格单独绘制一次，不随时间线重画。
 struct CyberBackdrop: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -21,33 +24,43 @@ struct CyberBackdrop: View {
     private var animating: Bool { visible && motionEnabled && scenePhase == .active && !reduceMotion }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animating)) { timeline in
-            Canvas(rendersAsynchronously: true) { context, size in
-                let time = animating ? timeline.date.timeIntervalSinceReferenceDate : 0
-                let drift = sin(time / 8) * 24
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(DisplayStyle.canvas))
-                let cyan = CGPoint(x: size.width * 0.1 + drift, y: size.height * 0.12)
-                let violet = CGPoint(x: size.width * 0.95, y: size.height * 0.65 + drift)
-                for (center, color, radius) in [(cyan, DisplayStyle.accent, CGFloat(420)), (violet, DisplayStyle.violet, CGFloat(360))] {
-                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .radialGradient(
-                        Gradient(colors: [color.opacity(0.10), color.opacity(0)]), center: center, startRadius: 0, endRadius: radius))
+        ZStack {
+            TimelineView(.animation(minimumInterval: 1.0 / 8, paused: !animating)) { timeline in
+                Canvas(rendersAsynchronously: true) { context, size in
+                    let time = animating ? timeline.date.timeIntervalSinceReferenceDate : 0
+                    let drift = sin(time / 8) * 24
+                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(DisplayStyle.canvas))
+                    let cyan = CGPoint(x: size.width * 0.1 + drift, y: size.height * 0.12)
+                    let violet = CGPoint(x: size.width * 0.95, y: size.height * 0.65 + drift)
+                    for (center, color, radius) in [(cyan, DisplayStyle.accent, CGFloat(420)), (violet, DisplayStyle.violet, CGFloat(360))] {
+                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .radialGradient(
+                            Gradient(colors: [color.opacity(0.10), color.opacity(0)]), center: center, startRadius: 0, endRadius: radius))
+                    }
                 }
-                var grid = Path()
-                stride(from: CGFloat(0), through: size.width, by: 28).forEach { x in
-                    grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height))
-                }
-                stride(from: CGFloat(0), through: size.height, by: 28).forEach { y in
-                    grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y))
-                }
-                context.stroke(grid, with: .color(DisplayStyle.accent.opacity(0.035)), lineWidth: 0.5)
             }
+            CyberGrid().stroke(DisplayStyle.accent.opacity(0.035), lineWidth: 0.5)
         }
         .ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
         .onAppear { visible = true }.onDisappear { visible = false }
     }
 }
 
-/// Content stays still while a slow edge highlight traverses the usage surface.
+/// 静态 28pt 网格；作为 Shape 只在尺寸变化时重新生成路径。
+private struct CyberGrid: Shape {
+    func path(in rect: CGRect) -> Path {
+        var grid = Path()
+        for x in stride(from: CGFloat(0), through: rect.width, by: 28) {
+            grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: rect.height))
+        }
+        for y in stride(from: CGFloat(0), through: rect.height, by: 28) {
+            grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: rect.width, y: y))
+        }
+        return grid
+    }
+}
+
+/// 卡片内容静止，只有一圈高光沿边框缓慢旋转（8 秒一圈）。
+/// 15 帧/秒时每帧约转 3°，细边框上看不出跳帧，比 24 帧/秒少约四成唤醒；未开启扫光的卡片时间线暂停。
 private struct CyberSurface: ViewModifier {
     var tint: Color
     var sweeping: Bool
@@ -64,7 +77,7 @@ private struct CyberSurface: ViewModifier {
                     LinearGradient(colors: [DisplayStyle.surface, DisplayStyle.graphite], startPoint: .topLeading, endPoint: .bottomTrailing))
             }
             .overlay {
-                TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animating)) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !animating)) { timeline in
                     let phase = animating ? timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 8) / 8 : 0.15
                     RoundedRectangle(cornerRadius: 17).strokeBorder(
                         AngularGradient(stops: [
@@ -84,10 +97,10 @@ private struct CyberSurface: ViewModifier {
             }
             .shadow(color: tint.opacity(sweeping ? 0.09 : 0.025), radius: sweeping ? 18 : 8, y: 4)
             .onAppear { visible = true }.onDisappear { visible = false }
-            .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
     }
 }
 
+/// 首次出现时的淡入上移；减弱动态效果、非当前页或后台时直接显示终态。
 private struct CyberEntrance: ViewModifier {
     let delay: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -136,13 +149,14 @@ struct CyberConnectionDot: View {
             }
         }.frame(width: 6, height: 6).accessibilityHidden(true)
             .onAppear { visible = true }.onDisappear { visible = false }
-            .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
     }
 }
 
 extension View {
+    /// 卡片底色与边框；`sweeping` 为 true 时边框高光旋转。
     func cyberSurface(tint: Color = DisplayStyle.accent, sweeping: Bool = false) -> some View {
         modifier(CyberSurface(tint: tint, sweeping: sweeping))
     }
+    /// 卡片入场动画，`delay` 用于错开多张卡片。
     func cyberEntrance(delay: Double = 0) -> some View { modifier(CyberEntrance(delay: delay)) }
 }

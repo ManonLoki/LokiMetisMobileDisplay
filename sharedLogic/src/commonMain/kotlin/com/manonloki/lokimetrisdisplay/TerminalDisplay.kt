@@ -15,8 +15,8 @@ data class TerminalSnapshot(
         val rows = agents.map { agent ->
             TerminalUsageRow(agent, quotas.firstOrNull { it.provider == providerQuotaKey(agent.agent) })
         } + quotas.filterNot { it.provider in matchedKeys }.map { TerminalUsageRow(null, it) }
-        val cursorRow = if (tokens != null && rows.none { providerQuotaKey(it.sourceName) == "cursor" })
-            listOf(TerminalUsageRow(null, null, fallbackAgent = "cursor")) else emptyList()
+        val cursorRow = if (tokens != null && rows.none { it.isZeroDefaultProvider })
+            listOf(TerminalUsageRow(null, null)) else emptyList()
         return (rows + cursorRow).sortedBy { displayAgentOrder(it.sourceName) }
     }
 
@@ -44,6 +44,7 @@ data class TerminalAmount(val total: String?, val availability: String, val comp
     }
     /** UI显示精确原值，不经Double或缩略换算。 */
     val text: String get() = when (availability) { "available" -> total ?: "—"; "noRecords" -> "无记录"; else -> "不可用" }
+    val hasNumericValue: Boolean get() = availability == "available" && total != null
     /** 部分或推算质量始终可见，不把不完整统计当作精确总量。 */
     val quality: String get() = listOfNotNull(when (completeness) { "partial" -> "部分"; "unknown" -> "范围未知"; else -> null },
         when (confidence) { "derived" -> "估算"; "suspected" -> "待核对"; else -> null }).joinToString(" · ")
@@ -99,13 +100,18 @@ private fun displayAgentOrder(raw: String): Int = when (normalizedAgentName(raw)
     else -> 4
 }
 
-/** 非序列化UI投影；缺失Cursor的默认零不参与统计或额度。 */
-data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?, val fallbackAgent: String? = null) {
-    internal val sourceName: String get() = tokenAgent?.agent ?: quota?.provider ?: requireNotNull(fallbackAgent)
+/** 非序列化UI投影；两者皆空即缺失Cursor的默认零行，不参与统计或额度。 */
+data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?) {
+    internal val sourceName: String get() = tokenAgent?.agent ?: quota?.provider ?: ZERO_DEFAULT_PROVIDER
     val displayName: String get() = tokenAgent?.displayName ?: quota?.label ?: agentDisplayName(sourceName)
-    val tokenText: String? get() = if (providerQuotaKey(sourceName) == "cursor" && tokenAgent?.amount?.total == null)
+    internal val isZeroDefaultProvider: Boolean get() = providerQuotaKey(sourceName) == ZERO_DEFAULT_PROVIDER
+    /** 与Swift `WidgetUsageRow.presentation` 同一规则：默认零提供方缺数字时显示0。 */
+    val tokenText: String? get() = if (isZeroDefaultProvider && tokenAgent?.amount?.hasNumericValue != true)
         "0" else tokenAgent?.amount?.text
 }
+
+/** 缺少Token数字时仍显示0的提供方；缺失整行时补占位行。 */
+private const val ZERO_DEFAULT_PROVIDER = "cursor"
 
 /** 完整Token总量及分Agent投影。 */
 data class TerminalTokens(val day: TerminalDay, val observedMs: Long, val all: TerminalAmount, val agents: List<TerminalAgent>) {

@@ -9,6 +9,7 @@ enum WatchHTTPConfigurationStore {
          kSecAttrAccount as String: "paired-phone"]
     }
 
+    /// 读取手机下发的只读 HTTP 配置；不存在时返回 nil。
     static func load() throws -> WatchHTTPConfiguration? {
         var request = query
         request[kSecReturnData as String] = true
@@ -20,6 +21,7 @@ enum WatchHTTPConfigurationStore {
         return try WatchHTTPConfiguration.decode(data)
     }
 
+    /// 保存并读回核对，保证撤销或换代在重启后仍然生效。
     static func save(_ configuration: WatchHTTPConfiguration) throws {
         let data = try configuration.encoded()
         let attributes: [String: Any] = [
@@ -33,6 +35,7 @@ enum WatchHTTPConfigurationStore {
         } else if updated != errSecSuccess { throw WidgetSnapshotError.unavailable }
     }
 
+    /// 删除持久配置；用于配置写入失败时尽力撤销旧授权。
     static func discard() throws {
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw WidgetSnapshotError.unavailable }

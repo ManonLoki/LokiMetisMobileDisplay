@@ -1,19 +1,31 @@
 import SwiftUI
+import WatchKit
 
-/// Watch应用固定持有一个配套owner，普通菜单切换不重建前台代次。
+/// Watch应用固定持有一个手机配套owner，分页切换不重建前台代次。
 @main
 struct LokiMetrisWatchApp: App {
     @Environment(\.scenePhase) private var phase
-    @StateObject private var model = WatchLinkModel()
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var appDelegate
+    @StateObject private var model = WatchLinkModel.shared
     var body: some Scene {
-        WindowGroup { WatchRootView(model: model) }
-            .onChange(of: phase, initial: true) { _, value in model.setActive(value == .active) }
+        WindowGroup {
+            // Frontmost inactive默认冻结UI；按系统低频节奏重绘已收到的缓存。
+            // Timeline只请求显示更新，不承担网络唤醒或后台保活。
+            TimelineView(.everyMinute) { _ in WatchRootView(model: model) }
+        }
+            .onChange(of: phase, initial: true) { _, value in
+                // Always On/frontmost是inactive，仍保留展示与同步资格。
+                model.setActive(value != .background)
+                if value == .active { model.resume() }
+                if value == .background { WatchAppDelegate.scheduleRefresh() }
+            }
     }
 }
 
 /// 主线程薄模型仅发布最新视图，所有协议和私有文件工作留在串行owner。
 @MainActor
 final class WatchLinkModel: ObservableObject {
+    static let shared = WatchLinkModel()
     @Published private(set) var state = WatchLinkView()
     private var engine: WatchLinkEngine?
     private var delivery: LanProjectionDelivery<WatchLinkView>?
@@ -24,14 +36,59 @@ final class WatchLinkModel: ObservableObject {
     }
     /// 以下操作都转发给引擎；引擎未就绪时忽略。
     func setActive(_ active: Bool) { engine?.setActive(active) }
-    func synchronize() { engine?.synchronize() }
-    func saveName(_ value: String) { engine?.saveName(value) }
+    /// 抬腕或回到前台时立即向手机要一次最新缓存。
+    func resume() { engine?.resume() }
+    /// 系统后台刷新窗口：先读手机缓存，不可达再走 HTTP 后备。
+    func refreshInBackground(completion: @escaping () -> Void) { engine?.refreshInBackground(completion: completion) }
+    /// 系统为配套通道唤醒时，处理完待收的应用上下文再结束任务。
+    func processBackgroundConnectivity(completion: @escaping () -> Void) { engine?.processBackgroundConnectivity(completion: completion) }
+}
+
+/// 只在系统分配的执行窗口刷新；不借用音频、运动或扩展运行会话保活。
+@MainActor
+final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+    /// 启动即创建唯一引擎并申请第一次后台刷新。
+    func applicationDidFinishLaunching() {
+        _ = WatchLinkModel.shared
+        Self.scheduleRefresh()
+    }
+
+    /// 申请约 5 分钟后的后台刷新；系统可按电量与使用习惯推迟。
+    static func scheduleRefresh() {
+        WKApplication.shared().scheduleBackgroundRefresh(
+            withPreferredDate: Date().addingTimeInterval(WatchRefreshPolicy.interval), userInfo: nil
+        ) { error in
+            if error != nil { NSLog("Watch background refresh scheduling deferred") }
+        }
+    }
+
+    /// 逐个完成系统交来的后台任务，每个任务都必须调用完成回调，否则会被系统扣减预算。
+    func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
+        for task in backgroundTasks {
+            switch task {
+            case let refresh as WKApplicationRefreshBackgroundTask:
+                Self.scheduleRefresh()
+                WatchLinkModel.shared.refreshInBackground {
+                    Task { @MainActor in refresh.setTaskCompletedWithSnapshot(true) }
+                }
+            case let connectivity as WKWatchConnectivityRefreshBackgroundTask:
+                WatchLinkModel.shared.processBackgroundConnectivity {
+                    Task { @MainActor in connectivity.setTaskCompletedWithSnapshot(true) }
+                }
+            case let snapshot as WKSnapshotRefreshBackgroundTask:
+                snapshot.setTaskCompleted(restoredDefaultState: true,
+                    estimatedSnapshotExpiration: Date().addingTimeInterval(WatchRefreshPolicy.interval), userInfo: nil)
+            default:
+                task.setTaskCompletedWithSnapshot(false)
+            }
+        }
+    }
 }
 
 /// Hooks、Token、额度从左到右独立分页；首次显示Token，以语义ID记住上次页面。
 @MainActor
 private struct WatchRootView: View {
-    private enum Page: String, Hashable { case hooks, tokens, quota }
+    private enum Page: String, Hashable, CaseIterable { case hooks, tokens, quota }
     private let panel = Color(red: 17 / 255, green: 29 / 255, blue: 45 / 255)
     private let accent = Color(red: 103 / 255, green: 232 / 255, blue: 249 / 255)
     private let violet = Color(red: 174 / 255, green: 140 / 255, blue: 255 / 255)
@@ -39,73 +96,51 @@ private struct WatchRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var reducedLuminance
     @ObservedObject var model: WatchLinkModel
-    @State private var showingSettings = false
-    @State private var name = ""
     @State private var entered = false
     @State private var updateGlow = false
     @State private var glowRevision = 0
+    @State private var visibleHookSlot: Int?
     @AppStorage("watch.panel.selectedPage") private var selectedPage = Page.tokens.rawValue
-    @AppStorage("watch.panel.showUsage") private var showUsage = true
-    @AppStorage("watch.panel.showHooks") private var showHooks = true
-    @AppStorage("watch.panel.usageDetailed") private var usageDetailed = false
 
     private var allowsMotion: Bool {
-        phase == .active && !reduceMotion && !reducedLuminance && !showingSettings
-    }
-    private var visiblePages: [Page] {
-        (showHooks ? [.hooks] : []) + (showUsage ? [.tokens, .quota] : [])
+        phase == .active && !reduceMotion && !reducedLuminance
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if visiblePages.isEmpty {
-                    ScrollView {
-                        emptyPanel(title: "未选择卡片", detail: nil, action: "选择卡片", identifier: "watch-configure-panel")
-                            .padding(.horizontal, 4)
-                    }
-                } else {
-                    GeometryReader { pageArea in
-                        TabView(selection: $selectedPage) {
-                            if showHooks { hooksPage(size: pageArea.size).tag(Page.hooks.rawValue) }
-                            if showUsage { tokensPage.tag(Page.tokens.rawValue) }
-                            if showUsage { quotaPage.tag(Page.quota.rawValue) }
-                        }
-                        .frame(width: pageArea.size.width, height: pageArea.size.height)
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .accessibilityIdentifier("watch-pages")
-                        .overlay(alignment: .bottom) {
-                            if visiblePages.count > 1 {
-                                HStack(spacing: 5) {
-                                    ForEach(visiblePages, id: \.rawValue) { page in
-                                        Circle().fill(selectedPage == page.rawValue ? .white : .white.opacity(0.35))
-                                            .frame(width: 4, height: 4)
-                                    }
-                                }
-                                .frame(height: 4)
-                                .padding(.bottom, 5)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                            }
-                        }
-                    }
-                    .ignoresSafeArea(.container, edges: .bottom)
-                }
+        GeometryReader { pageArea in
+            TabView(selection: $selectedPage) {
+                hooksPage(size: pageArea.size).tag(Page.hooks.rawValue)
+                tokensPage.tag(Page.tokens.rawValue)
+                quotaPage.tag(Page.quota.rawValue)
             }
-            .opacity(entered || !allowsMotion ? 1 : 0.5)
-            .scaleEffect(entered || !allowsMotion ? 1 : 0.98, anchor: .top)
-            .background(Color.black)
-            .navigationTitle("")
-            .navigationDestination(isPresented: $showingSettings) {
-                List { settings }
-                    .navigationTitle("设置")
+            .frame(width: pageArea.size.width, height: pageArea.size.height)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .accessibilityIdentifier("watch-pages")
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 5) {
+                    ForEach(Page.allCases, id: \.rawValue) { page in
+                        Circle().fill(selectedPage == page.rawValue ? .white : .white.opacity(0.35))
+                            .frame(width: 4, height: 4)
+                    }
+                }
+                .frame(height: 4)
+                .padding(.bottom, 5)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
+        .ignoresSafeArea(.container, edges: .bottom)
+        .opacity(entered || !allowsMotion ? 1 : 0.5)
+        .scaleEffect(entered || !allowsMotion ? 1 : 0.98, anchor: .top)
+        .background(Color.black)
         .tint(accent)
-        .onAppear { reconcilePage() }
-        .onChange(of: showUsage) { _, _ in reconcilePage() }
-        .onChange(of: showHooks) { _, _ in reconcilePage() }
-        .onChange(of: model.state.info?.name, initial: true) { _, value in if let value { name = value } }
+        .onAppear {
+            if Page(rawValue: selectedPage) == nil { selectedPage = Page.tokens.rawValue }
+        }
+        .onChange(of: model.state.envelope?.snapshot.hooks.map(\.slot), initial: true) { _, slots in
+            guard let slots, !slots.isEmpty else { visibleHookSlot = nil; return }
+            if visibleHookSlot.map({ !slots.contains($0) }) ?? true { visibleHookSlot = slots.min() }
+        }
         .onChange(of: phase, initial: true) { _, value in
             if value == .active {
                 if allowsMotion {
@@ -118,7 +153,6 @@ private struct WatchRootView: View {
         }
         .onChange(of: reduceMotion) { _, _ in if !allowsMotion { stopMotion() } }
         .onChange(of: reducedLuminance) { _, _ in if !allowsMotion { stopMotion() } }
-        .onChange(of: showingSettings) { _, _ in if !allowsMotion { stopMotion() } }
         .task(id: phase) {
             guard allowsMotion else { return }
             var transaction = Transaction()
@@ -139,12 +173,7 @@ private struct WatchRootView: View {
         }
     }
 
-    /// 已隐藏或无效的历史页只回退到有效页；全隐藏时保留用户最后的语义ID。
-    private func reconcilePage() {
-        guard !visiblePages.isEmpty, !visiblePages.contains(where: { $0.rawValue == selectedPage }) else { return }
-        selectedPage = (showUsage ? Page.tokens : .hooks).rawValue
-    }
-
+    /// 息屏、减弱动态效果或离开前台时，无动画地直接回到静止终态。
     private func stopMotion() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -154,22 +183,19 @@ private struct WatchRootView: View {
 
     private var tokensPage: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            Group {
                 if let envelope = model.state.envelope {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("Token 总量", systemImage: "number")
                             .font(.caption.weight(.medium)).foregroundStyle(accent)
                         if let tokens = envelope.snapshot.tokens {
-                            amount("总 Token", value: tokens.all, prominent: true)
+                            tokenTotal(tokens.all)
                             Text(tokens.day.date).font(.caption2).foregroundStyle(.secondary)
                         } else {
                             Text(envelope.snapshot.tokenError == nil ? "Token 尚未同步" : "Token 暂不可用")
                                 .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if usageDetailed, let tokens = envelope.snapshot.tokens {
-                            Divider().overlay(.white.opacity(0.08))
-                            ForEach(tokens.displayAgents, id: \.agent) { amount($0.displayName, value: $0.amount) }
-                            Text(tokens.day.zone).font(.caption2).foregroundStyle(.secondary)
+                            Text("在 iPhone 中连接桌面后自动同步")
+                                .font(.caption2).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -180,7 +206,7 @@ private struct WatchRootView: View {
                 }
             }
             .padding(.horizontal, 4)
-            .padding(.bottom, visiblePages.count > 1 ? 22 : 8)
+            .padding(.bottom, 22)
         }
         .accessibilityLabel("Token 总量页面")
     }
@@ -195,25 +221,16 @@ private struct WatchRootView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("等待额度数据").font(.headline)
-                        Text(model.state.envelope == nil
-                            ? "先在 iPhone 中连接桌面，再同步账户额度。"
-                            : "桌面尚未提供账户额度，获取后会自动同步。")
+                        Text("在 iPhone 中连接桌面后自动同步")
                             .font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        if model.state.envelope == nil {
-                            Button("连接设置") { showingSettings = true }
-                                .accessibilityIdentifier("watch-quota-settings")
-                        } else {
-                            Button("请求同步", action: model.synchronize)
-                                .accessibilityIdentifier("watch-quota-sync")
-                        }
                     }
                     .watchPanel(panel)
                     .accessibilityIdentifier("watch-quota-waiting")
                 }
             }
             .padding(.horizontal, 4)
-            .padding(.bottom, visiblePages.count > 1 ? 22 : 8)
+            .padding(.bottom, 22)
         }
         .accessibilityLabel("账户剩余额度页面")
     }
@@ -266,56 +283,69 @@ private struct WatchRootView: View {
     /// 上下滚动吸附切换，左右手势留给主页面；底部只为分页圆点留空。
     private func hooksPage(size: CGSize) -> some View {
         let width = max(0, size.width - 8)
-        let bottomInset: CGFloat = visiblePages.count > 1 ? 14 : 6
+        let bottomInset: CGFloat = 14
         let height = max(0, size.height - bottomInset)
-        return GeometryReader { _ in
-            ScrollView(.vertical) {
-                if let snapshot = model.state.envelope?.snapshot {
-                    if !snapshot.hooksAvailable {
-                        hookPlaceholder("暂不可用")
-                    } else if snapshot.hooks.isEmpty {
-                        hookPlaceholder("暂无活动")
-                    } else {
-                        LazyVStack(spacing: 0) {
-                            ForEach(snapshot.hooks.sorted(by: { $0.slot < $1.slot }), id: \.slot) { hook in
-                                hookTile(hook, height: height)
-                                    .frame(width: width, height: height)
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
-                                    .accessibilityIdentifier("watch-hook-\(hook.slot)")
-                            }
-                        }.scrollTargetLayout()
-                    }
+        return ScrollView(.vertical) {
+            if let snapshot = model.state.envelope?.snapshot {
+                if !snapshot.hooksAvailable {
+                    hookPlaceholder("暂不可用")
+                } else if snapshot.hooks.isEmpty {
+                    hookPlaceholder("暂无活动")
                 } else {
-                    waitingPanel
+                    LazyVStack(spacing: 0) {
+                        ForEach(snapshot.hooks.sorted(by: { $0.slot < $1.slot }), id: \.slot) { hook in
+                            hookTile(hook, height: height)
+                                .id(hook.slot)
+                                .frame(width: width, height: height)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(agentDisplayName(hook.agent))，\(hook.behavior.label)")
+                                .accessibilityIdentifier("watch-hook-\(hook.slot)")
+                        }
+                    }.scrollTargetLayout()
                 }
+            } else {
+                waitingPanel
             }
-            .scrollTargetBehavior(.paging)
-            .scrollIndicators(.hidden)
-            .contentMargins(.vertical, 0, for: .scrollContent)
-            .frame(width: width, height: height)
-            .clipped()
-            .padding(.horizontal, 4)
-            .padding(.bottom, bottomInset)
         }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $visibleHookSlot)
+        .scrollIndicators(.hidden)
+        .contentMargins(.vertical, 0, for: .scrollContent)
+        .frame(width: width, height: height)
+        .clipped()
+        .padding(.horizontal, 4)
+        .padding(.bottom, bottomInset)
         .accessibilityLabel("活动状态页面")
     }
 
     private var waitingPanel: some View {
-        emptyPanel(title: "尚未同步", detail: "先在 iPhone 中连接桌面，同步连接配置。", action: "连接设置", identifier: "watch-open-settings")
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "iphone").font(.title2).foregroundStyle(accent)
+            Text("等待 iPhone 同步").font(.headline)
+            Text("在 iPhone 中连接桌面后自动同步")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .watchPanel(panel)
+        .accessibilityIdentifier("watch-waiting")
     }
 
+    /// Hooks 不可用或为空时的占位卡片。
     private func hookPlaceholder(_ title: String) -> some View {
-        Text(title).font(.caption).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading).watchPanel(panel)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption)
+            Text("在 iPhone 中连接桌面后自动同步").font(.caption2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading).watchPanel(panel)
     }
 
     /// 大字便于扫读，小字保留完整整数；两者均来自同一精确值。
-    private func amount(_ title: String, value: WidgetAmount, prominent: Bool = false) -> some View {
+    private func tokenTotal(_ value: WidgetAmount) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            if !prominent { Text(title).font(.caption2).foregroundStyle(.secondary) }
             Text(value.compactText)
-                .font(prominent ? .system(size: 31, weight: .semibold, design: .monospaced) : .system(.body, design: .monospaced, weight: .medium))
+                .font(.system(size: 31, weight: .semibold, design: .monospaced))
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.25)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .privacySensitive()
@@ -329,10 +359,11 @@ private struct WatchRootView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title)，\(value.text)\(value.quality.isEmpty ? "" : "，" + value.quality)")
+        .accessibilityLabel("总 Token，\(value.text)\(value.quality.isEmpty ? "" : "，" + value.quality)")
         .privacySensitive()
     }
 
+    /// 单张活动卡：顶部一行显示 Agent 与状态，其余空间留给图片。
     private func hookTile(_ hook: LanDisplaySnapshot.Hook, height: CGFloat) -> some View {
         let inset: CGFloat = 9
         return VStack(alignment: .leading, spacing: 6) {
@@ -359,13 +390,14 @@ private struct WatchRootView: View {
         .animation(allowsMotion ? .easeOut(duration: 0.2) : nil, value: hook.behavior)
     }
 
+    /// 只有当前可见页、当前卡片且允许动效时才播放动图，其余情况停在当前帧不唤醒。
     private func hookImage(_ hook: LanDisplaySnapshot.Hook) -> some View {
         let image = hook.image.flatMap { model.state.images[$0] }
         let placeholder = hook.image == nil ? "暂无图片" : "图片未缓存"
         return GeometryReader { area in
             Group {
                 if let image {
-                    HookAssetImage(asset: image, playbackEnabled: selectedPage == Page.hooks.rawValue && !showingSettings)
+                    HookAssetImage(asset: image, playbackEnabled: selectedPage == Page.hooks.rawValue && allowsMotion && hook.slot == visibleHookSlot)
                 } else {
                     VStack(spacing: 4) {
                         Image(systemName: "photo").accessibilityHidden(true)
@@ -380,6 +412,7 @@ private struct WatchRootView: View {
         .accessibilityLabel(image == nil ? placeholder : "活动图片")
     }
 
+    /// 活动状态到颜色的固定映射。
     private func behaviorColor(_ behavior: WidgetHook.Behavior) -> Color {
         switch behavior {
         case .running: return accent
@@ -389,88 +422,10 @@ private struct WatchRootView: View {
         }
     }
 
-    private func emptyPanel(title: String, detail: String?, action: String, identifier: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "square.grid.2x2").font(.title2).foregroundStyle(accent)
-            Text(title).font(.headline)
-            if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
-            Button(action) { showingSettings = true }
-                .buttonStyle(.borderedProminent).tint(accent)
-                .foregroundStyle(Color(red: 5 / 255, green: 10 / 255, blue: 18 / 255))
-                .accessibilityIdentifier(identifier)
-        }.watchPanel(panel)
-    }
-
-    /// 手机优先，无法取得手机数据时自动使用已同步的 HTTP 配置。
-    @ViewBuilder private var connectionSettings: some View {
-        Section("数据连接") {
-            Text(model.state.status).font(.caption)
-            LabeledContent("当前方式") { Text(model.state.connectionMode).font(.caption2) }
-            Text("优先通过 iPhone 同步完整数据。手机 App 在后台时可提供连接配置；无法完成手机同步时，手表自动通过 HTTP 直连桌面。")
-                .font(.caption2).foregroundStyle(.secondary)
-            if model.state.summaryOnly {
-                Text("HTTP 直连提供用量、账户额度与插槽状态；正文与图片通过 iPhone 同步。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            if let date = model.state.receivedAt {
-                LabeledContent("上次同步") {
-                    Text(date.formatted(SyncTimeFormat.full)).font(.caption2)
-                        .accessibilityLabel("上次同步于 \(date.formatted(SyncTimeFormat.full))")
-                }
-            }
-            Button("请求同步", action: model.synchronize)
-                .buttonStyle(.bordered).accessibilityIdentifier("watch-sync")
-            if let error = model.state.error { Text(error).font(.caption).foregroundStyle(.secondary) }
-        }
-        if let source = model.state.envelope {
-            Section("同步来源") {
-                identity("iPhone ID", value: source.phoneId)
-                identity("桌面 ID", value: source.sourceId)
-            }
-        }
-    }
-
-    @ViewBuilder private var settings: some View {
-        Section("显示内容") {
-            Toggle("用量与额度", isOn: $showUsage).accessibilityIdentifier("watch-show-usage")
-            Toggle("Hooks", isOn: $showHooks).accessibilityIdentifier("watch-show-hooks")
-            if showUsage {
-                Picker("显示详情", selection: $usageDetailed) {
-                    Text("简洁").tag(false)
-                    Text("详细").tag(true)
-                }.accessibilityIdentifier("watch-usage-detail")
-            }
-            if showUsage && showHooks {
-                Text("首次显示 Token 总量，左滑看额度，右滑看 Hooks；自动记住上次查看的页面。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            } else if visiblePages.count > 1 {
-                Text("左右滑动切换卡片，自动记住上次查看的页面。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            if showHooks {
-                Text("Hooks 每屏显示一张活动卡，上下滚动切换。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-        connectionSettings
-        Section("本机") {
-            TextField("设备名称", text: $name).accessibilityIdentifier("watch-device-name")
-            Button("保存名称") { model.saveName(name) }
-                .buttonStyle(.bordered).disabled(model.state.info == nil || name == model.state.info?.name)
-            if let feedback = model.state.nameFeedback { Text(feedback).font(.caption) }
-            identity("设备 ID", value: model.state.info?.deviceId ?? "身份暂不可用")
-        }
-    }
-
-    private func identity(_ title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(value).font(.caption2.monospaced()).fixedSize(horizontal: false, vertical: true)
-        }
-    }
 }
 
 private extension View {
+    /// 统一的 Watch 卡片外观；`highlighted` 为 true 时边框短暂高亮提示有更新。
     func watchPanel(_ color: Color, highlighted: Bool = false, padding: CGFloat = 13) -> some View {
         modifier(WatchCyberPanel(color: color, highlighted: highlighted, padding: padding))
     }

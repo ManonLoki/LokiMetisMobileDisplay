@@ -74,11 +74,12 @@ final class WatchAssetCache {
         guard asset.isValid else { throw WidgetSnapshotError.invalid }
     }
     /// 后台保留全部动画帧和原始时序；每张最多256像素、2MiB，十二张约24MiB。
-    func image(_ path: URL, mime: String) throws -> LanImageAsset {
+    /// 不读写缓存状态，可在独立解码队列执行，不占用配套RPC队列。
+    static func image(_ path: URL, asset: LanDisplaySnapshot.Asset) throws -> LanImageAsset {
         var limits = LanImageAsset.Limits()
         limits.maxPixelSize = 256
         limits.maxDecodedBytes = 2 * 1024 * 1024
-        return try LanImageAsset.decode(contentsOf: path, mime: mime, limits: limits)
+        return try LanImageAsset.decode(contentsOf: path, mime: asset.mime, id: asset.hash, limits: limits)
     }
     /// 当前引用优先保留，旧缓存按最近复用时间收敛到512MiB和512个文件。
     func prune(keeping: Set<String>) {

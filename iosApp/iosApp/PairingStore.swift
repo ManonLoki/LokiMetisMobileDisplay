@@ -10,7 +10,7 @@ final class PairingStore {
     init(deviceId: String) { self.deviceId = deviceId }
 
     /// 重装恢复只读取私有服务中的账户属性，不读取任何配对秘密或修改其双端绑定。
-    static func legacyIdentityAccounts() throws -> [String] {
+    static func identityAccounts() throws -> [String] {
         let search: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrSynchronizable as String: false,
             kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll]
@@ -35,6 +35,7 @@ final class PairingStore {
         return try PairingRecovery.export(deviceId: deviceId, materials: materials)
     }
 
+    /// 恢复包的内容指纹，用于确认中断后继续的是同一个包。
     static func recoveryFingerprint(deviceId: String, materials: [[String: Any]]) throws -> String {
         try PairingRecovery.validate(deviceId: deviceId, materials: materials)
         let sorted = materials.sorted { ($0["clientId"] as! String) < ($1["clientId"] as! String) }
@@ -46,7 +47,7 @@ final class PairingStore {
     /// 不增加、合并、改绑或删除任何配对；包内必须包含这一组的全部既存材料。
     func verifyExistingRecoverySelection(materials: [[String: Any]]) throws {
         try PairingRecovery.validate(deviceId: deviceId, materials: materials)
-        let accounts = try Self.legacyIdentityAccounts()
+        let accounts = try Self.identityAccounts()
         let stored = try clientIds().sorted().map { client -> [String: Any] in
             guard let material = try load(client) else { throw DeviceIdentityFailure.recoveryConflict }
             return material
@@ -57,7 +58,7 @@ final class PairingStore {
     /// 首次恢复必须是整个服务空库；仅同一恢复日志允许继续此前精确匹配的部分写入。
     func checkRecoveryDestination(materials: [[String: Any]], resuming: Bool) throws {
         try PairingRecovery.validate(deviceId: deviceId, materials: materials)
-        let accounts = try Self.legacyIdentityAccounts()
+        let accounts = try Self.identityAccounts()
         if !resuming {
             guard accounts.isEmpty else { throw DeviceIdentityFailure.recoveryConflict }
             return
@@ -72,6 +73,7 @@ final class PairingStore {
         }
     }
 
+    /// 逐条写入恢复材料并读回核对：已存在的同一桌面记录不重写，但必须与恢复包完全一致；最后核对整包指纹。
     func importRecoveryMaterials(_ materials: [[String: Any]]) throws {
         try checkRecoveryDestination(materials: materials, resuming: true)
         for material in materials {
@@ -87,7 +89,7 @@ final class PairingStore {
 
     /// 提交身份前、以及崩溃后收尾时，都必须确认整包而非仅个别配对写入完成。
     func verifyRecovery(fingerprint: String) throws {
-        let accounts = try Self.legacyIdentityAccounts()
+        let accounts = try Self.identityAccounts()
         let clients = try clientIds()
         guard accounts.count == clients.count else { throw DeviceIdentityFailure.recoveryConflict }
         let materials = try clients.sorted().map { clientId -> [String: Any] in
@@ -98,10 +100,12 @@ final class PairingStore {
         else { throw DeviceIdentityFailure.recoveryConflict }
     }
 
+    /// 按排序后的 JSON 字节比较两份配对材料。
     private static func sameMaterial(_ left: [String: Any], _ right: [String: Any]) throws -> Bool {
         try JSONSerialization.data(withJSONObject: left, options: [.sortedKeys]) == JSONSerialization.data(withJSONObject: right, options: [.sortedKeys])
     }
 
+    /// 精确定位「桌面.本机」这一条钥匙串记录的查询条件。
     private func query(_ clientId: String) throws -> [String: Any] {
         guard SharedValidation.isCanonicalUUID(clientId) else { throw Failure.invalid }
         return [kSecClass as String: kSecClassGenericPassword,
@@ -142,34 +146,6 @@ final class PairingStore {
             result.insert(id)
         }
         return result
-    }
-
-    /// 前台解锁期间迁移旧记录，让系统之后唤醒App时能认证局域网桌面。
-    /// 逐条验证双端身份与原始数据边界，仅修改可访问属性，不重写或删除秘密。
-    func prepareForBackgroundRefresh() throws {
-        for clientId in try clientIds().sorted() {
-            var search = try query(clientId)
-            search[kSecReturnAttributes as String] = true
-            search[kSecReturnData as String] = true
-            search[kSecMatchLimit as String] = kSecMatchLimitOne
-            var item: CFTypeRef?
-            let status = SecItemCopyMatching(search as CFDictionary, &item)
-            if status == errSecItemNotFound { continue }
-            guard status == errSecSuccess, let row = item as? [String: Any],
-                  row[kSecAttrService as String] as? String == service,
-                  row[kSecAttrAccount as String] as? String == clientId + "." + deviceId,
-                  let data = row[kSecValueData as String] as? Data, data.count <= 8192,
-                  let material = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  material["clientId"] as? String == clientId,
-                  material["deviceId"] as? String == deviceId,
-                  let accessibility = row[kSecAttrAccessible as String] as? String else { throw Failure.storage }
-            if accessibility == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String { continue }
-            guard accessibility == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String else { throw Failure.storage }
-            var exact = try query(clientId)
-            exact[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            let update = [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-            guard SecItemUpdate(exact as CFDictionary, update as CFDictionary) == errSecSuccess else { throw Failure.storage }
-        }
     }
 
     /// 只有OS调用确实成功才返回true；调用方须把原commitId交还共享核心再取得ACK。

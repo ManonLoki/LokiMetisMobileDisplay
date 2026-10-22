@@ -7,6 +7,7 @@ final class NativeLinkBridge {
     /// 调用方串行使用同一句柄，因此复用一块输出缓冲；每次返回前只清零实际写入部分。
     private var output = [UInt8](repeating: 0, count: 192 * 1024)
 
+    /// 创建一个 Rust 会话句柄，承载配对、认证与加解密状态。
     init(deviceId: String, name: String) throws {
         let identity = try JSONSerialization.data(withJSONObject: ["deviceId": deviceId, "name": name])
         handle = identity.withUnsafeBytes { buffer in
@@ -40,7 +41,8 @@ final class NativeLinkBridge {
     }
 
     /// 私有持久缓存每次复用前验证完整内容，损坏文件不能被当作缓存命中。
-    func validAsset(_ descriptor: [String: Any], bytes: Data) throws -> Bool {
+    /// 不使用会话句柄，可在任意队列调用。
+    static func validAsset(_ descriptor: [String: Any], bytes: Data) throws -> Bool {
         let metadata = try JSONSerialization.data(withJSONObject: descriptor)
         return metadata.withUnsafeBytes { a in
             bytes.withUnsafeBytes { b in
@@ -50,6 +52,7 @@ final class NativeLinkBridge {
         }
     }
 
+    /// 释放 Rust 句柄；重复调用安全。
     func close() { if handle != 0 { loki_mobile_destroy(handle); handle = 0 } }
     deinit { close() }
 }

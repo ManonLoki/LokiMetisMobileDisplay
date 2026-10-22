@@ -10,7 +10,7 @@ final class DeviceSettings: ObservableObject {
     private(set) var identityError: String?
     private let preferences: UserDefaults
 
-    /// 兼容已保存名称和旧发现UUID，身份损坏时不生成替代身份覆盖信任。
+    /// 读取已保存名称与钥匙串身份；身份损坏时不生成替代身份覆盖信任。
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
         do { deviceId = try DeviceIdentityStore().load() }

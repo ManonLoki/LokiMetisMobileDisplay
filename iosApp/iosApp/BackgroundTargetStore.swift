@@ -75,6 +75,7 @@ final class BackgroundTargetStore {
         try FileManager.default.removeItem(at: file)
     }
 
+    /// 读取并校验后台刷新目标记录；文件不存在返回 nil。
     private func loadRecord() throws -> BackgroundTarget? {
         let file = try fileURL()
         let data: Data
@@ -92,6 +93,7 @@ final class BackgroundTargetStore {
         return try validated(record.target)
     }
 
+    /// 目标记录固定位于应用私有目录，不进入 App Group。
     private func fileURL() throws -> URL {
         guard SharedValidation.validId(deviceId) else { throw Failure.invalid }
         let folder: URL
@@ -103,6 +105,7 @@ final class BackgroundTargetStore {
         return folder.appendingPathComponent(deviceId + ".json", isDirectory: false)
     }
 
+    /// 只接受本产品服务类型与 local. 域，并重新校验名称长度与控制字符；类型与域按规范写法返回。
     private func validated(_ target: BackgroundTarget) throws -> BackgroundTarget {
         guard SharedValidation.validId(deviceId), SharedValidation.validId(target.id), target.id != deviceId,
               !target.name.isEmpty, target.name.utf8.count <= 63,

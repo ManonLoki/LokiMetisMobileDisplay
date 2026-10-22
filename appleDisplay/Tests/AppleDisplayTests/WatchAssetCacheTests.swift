@@ -7,32 +7,9 @@ import XCTest
 final class WatchAssetCacheTests: XCTestCase {
     private let transfer = "32345678-1234-4abc-8def-123456789abc"
 
-    private func encoded(type: String, mime: String, frames: Int = 2, size: Int = 8) throws -> Data {
-        let data = NSMutableData()
-        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, type as CFString, frames, nil))
-        let dictionary = mime == "image/gif" ? kCGImagePropertyGIFDictionary : kCGImagePropertyPNGDictionary
-        let loopKey = mime == "image/gif" ? kCGImagePropertyGIFLoopCount : kCGImagePropertyAPNGLoopCount
-        let delayKey = mime == "image/gif" ? kCGImagePropertyGIFUnclampedDelayTime : kCGImagePropertyAPNGUnclampedDelayTime
-        CGImageDestinationSetProperties(destination, [dictionary: [loopKey: 2]] as CFDictionary)
-        for index in 0..<frames {
-            let context = try XCTUnwrap(CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
-                bytesPerRow: size * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-            context.setFillColor(CGColor(red: index.isMultiple(of: 2) ? 1 : 0, green: 0,
-                blue: index.isMultiple(of: 2) ? 0 : 1, alpha: 1))
-            context.fill(CGRect(x: 0, y: 0, width: size, height: size))
-            let image = try XCTUnwrap(context.makeImage())
-            CGImageDestinationAddImage(destination, image, [dictionary: [delayKey: index == 0 ? 0.05 : 0.2]] as CFDictionary)
-        }
-        XCTAssertTrue(CGImageDestinationFinalize(destination))
-        return data as Data
-    }
-
     /// 走Watch真实分块校验后再从命中的私有缓存解码，不绕过传输哈希。
-    private func committed(_ data: Data, mime: String) throws -> (WatchAssetCache, URL) {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
-        let cache = try WatchAssetCache(directory: folder)
+    private func committed(_ data: Data, mime: String) throws -> (LanDisplaySnapshot.Asset, URL) {
+        let cache = try WatchAssetCache(directory: temporaryFolder())
         let descriptor = LanDisplaySnapshot.Asset(hash: WatchProtocol.hash(data), mime: mime, length: UInt64(data.count))
         try cache.begin(descriptor, id: transfer)
         var offset = 0
@@ -43,13 +20,15 @@ final class WatchAssetCacheTests: XCTestCase {
             if end < data.count { XCTAssertNil(result.1) }
             offset = end
         }
-        return (cache, try XCTUnwrap(cache.cached(descriptor)))
+        return (descriptor, try XCTUnwrap(cache.cached(descriptor)))
     }
 
     func test_cached_watch_gif_and_apng_preserve_frames_timings_and_finite_loops() throws {
         for (type, mime) in [("com.compuserve.gif", "image/gif"), ("public.png", "image/png")] {
-            let (cache, path) = try committed(encoded(type: type, mime: mime), mime: mime)
-            let asset = try cache.image(path, mime: mime)
+            let (descriptor, path) = try committed(TestImages.encoded(type, mime: mime, frames: 2, loops: 2), mime: mime)
+            let asset = try WatchAssetCache.image(path, asset: descriptor)
+            XCTAssertEqual(asset.id, descriptor.hash)
+            XCTAssertEqual(try WatchAssetCache.image(path, asset: descriptor).id, asset.id)
             XCTAssertEqual(asset.frames.count, 2)
             XCTAssertEqual(asset.frameDurations[0], 0.05, accuracy: 0.001)
             XCTAssertEqual(asset.frameDurations[1], 0.2, accuracy: 0.001)
@@ -64,15 +43,15 @@ final class WatchAssetCacheTests: XCTestCase {
 
     func test_watch_image_pixel_and_total_animation_memory_are_bounded_without_dropping_frames() throws {
         let mime = "image/gif"
-        let (staticCache, staticPath) = try committed(encoded(type: "com.compuserve.gif", mime: mime, frames: 1, size: 512), mime: mime)
-        let still = try staticCache.image(staticPath, mime: mime)
+        let (staticDescriptor, staticPath) = try committed(TestImages.encoded("com.compuserve.gif", mime: mime, size: 512, loops: 2), mime: mime)
+        let still = try WatchAssetCache.image(staticPath, asset: staticDescriptor)
         XCTAssertEqual(still.frames.count, 1)
         XCTAssertEqual(still.frames[0].width, 256)
         XCTAssertEqual(still.frames[0].height, 256)
 
         for frameCount in [9, 32] {
-            let (cache, path) = try committed(encoded(type: "com.compuserve.gif", mime: mime, frames: frameCount, size: 512), mime: mime)
-            let asset = try cache.image(path, mime: mime)
+            let (descriptor, path) = try committed(TestImages.encoded("com.compuserve.gif", mime: mime, frames: frameCount, size: 512, loops: 2), mime: mime)
+            let asset = try WatchAssetCache.image(path, asset: descriptor)
             XCTAssertEqual(asset.frames.count, frameCount)
             XCTAssertLessThanOrEqual(asset.decodedByteCount, 2 * 1024 * 1024)
             XCTAssertLessThan(asset.frames[0].width, 256)
