@@ -1,12 +1,14 @@
 # 诡秘神谕移动展示终端 · LokiMetrisDisplay
 
-**桌面客户端：[LokiMetris · 诡秘神谕](https://github.com/ManonLoki/LokiMetis)** —— 电脑负责采集用量与活动，移动端负责展示。
+**数据采集端：[LokiMetris · 诡秘神谕](https://github.com/ManonLoki/LokiMetis)** —— 电脑负责采集用量与活动，移动端负责展示。
 
 在 Android、iPhone、iPad、Apple Watch 和小组件上，查看电脑上的 AI 编程工具用量、账户额度与运行状态。两端通过局域网连接，首次使用四位码配对，之后自动重连。
 
 中文系统里的应用名为“诡秘神谕”，其他语言显示为“LokiMetris”。
 
 [下载 Android APK](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/latest) · [主要界面](#主要-ui-展示) · [使用说明](#详细使用说明) · [版本更新](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases) · [从源码运行](#从源码运行)
+
+> **Desktop 实验展示终端**：`codex/desktop-experimental` 分支新增 `desktopApp`，在电脑窗口中使用与 Android 平板共用的展示台和设置。它从 LokiMetris 采集端接收数据，本身不采集本机 AI 用量。该分支与 `main` 独立开发、禁止互相合并；当前发布仍为 **v1.0.7**，本次没有发布新版本。运行与验证范围见 [Desktop 实验说明](docs/11-Desktop实验展示终端.md)。
 
 ## 主要 UI 展示
 
@@ -33,6 +35,12 @@ Token 精简／详细、Hooks 1×1／2×2 均可独立选择并自动保存，�
 <img src="docs/images/v1.0.6/ipad-landscape.png" width="1000" alt="iPad 横屏：侧栏导航，用量与四张 Hooks 图片卡并列">
 
 iPad 横屏将用量与 Hooks 并列，宽窗口使用侧栏导航；手机横屏也采用左右分区。另见 [Android 横屏](docs/images/v1.0.6/android-landscape.png) 与 [Android 大字号](docs/images/v1.0.6/android-large-text.png)。
+
+### Desktop 实验展示台
+
+<img src="docs/images/desktop-experimental/desktop-tablet-panel.png" width="1000" alt="Desktop 实验展示台：侧栏导航、用量与四张 Hooks 并列，使用测试专用演示数据">
+
+宽窗口参照 Android 平板左右分区，缩窄后改为上下分区和底部导航；支持鼠标翻页、图文详情及本机面板设置。另见 [设置](docs/images/desktop-experimental/desktop-settings.png) 与 [窄窗口](docs/images/desktop-experimental/desktop-narrow-panel.png)。图片由隔离的桌面 UI 自动化测试生成；真实采集端配对与实际运行结果另记录在 [实验说明](docs/11-Desktop实验展示终端.md)。
 
 ### Android 悬浮窗与小组件
 
@@ -81,6 +89,7 @@ iPad 横屏将用量与 Hooks 并列，宽窗口使用侧栏导航；手机横�
 | iPhone | iOS 18.2 | 原生 SwiftUI 应用 |
 | iPad | iPadOS 18.2 | 平板布局与多窗口 |
 | Apple Watch | watchOS 11.0 | 首次配置需要已配对的 iPhone；Always On 取决于表款及系统设置 |
+| Desktop 实验展示终端 | 本次验证 macOS Apple Silicon | 配置了 macOS、Windows、Linux 宿主构建；后两者尚未构建或运行验证，未声明统一最低系统版本 |
 
 ### 各端入口
 
@@ -88,6 +97,7 @@ iPad 横屏将用量与 Hooks 并列，宽窗口使用侧栏导航；手机横�
 | 入口 | 功能 |
 | --- | --- |
 | Android App | 手机、平板完整展示台；可手动开启后台实时同步 |
+| Desktop 实验 App | 电脑窗口中的完整展示台；与 Android 平板共用界面，窗口存续期间维持连接，没有 Android 系统悬浮窗或小组件 |
 | Android 桌面小组件 | 可调整尺寸，查看最近同步的用量、额度、活动摘要与同步时间，支持手动刷新 |
 | Android 悬浮窗 | 在其他应用上方查看紧凑卡片；Token 页显示总量与最多四个额度账户，Hooks 页显示最多四条状态与正文首行，不显示图片 |
 | iPhone / iPad App | 原生 SwiftUI 展示台，保留最近缓存；iPad 支持多窗口共用连接 |
@@ -101,6 +111,8 @@ Android 悬浮窗需开启系统的“显示在其他应用上层”权限。拖
 
 **Android**：从 [GitHub Releases](https://github.com/ManonLoki/LokiMetisMobileDisplay/releases/latest) 下载 APK 安装，附件中的 `SHA256SUMS` 可用于校验。
 
+**Desktop 实验 App**：当前从实验分支构建运行，见下方 [Desktop 源码运行](#desktop-实验展示终端)。macOS 可生成携带运行时的 `.app`；本次未向正式 Releases 发布桌面安装包。
+
 **iPhone / iPad / Apple Watch**：当前通过 Xcode 开发签名安装，见下方[源码运行说明](#iphone--ipad)。iPhone 宿主同时包含 Widget 和 Watch 应用；Watch 需要与 iPhone 配对。
 
 使用同签名安装包覆盖升级，可保留本机数据。Android 卸载会删除本机配对材料，重新安装后需要再次配对；签名说明见 [signing/README.md](signing/README.md)。
@@ -112,7 +124,7 @@ Android 悬浮窗需开启系统的“显示在其他应用上层”权限。拖
 3. 移动端显示四位码后，保持 App 在前台，在电脑自动弹出的配对窗口中输入该码。四位码有效期为 60 秒，过期后重新发起即可。
 4. 显示“已连接”后，回到“展示台”查看数据。以后打开 App 会自动连接保存的配对。
 
-在移动端忘记配对只移除本机凭据；电脑上的旧设备记录需在桌面端单独移除。
+在展示终端忘记配对只移除本机凭据；电脑上的旧设备记录需在采集端单独移除。Desktop 采用相同的四位码流程，为兼容现有采集端按 Android 平板身份连接，采集端设备列表会将它识别为 Android 平板。
 
 ### 自定义展示台
 
@@ -122,7 +134,7 @@ Android 悬浮窗需开启系统的“显示在其他应用上层”权限。拖
 4. Hooks 选择“1×1”每页一张，或“2×2”每页四张；在展示台左右滑动查看更多卡片。
 5. 返回“展示台”查看结果。更改自动保存，只影响这台设备；两块都开启时竖屏上下、横屏左右排列，只开启一块时铺满展示区域。用量明细较多时，可在用量卡片内上下滚动。
 
-窄窗口通过底部导航切换展示台与设置，宽窗口使用侧栏；iPad 分屏时也会随窗口宽度调整。iPad 多窗口共用桌面连接，不需要每个窗口重新配对。
+Desktop 与移动端的窄窗口通过底部导航切换展示台与设置，宽窗口使用侧栏；iPad 分屏时也会随窗口宽度调整。iPad 多窗口共用桌面连接，不需要每个窗口重新配对。
 
 ### 查看 Hooks 图文与状态
 
@@ -162,6 +174,7 @@ Watch 的新图片经 iPhone 同步。手机不可达时，已获配置的 Watch
 | 入口 | 断线或进入后台后的行为 |
 | --- | --- |
 | Android 主展示台 | 只显示当前连接数据；断线后清空，重启不恢复旧面板。未开启实时同步时，进入后台会关闭连接 |
+| Desktop 实验展示台 | 断线清空完整面板；失焦与最小化保持连接，最小化暂停动效，关闭窗口退出。已校验图片可以保留，必须被新认证快照引用后才重新显示 |
 | Android 后台实时同步 | 用户手动开启后，通过前台服务维持连接并显示持续通知；系统结束进程或设备重启后需重新开启 |
 | Android 小组件 | 独立保留最近一次摘要和原同步时间，刷新失败时继续显示旧结果 |
 | iPhone / iPad | 保留最近数据与同步时间；进入后台关闭持续连接，系统后台任务可短暂连接电脑更新摘要 |
@@ -185,8 +198,9 @@ Apple App、小组件与 Watch 的后台刷新申请间隔约为 **5 分钟**，
 | Xcode | iPhone、iPad、Watch 与 Widget 开发，需要对应系统的 SDK 和模拟器运行时 |
 | Rust / Cargo / rustup | 编译主通道配对与加密核心，版本要求见所选桌面仓库的 `Cargo.toml` |
 | Python 3 | 运行仓库自带的构建、签名及 Apple 测试脚本，无第三方 Python 依赖 |
+| 宿主 C 编译工具 | Desktop JNI 构建；macOS 使用 Xcode Command Line Tools，Linux 使用 C 编译器与 libc 开发文件，Windows 使用匹配 Rust 的 MSVC 或 MinGW 工具链 |
 
-Gradle 使用项目的 `./gradlew`。完整移动 App 还依赖桌面仓库中的 Rust 源码，需同时准备两个仓库，并选择与移动版本兼容的桌面提交：
+Gradle 使用项目的 `./gradlew`。完整 Android／iPhone App 与 Desktop 展示终端还依赖采集端仓库中的 Rust 源码，需同时准备两个仓库，并选择与移动版本兼容的桌面提交：
 
 ```sh
 git clone https://github.com/ManonLoki/LokiMetisMobileDisplay.git
@@ -232,6 +246,29 @@ lokiDesktopRoot=/absolute/path/to/LokiMetis
 
 当前 Android 的 Debug／Release 共用原生库生成任务，Rust 桥均使用脚本默认的 Cargo Debug 配置；APK 的 Release 名称不代表桥已采用 Cargo Release 优化。
 
+### Desktop 实验展示终端
+
+先切换到实验分支；桌面开发与验证统一使用此分支，不合入 `main`：
+
+```sh
+git switch codex/desktop-experimental
+./gradlew :desktopApp:run \
+  -PlokiDesktopRoot=/absolute/path/to/LokiMetis
+```
+
+首次打开后进入“设置”选择采集端，在采集端输入本窗口显示的四位码。展示终端可与采集端运行在同一台或另一台电脑上，发现仍依赖局域网多播和系统防火墙规则。窗口失焦或最小化不会断开连接；关闭窗口结束进程。
+
+生成当前系统、当前架构的应用目录或安装包：
+
+```sh
+./gradlew :desktopApp:createDistributable \
+  -PlokiDesktopRoot=/absolute/path/to/LokiMetis
+./gradlew :desktopApp:packageDistributionForCurrentOS \
+  -PlokiDesktopRoot=/absolute/path/to/LokiMetis
+```
+
+macOS 应用目录为 `desktopApp/build/compose/binaries/main/app/LokiMetrisDisplay.app`，携带运行时和本机 Rust／JNI 库。构建配置提供 macOS DMG、Windows MSI、Linux DEB，需在对应系统构建；本次已验证 macOS arm64 应用目录，Windows／Linux 与各系统安装包尚未验证。Windows 使用 `gradlew.bat`，MSVC 构建需从 Visual Studio Native Tools 环境运行。详细依赖、私有数据位置与测试记录见 [Desktop 实验说明](docs/11-Desktop实验展示终端.md)。
+
 ### iPhone / iPad
 
 添加 Rust 编译目标并打开 Xcode 工程：
@@ -276,12 +313,12 @@ xcodebuild -project iosApp/iosApp.xcodeproj \
 
 ### 共享逻辑与 Apple 测试
 
-SharedLogic 同时编译到 Android、iOS 和 watchOS。Watch 真机保留 `arm64` 与 `arm64_32`，Apple 模拟器使用 Apple Silicon 的 `arm64`。Xcode 的 App、Watch、Widget 各自生成并链接所需框架；构建脚本会串行更新共用产物。
+SharedLogic 同时编译到 Android、Desktop JVM、iOS 和 watchOS。Watch 真机保留 `arm64` 与 `arm64_32`，Apple 模拟器使用 Apple Silicon 的 `arm64`。Xcode 的 App、Watch、Widget 各自生成并链接所需框架；构建脚本会串行更新共用产物。
 
 在 Apple Silicon Mac 上运行：
 
 ```sh
-./gradlew :sharedLogic:testAndroidHostTest :sharedLogic:iosSimulatorArm64Test
+./gradlew :sharedLogic:testAndroidHostTest :sharedLogic:desktopTest :sharedLogic:iosSimulatorArm64Test
 python3 scripts/test_apple_shared.py
 ```
 
@@ -289,11 +326,13 @@ python3 scripts/test_apple_shared.py
 
 ## 技术与目录
 
-Android 使用 Kotlin + Compose，Apple 各端使用原生 SwiftUI；主局域网通道的配对与加密核心由桌面仓库的 Rust 模块提供，只读 HTTP 使用独立密钥并由各平台密码 API 执行。Android、iOS、Watch 和 Widget 通过 SharedLogic 复用展示模型校验、Agent 筛选与排序、用量和额度规则、连接时限与帧容量、Watch 传输与配置、图片调度与缓存淘汰、解码预算，以及只读 HTTP 协议与局域网地址边界。系统网络、文件与图片解码仍由平台执行；Swift 保留原有数据编码格式与界面适配。
+Android 与 Desktop 使用 Kotlin + Compose，共用 `sharedUI` 的展示台、设置、用量卡片、Hooks 图文详情与动效；Apple 各端使用原生 SwiftUI；主局域网通道的配对与加密核心由桌面仓库的 Rust 模块提供，只读 HTTP 使用独立密钥并由各平台密码 API 执行。Android、Desktop、iOS、Watch 和 Widget 通过 SharedLogic 复用展示模型校验、Agent 筛选与排序、用量和额度规则、连接时限与帧容量、Watch 传输与配置、图片调度与缓存淘汰、解码预算，以及只读 HTTP 协议与局域网地址边界。系统网络、文件与图片解码仍由平台执行；Swift 保留原有数据编码格式与界面适配。
 
 ```text
 .
-├── androidApp/       Android 入口、Compose 界面、小组件、后台同步、悬浮窗与本地桥构建
+├── androidApp/       Android 入口、平台界面、小组件、后台同步、悬浮窗与本地桥构建
+├── desktopApp/       实验桌面窗口、发现／连接、私有存储、图片与宿主原生库构建
+├── sharedUI/         Android／Desktop 共用 Compose 页面与动效
 ├── sharedLogic/      各端共享业务规则；androidMain 内为 Android 网络与存储适配
 ├── iosApp/
 │   ├── iosApp/                iPhone / iPad 应用
@@ -303,7 +342,7 @@ Android 使用 Kotlin + Compose，Apple 各端使用原生 SwiftUI；主局域�
 │   ├── Configuration/         Apple 版本与应用标识配置
 │   └── iosApp.xcodeproj/      Xcode 工程
 ├── appleDisplay/     Apple 共用的 Swift 展示、缓存与传输逻辑
-├── scripts/          Rust 桥、Apple 共享框架与测试、Android 签名及图标脚本
+├── scripts/          移动／桌面 Rust 桥、Apple 共享框架与测试、Android 签名及图标脚本
 ├── signing/          Android 签名说明
 ├── branding/         应用图标资源
 ├── docs/             功能与技术文档
@@ -314,6 +353,7 @@ Android 使用 Kotlin + Compose，Apple 各端使用原生 SwiftUI；主局域�
 flowchart TD
     desktop["电脑 LokiMetris：用量、额度、Hooks"] -->|局域网加密连接| android["Android App"]
     desktop -->|局域网加密连接| ios["iPhone / iPad App"]
+    desktop -->|局域网加密连接| display["Desktop 实验展示终端"]
     android --> androidWidget["Android 桌面小组件"]
     android --> floating["Android 悬浮窗"]
     ios -->|共享缓存| widget["iOS 小组件"]
@@ -323,14 +363,16 @@ flowchart TD
     desktop -->|只读加密摘要| watch
 ```
 
-版本名和构建号分别见 [Android 配置](androidApp/build.gradle.kts) 与 [Apple 配置](iosApp/Configuration/Config.xcconfig)。
+版本名和构建号见 [Android 配置](androidApp/build.gradle.kts) 与 [Apple 配置](iosApp/Configuration/Config.xcconfig)；Desktop 实验包的配置见 [desktopApp](desktopApp/build.gradle.kts)。
 
-当前发布为 **v1.0.7**：Android 构建号 **9**，Apple 构建号 **15**；变化与实际验证范围见 [发布记录](docs/10-v1.0.7发布与设备安装.md)。上方 UI 图片保留 v1.0.6 的演示来源说明。
+当前发布为 **v1.0.7**：Android 构建号 **9**，Apple 构建号 **15**；变化与实际验证范围见 [发布记录](docs/10-v1.0.7发布与设备安装.md)。移动端 UI 图片保留 v1.0.6 的演示来源说明；Desktop 图片与验证属于实验分支，不构成新版本发布。
 
 | 要修改的内容 | 先看哪里 |
 | --- | --- |
 | 展示规则、额度、排序、缓存与传输策略 | `sharedLogic/src/commonMain/` |
-| Android 界面、组件、悬浮窗与后台服务 | `androidApp/src/main/` |
+| Android／Desktop 共用展示台、设置、卡片与动效 | `sharedUI/src/commonMain/` |
+| Android 平台界面、组件、悬浮窗与后台服务 | `androidApp/src/main/` |
+| Desktop 窗口、连接、存储与图片 | `desktopApp/src/desktopMain/` |
 | Android 连接、配对、图片缓存与独立摘要 | `sharedLogic/src/androidMain/` |
 | Apple 网络、系统生命周期与各端界面 | `iosApp/` |
 | Apple 编解码、缓存、传输适配与跨语言测试 | `appleDisplay/` |
@@ -349,4 +391,4 @@ flowchart TD
 | 构建提示缺少 Rust bridge | 检查桌面源码是否完整，`lokiDesktopRoot` 或 `LOKI_DESKTOP_ROOT` 是否指向正确目录 |
 | Android 无法覆盖安装 | 确认沿用原签名；迁移方式见[签名说明](signing/README.md) |
 
-进一步阅读：[KMP 分层优化与后续路线](docs/08-KMP分层与优化路线.md)、[当前架构与源码导航](docs/07-当前架构.md)、[文件结构详解](docs/01-文件结构.md)、[技术架构](docs/02-技术架构.md)、[功能与交互](docs/03-业务需求整理.md)、[Android 签名](signing/README.md)。
+进一步阅读：[Desktop 实验展示终端](docs/11-Desktop实验展示终端.md)、[KMP 分层优化与后续路线](docs/08-KMP分层与优化路线.md)、[当前架构与源码导航](docs/07-当前架构.md)、[文件结构详解](docs/01-文件结构.md)、[技术架构](docs/02-技术架构.md)、[功能与交互](docs/03-业务需求整理.md)、[Android 签名](signing/README.md)。

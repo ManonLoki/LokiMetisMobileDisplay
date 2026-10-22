@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
                     if (saved) owner.link?.nameChanged()
                     saved
                 }, imageHashes = projection.images.keys, applicationName = getString(R.string.app_name),
+                motionEnabled = rememberCyberMotionEnabled(), quotaTimestamp = ::formatQuotaTimestamp,
                 platformSettings = {
                     AndroidBackgroundSettings(owner, onRequestOverlay = ::requestOverlay,
                         onStartRealtime = ::startRealtime,

@@ -35,6 +35,9 @@ private val UsageBackground = Color(0xFF101E33)
 private val UsageForeground = Color(0xFFE9F2FF)
 private val UsageMuted = Color(0xFF9BB0C9)
 
+/** 系统日期格式由宿主提供；公共 UI 的保底值保留原始时间而不猜测时区。 */
+internal val LocalQuotaTimestamp = staticCompositionLocalOf<(Long) -> String> { { it.toString() } }
+
 /** 卡片实际宽高决定字号；精简款居中，明细超出时从顶部独立滚动。 */
 @Composable
 internal fun UsageCard(snapshot: TerminalSnapshot?, panel: PanelConfiguration) {
@@ -190,6 +193,7 @@ private fun ProviderTitle(name: String, planLabel: String?, nameStyle: TextStyle
 /** 所有明细共用卡片确定的短条宽度；完整整数不缩小，极窄时整行横向查看。 */
 @Composable
 private fun UsageRowDetails(row: TerminalUsageRow, size: TextUnit, barWidth: Dp) {
+    val quotaTimestamp = LocalQuotaTimestamp.current
     val windows = row.quota?.windows.orEmpty()
     val exact = row.tokenText?.takeIf { row.tokenAgent?.amount?.hasNumericValue == true || it == "0" }?.let(TokenFormatting::exact)
     if (windows.isEmpty() && exact == null) return
@@ -203,7 +207,7 @@ private fun UsageRowDetails(row: TerminalUsageRow, size: TextUnit, barWidth: Dp)
             windows.forEach { window ->
                 val color = quotaRemainingColor(window)
                 Row(Modifier.clearAndSetSemantics {
-                    contentDescription = quotaAccessibilityText(row.displayName, window)
+                    contentDescription = quotaAccessibilityText(row.displayName, window, quotaTimestamp)
                 }, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(window.kindLabel, style = labelStyle, color = UsageMuted, maxLines = 1, softWrap = false)
                     Text(window.percentText, style = percentStyle, color = color, maxLines = 1, softWrap = false)
@@ -281,9 +285,9 @@ private fun QuotaBalanceBar(window: ProviderQuotaWindow, modifier: Modifier = Mo
     }
 }
 
-private fun quotaAccessibilityText(name: String, window: ProviderQuotaWindow): String =
+private fun quotaAccessibilityText(name: String, window: ProviderQuotaWindow, quotaTimestamp: (Long) -> String): String =
     "$name，${window.kindLabel} 额度剩余 ${window.percentText}" +
-        window.resetAtUnix?.let { "，重置 ${formatQuotaTimestamp(it)}" }.orEmpty()
+        window.resetAtUnix?.let { "，重置 ${quotaTimestamp(it)}" }.orEmpty()
 
 
 /** 额度紧随主数字；缺失窗口不造零，明细时间使用上游观察时间。 */
@@ -314,7 +318,7 @@ private fun ProviderQuotaRows(quota: ProviderQuotaSnapshot, modifier: Modifier =
 
 @Composable
 private fun QuotaObservedAt(quota: ProviderQuotaSnapshot) {
-    Text("额度更新 ${formatQuotaTimestamp(quota.observedAtUnix)}",
+    Text("额度更新 ${LocalQuotaTimestamp.current(quota.observedAtUnix)}",
         modifier = Modifier.testTag("quota-observed-at"), style = MaterialTheme.typography.labelSmall, color = UsageMuted)
 }
 
@@ -342,11 +346,12 @@ private fun ProviderQuotaWindows(provider: ProviderQuotaEntry, modifier: Modifie
 @Composable
 private fun ProviderQuotaWindowRow(provider: ProviderQuotaEntry, window: ProviderQuotaWindow,
                                    modifier: Modifier = Modifier) {
+    val quotaTimestamp = LocalQuotaTimestamp.current
     val color = quotaRemainingColor(window)
     val label = window.kindLabel
     val captionStyle = quotaCaptionStyle()
     Column(modifier.fillMaxWidth().clearAndSetSemantics {
-        contentDescription = quotaAccessibilityText(provider.label, window)
+        contentDescription = quotaAccessibilityText(provider.label, window, quotaTimestamp)
     }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
             Text(label, style = captionStyle, color = UsageMuted, modifier = Modifier.weight(1f))

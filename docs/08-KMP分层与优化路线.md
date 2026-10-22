@@ -1,31 +1,32 @@
 # 08 KMP 分层与优化路线
 
-核对日期：2026-10-22；当前源码基线为 `v1.0.7`。前半篇说明现有分层与待评估边界，后半篇保留发布前五轮共享层整理的历史记录。那些记录中的版本 `1.0.5`、测试数量和本机构建日志仍属于当时产物；本次文档核对未重新执行这些构建。模拟器 UI 历史证据见 [09](09-v1.0.6发布与UI验证.md)，本次发布验证见 [10](10-v1.0.7发布与设备安装.md)，当前架构图与源码索引见 [07](07-当前架构.md)。
+核对日期：2026-10-22；当前工作树为 `codex/desktop-experimental`，正式发布基线仍为 `v1.0.7`。Desktop 实验构建与验证见 [11](11-Desktop实验展示终端.md)。前半篇说明现有分层与待评估边界，后半篇保留发布前五轮共享层整理的历史记录。那些记录中的版本 `1.0.5`、测试数量和本机构建日志仍属于当时产物；本次文档核对未重新执行这些构建。模拟器 UI 历史证据见 [09](09-v1.0.6发布与UI验证.md)，本次发布验证见 [10](10-v1.0.7发布与设备安装.md)，当前架构图与源码索引见 [07](07-当前架构.md)。
 
 ## 官方依据与当前结构
 
 以 [Kotlin 官方推荐项目结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html) 为主线：应用入口独立，平台和界面无关的业务规则放共享模块；只有需要共享 Compose 界面的平台才使用额外的 `sharedUI`。结合 [Android 官方模块化指南](https://developer.android.com/topic/modularization)，按实际消费者和编译隔离收益决定粒度，不额外增加一组小型 `core/domain/data/feature` 构建模块。
 
-当前采用 **SharedLogic 业务决策 + 平台接口与原生界面**：
+当前采用 **SharedLogic 业务决策 + Android／Desktop 共用 Compose 界面 + Apple 原生界面**：
 
-- Android、iOS 主 App、iOS Widget、Watch 均实际使用 SharedLogic。
-- Android 的 Compose 界面归 `androidApp`，仅支持 Android 的原 `sharedUI` 已合并。
+- Android、Desktop JVM、iOS 主 App、iOS Widget、Watch 均实际使用 SharedLogic。
+- 新增 Desktop 消费者后，实验分支从 Android 再抽出 `sharedUI`，共用展示台、设置、用量、Hooks 详情与动效。平台图片、日期、系统动作由入口注入。此前单 Android 目标的合并记录保留在历史段。
 - Apple 保留 Swift Codable 数据外壳（用于既有 JSON 编解码）和 SwiftUI 界面；领域验证、展示与缓存决策调用 Kotlin，删除重复算法。
-- macOS 目标供 Swift 测试真实链接共享框架，不新增 macOS 产品。
+- `macosArm64` Kotlin/Native 框架仍只供 Swift 测试；新增的桌面产品使用 `jvm("desktop")`，二者目标独立。
 - Rust 仍提供主通道配对、认证和加解密；Watch 与 Widget 不链接 Rust、不持有主配对秘密。
 
 ## 模块和编译目标
 
 | 部分 | 当前处理 | 原因 |
 | --- | --- | --- |
-| `sharedUI` → `androidApp` | 已合并，Gradle 从三个模块减为两个 | 只有 Android 目标；消除中间模块、单目标 `expect/actual` 和通过 UI 间接暴露核心的依赖 |
-| `sharedLogic` | 保留，Android 显式依赖；Apple 各目标链接对应静态框架 | 公共 `commonMain` 不依赖 Compose 或系统视图；`androidMain` 仍包含系统网络、存储及 `Drawable` 图片投影 |
+| `sharedUI` | 实验分支重新抽出，配置 Android 与 Desktop JVM | 出现两个真实 Compose 消费者，共用五份通用界面文件；不恢复单平台 `expect/actual` 空壳 |
+| `desktopApp` | 新增窗口与 JVM 宿主，Gradle 当前共四模块 | 平台发现、连接、存储、图片及打包有独立生命周期；共用 `sharedUI` 和 `sharedLogic` |
+| `sharedLogic` | 保留，Android／Desktop 显式依赖；Apple 各目标链接对应静态框架 | 公共 `commonMain` 不依赖 Compose 或系统视图；`androidMain` 仍包含系统网络、存储及 `Drawable` 图片投影 |
 | iOS App、Watch App、Widget Extension | 保留三个 Xcode target | 权限、系统入口、生命周期和安装产物独立 |
 | `appleDisplay` | 仍为共享 Swift 源码与 SwiftPM 测试入口 | Xcode 按需编译源文件，SwiftPM 测试同时链接 macOS SharedLogic；未改成 Xcode package product 依赖 |
 | `WidgetShared` | 保留为文件目录 | 仅为 App Group 容器适配，没有需要合并的独立构建模块 |
 | 桌面 Rust | 保持外部源码依赖 | 同一协议实现同时服务桌面和移动端 |
 
-SharedLogic 的 Apple 目标：
+SharedLogic 另有 Desktop JVM 目标；Apple 目标如下：
 
 | 用途 | Kotlin 目标 | 架构 |
 | --- | --- | --- |
@@ -67,7 +68,7 @@ SharedLogic 的 Apple 目标：
 | Widget HTTP 期限、容量、端点、认证域与二进制字段边界 | `WidgetHttpPolicy` | 原生 HTTP、取消、JSON、Base64 与系统密码 API |
 | 局域网地址文本、IPv4、scope 与已解析地址分类 | `WidgetEndpointRules` | 系统 IPv6 解析、Apple `.local` 及构造时小写化、Android 数值对端 |
 
-`UsageDisplayPolicy` 返回原始数组的 Token / 额度索引，两个平台使用同一算法；不改写原始总量、统计质量、日期或缓存顺序。Cursor 默认零只属于展示投影。
+`UsageDisplayPolicy` 返回原始数组的 Token / 额度索引，各端使用同一算法；不改写原始总量、统计质量、日期或缓存顺序。Cursor 默认零只属于展示投影。
 
 名称只对比较键做 Unicode NFC 规范化（将规范等价编码转换为同一形式），Android 使用系统 Normalizer，Apple 使用 Foundation；`Café` 与分解形式能匹配，原始显示与编码字段保持原样。规范等价的重复名单/Token 名称会被拒绝，历史图也不会被误判成换 Agent。
 
@@ -100,6 +101,7 @@ sharedLogic/src/
     widget/          只读 HTTP、平台密码 API、文件编解码与提交
     nativebridge/    Rust JNI 包装
     protocol/        Android 系统 Unicode NFC 规范化适配
+  desktopMain/.../protocol/ JVM Unicode NFC 规范化适配
   appleMain/.../protocol/ Apple 系统 Unicode NFC 规范化适配
   commonTest/.../     同一业务用例在 JVM / iOS / watchOS 上验证
   androidHostTest/.../ Android/JVM 文件、HTTP、密码向量与存储验证
@@ -107,17 +109,28 @@ sharedLogic/src/
 androidApp/src/main/.../
   MainActivity.kt     Android 入口
   application/       应用级引擎及投影订阅
-  ui/                Compose 页面、用量、设置、动效
-    platform/        图片、日期及系统设置适配
+  ui/platform/       图片、日期及系统设置适配（通用页面已抽出）
   service/           前台服务和通知
   overlay/           悬浮窗、拖动、切页
   widget/            系统小组件与后台调度
+
+sharedUI/src/commonMain/.../
+  App.kt / PanelPage.kt / SettingsPage.kt / UsageCard.kt / CyberMotion.kt
+
+desktopApp/src/desktopMain/.../
+  DesktopMain.kt      窗口与生命周期
+  connection/        mDNS、DNS缓存、Selector TCP 与唯一连接 owner
+  storage/           用户私有配对材料与校验图片缓存
+  protocol/          严格 JSON 与 Android 平板兼容身份
+  nativebridge/      宿主原生库加载与 Rust JNI
+  DesktopHookImage.kt Skia图片与动画，受共用动效资格控制
 
 iosApp/              Apple 原生入口、界面和系统适配
 appleDisplay/        Codable / Date / 图片 / 文件 / 传输等 Swift 适配及真实共享测试
 scripts/
   build_apple_shared.py  Xcode 各目标按 SDK/架构生成框架，共用构建锁
   test_apple_shared.py   构建 macOS 框架后运行 Swift 测试
+  build_desktop_native.py 宿主 Rust/JNI 构建，产物随 Desktop JAR 分发
 ```
 
 最初的物理目录调整保留 Kotlin 原包名、JNI 符号、Manifest 组件名、领域模型和本机持久化键。内部资源传输描述在最终筛查时统一为通用类型，两端调用同步更新，线格式与缓存字段不变。目录定位职责，尚不等于编译器强制的包级依赖隔离；以后若调整包 API，应单独验证这些对外接口。
@@ -127,8 +140,9 @@ scripts/
 Xcode 沿用 [Kotlin 官方 direct integration](https://kotlinlang.org/docs/multiplatform/multiplatform-direct-integration.html) 的 `embedAndSignAppleFrameworkForXcode`。三个目标通过标准库 Python 包装串行调用，避免同时更新相同框架目录；各目标保留独立 SDK、架构及配置。Watch 真机产物按当前架构组合为 fat framework（包含两种机器码的框架）。
 
 ```sh
-./gradlew :sharedLogic:testAndroidHostTest :sharedLogic:iosSimulatorArm64Test :androidApp:assembleDebug
+./gradlew :sharedLogic:testAndroidHostTest :sharedLogic:desktopTest :sharedLogic:iosSimulatorArm64Test :androidApp:assembleDebug
 python3 scripts/test_apple_shared.py
+./gradlew :desktopApp:desktopTest :desktopApp:createDistributable -PlokiDesktopRoot=/absolute/path/to/LokiMetis
 ```
 
 Watch 公共测试使用 `./gradlew :sharedLogic:watchosSimulatorArm64Test --device <Watch模拟器UUID>`；需要本机已有可用 Watch 模拟器设备，只有 SDK/runtime 而没有设备时，Kotlin 插件可能报出误导的 SDK 错误。
@@ -138,7 +152,7 @@ Watch 公共测试使用 `./gradlew :sharedLogic:watchosSimulatorArm64Test --dev
 ## 仍应留在平台或继续评估的部分
 
 - Bonjour/NSD、Socket、HTTP 取消和系统任务负责实际执行；共享层输出决策，不接管已有单 owner 的线程状态。
-- Keychain/Keystore、App Group 跨进程锁、文件保护、原子事务、ImageIO/ImageDecoder 和动图播放继续使用系统实现。
+- Keychain/Keystore、App Group 跨进程锁、文件保护、原子事务、ImageIO/ImageDecoder/Skia 和动图播放继续使用系统实现。
 - Rust 密码协议、C/JNI 入口和平台 CryptoKit/JCA 适配继续保留。
 - Swift Codable 外壳继续兼容既有 JSON 与缓存格式。统一序列化引擎应作为另一个变更单独验证，不能顺带改存量文件。
 - WatchConnectivity 的分块、ACK 事实和前台租约规则已共享；真实 sendMessage、系统取消及后台完成回调仍在 Apple 适配层。
@@ -154,8 +168,8 @@ Android 只读目标要求认证 TCP 的数值 IP，Apple 目标还支持 `.loca
 
 | 公共策略 | 实际消费者与规则 | 保留的既有差异 |
 | --- | --- | --- |
-| `ImageCachePolicy` | Android、iPhone、Watch：当前引用优先、最近复用排序、预算判断；删除成功后提交新的占用状态 | 三端以 512 MiB 为淘汰目标，Android/Watch 另以 512 文件为目标；当前引用全部保留，故可超过目标。删除失败不扣预算，下轮继续扫描 |
-| `ImageDecodePolicy` | Android 目标尺寸、Apple 分帧预算与实测行字节缩边、共同 16,777,216 源像素限制 | Android/iPhone 目标边长 512、Watch 256；Apple 最多 512 帧及 iPhone 8 MiB/Watch 2 MiB 总解码预算；Android 沿用系统动画解码，不增加 Apple 帧预算 |
+| `ImageCachePolicy` | Android、Desktop、iPhone、Watch：当前引用优先、最近复用排序、预算判断；删除成功后提交新的占用状态 | 四端以 512 MiB 为淘汰目标，Android/Desktop/Watch 另以 512 文件为目标；当前引用全部保留，故可超过目标。删除失败不扣预算，下轮继续扫描 |
+| `ImageDecodePolicy` | Android 目标尺寸、Desktop/Apple 分帧预算与实测行字节缩边、共同 16,777,216 源像素限制 | Android/Desktop/iPhone 目标边长 512、Watch 256；Desktop/Apple 最多 512 帧及 Desktop/iPhone 8 MiB、Watch 2 MiB 总解码预算；Android 沿用系统动画解码，不增加 Apple 帧预算 |
 | `WidgetHttpPolicy` | Android Widget、iOS Widget、Watch：6 秒总期限、96 KiB 响应、固定端点与认证域、200/JSON/原 URL、增量容量、nonce/tag/密文边界及请求绑定 | 封闭的 Android/Apple 配置保留 Android 1024 字节请求与规范 Base64 限制；Apple 响应沿用 Foundation 可解码语义，密钥两端均要求规范编码 |
 
 解码前只共享尺寸和容量事实，不搬运图片；HTTP 认证只桥接 12 字节 nonce 和固定小型附加认证数据，不跨语言复制整个响应。原生网络取消、重定向处理、流式回调及文件锁继续由原 owner 执行。发布节流、投影的线程投递和异常分类也保留在平台边界。

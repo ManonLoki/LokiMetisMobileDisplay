@@ -20,7 +20,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
 
 private enum class DisplayMenu(val title: String) { PANEL("展示台"), SETTINGS("设置") }
 
@@ -32,6 +31,8 @@ fun App(state: TerminalLinkView, onSelect: (String) -> Unit, onForget: (String) 
         onSavePanel: (PanelConfiguration) -> Boolean = { false },
         imageHashes: Set<String> = emptySet(),
         applicationName: String = "LokiMetris",
+        motionEnabled: Boolean = false,
+        quotaTimestamp: (Long) -> String = { it.toString() },
         platformSettings: @Composable () -> Unit = {},
         image: @Composable (String, String, Int) -> Unit = { _, _, _ -> }) {
     var selected by rememberSaveable { mutableStateOf(DisplayMenu.PANEL.name) }
@@ -52,10 +53,10 @@ fun App(state: TerminalLinkView, onSelect: (String) -> Unit, onForget: (String) 
         error = Color(0xFFFF8B9C), onError = Color(0xFF420E1C),
     )
     MaterialTheme(colorScheme = colors) {
-        val motionEnabled = rememberCyberMotionEnabled()
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 700.dp
-            CompositionLocalProvider(LocalCyberMotion provides motionEnabled, LocalCyberWide provides wide) {
+            CompositionLocalProvider(LocalCyberMotion provides motionEnabled, LocalCyberWide provides wide,
+                LocalQuotaTimestamp provides quotaTimestamp) {
                 CyberBackdrop(Modifier.fillMaxSize())
                 Scaffold(containerColor = Color.Transparent, contentColor = colors.onBackground, bottomBar = {
                     if (!wide) NavigationBar(containerColor = colors.surface.copy(alpha = 0.97f), tonalElevation = 0.dp,
@@ -147,11 +148,4 @@ private fun MenuIcon(menu: DisplayMenu) {
 internal fun PageHeading(title: String) {
     Text(title, modifier = Modifier.fillMaxWidth(), fontSize = 30.sp, lineHeight = 38.sp,
         letterSpacing = (-0.8).sp, fontWeight = FontWeight.Bold)
-}
-
-/** 预览不创建原生桥，也不伪造已同步的数据。 */
-@Preview
-@Composable
-private fun DisplayPreview() {
-    App(TerminalLinkView("12345678-1234-4abc-8def-123456789abc", MdnsProtocol.DEFAULT_NAME), {}, {}, { false }, {})
 }

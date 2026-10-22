@@ -35,7 +35,8 @@ import kotlinx.coroutines.delay
 
 internal val CyberCyan = Color(0xFF67E8F9)
 internal val CyberViolet = Color(0xFFAE8CFF)
-internal val LocalCyberMotion = staticCompositionLocalOf { false }
+/** 图片由宿主渲染，动画资格随当前页面、分页和详情一起传递。 */
+val LocalCyberMotion = staticCompositionLocalOf { false }
 internal val LocalCyberWide = staticCompositionLocalOf { false }
 
 /** 仅在可见、前台且系统允许动画时运行；取消协程即停止帧请求。 */

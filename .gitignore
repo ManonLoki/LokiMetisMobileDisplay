@@ -17,6 +17,8 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+__pycache__/
+*.pyc
 signing/*.keystore
 signing/*.jks
 signing/signing.properties

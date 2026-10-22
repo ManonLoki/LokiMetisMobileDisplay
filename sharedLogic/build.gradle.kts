@@ -6,6 +6,9 @@ plugins {
 }
 
 kotlin {
+    jvm("desktop") {
+        compilerOptions { jvmTarget = JvmTarget.JVM_11 }
+    }
     // Watch 双真机架构分别为 arm64_32 与 arm64；所有 Apple 模拟器仅配置 arm64。
     // macosArm64 供 SwiftPM 集成测试链接，不代表新增一个 macOS 产品。
     listOf(

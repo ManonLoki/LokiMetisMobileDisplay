@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 
 /** 两个模块同时启用时等分展示台；用量纵向滚动，Hooks 独立横向分页。 */
 @Composable
@@ -77,6 +78,7 @@ private fun HooksPane(state: TerminalLinkView, layout: HookLayout, imageHashes: 
     Column(Modifier.fillMaxSize().testTag("hooks-pane"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         key(layout) {
             val pager = rememberPagerState(pageCount = { pages.size })
+            val scope = rememberCoroutineScope()
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                     CompositionLocalProvider(LocalCyberMotion provides (motion && pager.currentPage == page && selectedHook == null)) {
@@ -99,8 +101,26 @@ private fun HooksPane(state: TerminalLinkView, layout: HookLayout, imageHashes: 
                 }
                 if (pages.size > 1) Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp),
                     shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)) {
-                    Text("${pager.currentPage + 1} / ${pages.size} · 左右滑动", Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CyberTextButton(onClick = {
+                            scope.launch {
+                                val target = (pager.currentPage - 1).coerceAtLeast(0)
+                                if (motion) pager.animateScrollToPage(target) else pager.scrollToPage(target)
+                            }
+                        }, enabled = pager.currentPage > 0 && !pager.isScrollInProgress,
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                            modifier = Modifier.testTag("hooks-page-previous")) { Text("上一页", style = MaterialTheme.typography.labelSmall) }
+                        Text("${pager.currentPage + 1} / ${pages.size}", Modifier.padding(horizontal = 4.dp),
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        CyberTextButton(onClick = {
+                            scope.launch {
+                                val target = (pager.currentPage + 1).coerceAtMost(pages.lastIndex)
+                                if (motion) pager.animateScrollToPage(target) else pager.scrollToPage(target)
+                            }
+                        }, enabled = pager.currentPage < pages.lastIndex && !pager.isScrollInProgress,
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                            modifier = Modifier.testTag("hooks-page-next")) { Text("下一页", style = MaterialTheme.typography.labelSmall) }
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 # LokiMetrisDisplay 项目文档
 
-LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**移动端显示终端**：桌面负责统计各 AI 编程工具（Codex、Claude Code、Cursor、Grok、WorkBuddy 等）的 Token 用量、账户剩余额度和 Agent 实时活动（Hooks），手机、平板、手表和小组件负责“在桌面之外随时看一眼”。
+LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**移动端显示终端**：桌面负责统计各 AI 编程工具（Codex、Claude Code、Cursor、Grok、WorkBuddy 等）的 Token 用量、账户剩余额度和 Agent 实时活动（Hooks），手机、平板、手表和小组件负责“在桌面之外随时看一眼”。`codex/desktop-experimental` 分支另提供电脑窗口中的实验展示终端 `desktopApp`，只接收采集端数据，界面与 Android 平板共用；当前正式发布仍为 v1.0.7。
 
 安装、连接和启动调试先看 [项目 README](../README.md)。以下文档按当前源码说明文件职责、技术边界、产品行为和维护方式：
 
@@ -13,6 +13,7 @@ LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**�
 | [06 发布检查清单](06-发布检查清单.md) | 每次发版怎样核对 README、关联文档和验证说明？ | 准备发布版本的人 |
 | [07 当前架构与源码导航](07-当前架构.md) | 各端如何组合共享规则和平台实现？入口和关键调用在哪里？ | 希望先建立整体认识的人 |
 | [08 KMP 分层与优化路线](08-KMP分层与优化路线.md) | 已完成的共享边界、官方依据及后续迁移顺序 | 要继续整理跨平台代码的人 |
+| [11 Desktop 实验展示终端](11-Desktop实验展示终端.md) | 怎样运行与打包电脑展示窗口？如何兼容采集端？实际验证到哪里？ | 开发和试用 Desktop 实验分支的人 |
 
 以下内容保留当时的实现与验证范围，不能当作当前功能清单或本次检查结果：
 
@@ -25,7 +26,7 @@ LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**�
 ## 一句话看懂整体
 
 ```
-桌面 LokiMetris ──(加密 TCP，配对后认证)──▶ Android / iPhone / iPad App
+桌面 LokiMetris ──(加密 TCP，配对后认证)──▶ Android / Desktop 实验 App / iPhone / iPad App
        │                                      ├──本机摘要缓存──▶ 系统小组件
        │                                      └──iPhone 即时分块──▶ Apple Watch
        └──(局域网加密 HTTP，只读摘要)──▶ Android / iOS 小组件、Watch 后备
@@ -35,6 +36,8 @@ LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**�
 - **Apple Watch** 不直接连桌面的主通道：优先从 iPhone 取数据；iPhone 不可达时，用 iPhone 授予的**只读 HTTP 配置**自己向桌面拉摘要。
 - **iOS 小组件** 读取 App Group 里的最近摘要；被系统唤醒时也可用只读 HTTP 自行刷新。完整 App 缓存还可携带正文与图片引用，组件投影会裁剪这些内容。
 - **Android** 提供主展示台、桌面小组件与悬浮窗。完整面板驻内存，组件另存摘要；悬浮窗直接消费当前连接投影。主通道共用 Rust 配对／加密核心，独立 HTTP 密码操作由平台 API 执行。
+
+- **Desktop 实验 App** 从同一采集端接收完整快照与图片，窗口存续期间保持连接；断线清空主面板。它不采集本机用量，不创建 Android 小组件或悬浮窗，协议兼容身份为 Android 平板。
 
 ## 术语表
 
@@ -53,3 +56,5 @@ LokiMetrisDisplay（中文名“诡秘神谕”）是桌面端 LokiMetris 的**�
 2026-10-22 文档核对阶段以 `v1.0.6` 发布提交 `9c05bf5c5409a8b21e0abf8f906f80dbc79693a3` 为基线，逐文件核对 173 个 Kotlin、Swift、C 与 Android XML 生产／测试／资源文件，另核对五个构建辅助脚本和 Gradle／Xcode 配置。README、当前专题文档、存储与并发契约注释已对齐；历史测试数字、发布产物与旧 Archify 图保留原范围。
 
 上述文档核对阶段只修改文档、注释和 Python 文档字符串。通过保留字符串的非注释 token 对比、Python 抽象语法树对比和 XML 元素树对比，确认可执行内容、配置值与资源结构未变；本地文档链接、标题锚点和差异格式检查通过。没有重新运行构建、模拟器或真机检查，既有验证范围仍以对应版本记录为准。
+
+2026-10-22 Desktop 实验分支新增四模块结构、共用 Compose 界面与宿主构建／存储说明；已更新 README、01、02、03、07、08 和 11。移动端历史发布记录保留原文，本次桌面验证与未验证范围统一记录在 [11](11-Desktop实验展示终端.md)。
