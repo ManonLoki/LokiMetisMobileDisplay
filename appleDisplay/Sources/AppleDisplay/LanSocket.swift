@@ -2,6 +2,67 @@ import Foundation
 import SharedLogic
 import Network
 
+/// Bonjour TXT 先校验、排除身份冲突，再允许发现结果刷新已保存连接的重试预算。
+enum LanDiscoveryUpdate {
+    struct Advertisement {
+        let id: String?
+        let version: String?
+        let name: String?
+        let endpoint: NWEndpoint
+    }
+    struct Service {
+        let name: String
+        let endpoint: NWEndpoint
+    }
+
+    static func validated(_ advertisements: [Advertisement], excluding deviceId: String) -> [String: Service] {
+        var found: [String: Service] = [:]; var duplicates: Set<String> = []
+        for value in advertisements.prefix(128) {
+            guard value.version == "1", let id = value.id, SharedValidation.validId(id), id != deviceId,
+                  let name = value.name, !name.isEmpty, name.utf8.count <= 160,
+                  !SharedValidation.containsControl(name) else { continue }
+            if found[id] != nil { duplicates.insert(id) }
+            found[id] = Service(name: name, endpoint: value.endpoint)
+        }
+        for id in duplicates { found.removeValue(forKey: id) }
+        return found
+    }
+
+    /// TXT 改名、无效广告和重复身份都不是新的可用端点，不能撤销已预约的恢复。
+    static func renewed(previous: NWEndpoint?, current: NWEndpoint?) -> Bool {
+        guard let current else { return false }
+        return current != previous
+    }
+}
+
+/// owner 队列中的单项重试：撤销身份后，已经入队的旧任务也不能运行或清除新任务。
+/// DispatchWorkItem.cancel 本身不保证阻止已经开始执行的工作，连接和发现共用此保护。
+final class LanRetryScheduler {
+    private let queue: DispatchQueue
+    private var identifier: UUID?
+    private var work: DispatchWorkItem?
+    var isScheduled: Bool { identifier != nil }
+
+    init(queue: DispatchQueue) { self.queue = queue }
+
+    func schedule(after delay: TimeInterval, perform action: @escaping () -> Void) {
+        cancel()
+        let id = UUID(); identifier = id
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.identifier == id else { return }
+            self.identifier = nil; self.work = nil
+            action()
+        }
+        work = item; queue.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    func cancel() {
+        identifier = nil; work?.cancel(); work = nil
+    }
+
+    deinit { work?.cancel() }
+}
+
 /// 一个Apple Network连接拥有读进度、有限写队列和半写超时；与iOS App编译同一源码进行宿主socket回归。
 final class LanSocket {
     enum Failure: Error, Equatable { case network, invalid, timeout, overloaded }

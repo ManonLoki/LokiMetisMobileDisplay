@@ -38,6 +38,8 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private val backgroundConnection = AtomicBoolean(false)
     private val userIntent = TerminalPendingIntent()
     private val overflowPending = AtomicBoolean(false)
+    private val networkChanged = AtomicBoolean(false)
+    private val discoveryFailed = AtomicBoolean(false)
     private val discovered = AtomicReference<List<AndroidLanEndpoint>?>(null)
     private val projection = AtomicReference<AndroidLinkProjection?>(null)
     private var deliveryQueued = false
@@ -61,13 +63,15 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private var pairingDeadline: Long? = null
     private var deadline: Long? = null
     private var retryAt: Long? = null
+    private var discoveryRetryAt: Long? = null
     private var lastInbound = 0L
     private var currentAsset: TerminalAsset? = null
     private var assetDeadline: Long? = null
     private val failedAssets = mutableSetOf<String>()
     private val browser = AndroidLanBrowser(app, changed = { discovered.set(it); selector.wakeup() }, failed = {
-        submit { view = view.copy(error = "发现失败，请检查本地网络权限和Wi-Fi后重试。"); publish() }
+        discoveryFailed.set(true); selector.wakeup()
     })
+    private val networkMonitor = AndroidLanNetworkMonitor(app) { networkChanged.set(true); selector.wakeup() }
 
     init {
         Thread({ run() }, "loki-lan-owner").apply { isDaemon = true }.start()
@@ -90,8 +94,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             TerminalUserIntent.Discover -> {
                 intent.discover(); view = view.copy(error = null, status = if (active) "正在发现桌面端…" else "需要本地网络权限或返回前台")
                 if (active) {
-                    browser.start()
-                    if (socket == null) { retryAt = null; if (pairingDeadline != null) connect(true) else browsed(endpoints.values.toList()) }
+                    if (socket == null) restartDiscovery() else browser.start()
                 }
             }
             is TerminalUserIntent.Select -> { intent.discover(); selectNow(value.id) }
@@ -132,6 +135,11 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         while (true) {
             try {
                 syncForeground()
+                if (networkChanged.getAndSet(false) && active) restartDiscovery(connectionLost = true)
+                if (discoveryFailed.getAndSet(false) && active) {
+                    discoveryRetryAt = now + 5_000
+                    view = view.copy(error = "发现失败，正在重新发现桌面端…"); publish()
+                }
                 for (index in 0 until 32) {
                     commands.poll()?.invoke()
                 }
@@ -166,11 +174,9 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             }
             if (visibilityChanged && visible && active) {
                 intent.enterForeground()
-                browser.start()
                 if (socket == null && pairingDeadline == null) {
-                    retryAt = null; view = view.copy(error = null)
-                    browsed(endpoints.values.toList())
-                }
+                    view = view.copy(error = null); restartDiscovery()
+                } else browser.start()
                 nextAsset(); publish()
             }
             return
@@ -182,11 +188,11 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             try { paired = requireNotNull(store).clientIds() } catch (_: Exception) { view = view.copy(error = "无法读取配对记录，请解锁后重试。") }
             intent.enterForeground(); rebuildHosts()
             if (socket == null) view = view.copy(status = "正在发现桌面端…")
-            browser.start()
+            networkMonitor.start(); browser.start()
         } else {
             clearLiveDisplay()
             intent.leaveForeground()
-            browser.stop(); endpoints = emptyMap(); rebuildHosts()
+            networkMonitor.stop(); browser.stop(); discoveryRetryAt = null; endpoints = emptyMap(); rebuildHosts()
             if (phase == Phase.STREAMING) {
                 val paused = socket
                 try { phase = Phase.PAUSING; sendSecure(JSONObject().put("type", "pause")) { if (socket === paused && !active) cancelSession() } }
@@ -196,15 +202,33 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         }
         publish()
     }
+    /** 换网立即撤下旧端点及会话；保留信任和仍有效的密码窗口，只用新发现地址恢复。 */
+    private fun restartDiscovery(connectionLost: Boolean = false) {
+        discovered.set(null); endpoints = emptyMap(); rebuildHosts()
+        intent.renewedEndpoint(); retryAt = null; discoveryRetryAt = null
+        if (connectionLost && socket != null) fail(true, "网络已变化，正在重新发现桌面端…")
+        else if (pairingDeadline != null) scheduleRetry()
+        browser.restart()
+        if (socket == null) view = view.copy(status = "正在发现桌面端…")
+        publish()
+    }
     /** 新地址才续预算，相同广告重复出现不能绕过八次重试。 */
     private fun browsed(values: List<AndroidLanEndpoint>) {
         val previous = endpoints
         endpoints = if (active && intent.requested) values.filter { it.id != settings.deviceId }.associateBy { it.id } else emptyMap()
         val selected = view.selectedId
-        if (selected != null && endpoints[selected] != null && (endpoints[selected]?.address != previous[selected]?.address || endpoints[selected]?.network != previous[selected]?.network)) intent.renewedEndpoint()
+        if (selected != null && endpoints[selected] != null && (endpoints[selected]?.address != previous[selected]?.address || endpoints[selected]?.network != previous[selected]?.network)) {
+            intent.renewedEndpoint(); retryAt = null
+            val connection = socket
+            val endpoint = requireNotNull(endpoints[selected])
+            if (connection != null && (connection.endpoint.address != endpoint.address || connection.endpoint.network != endpoint.network)) {
+                fail(true, "桌面地址已变化，正在恢复连接…")
+            }
+        }
         rebuildHosts()
         if (active && socket == null && retryAt == null) {
-            intent.automaticSelection(selected, paired, view.hosts.filter { it.available }.map { it.id })?.let { id ->
+            if (pairingDeadline != null && selected in endpoints) connect(true)
+            else intent.automaticSelection(selected, paired, view.hosts.filter { it.available }.map { it.id })?.let { id ->
                 if (selected == id) resumeSelected() else selectNow(id)
             }
         }
@@ -240,7 +264,8 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     /** 新 TCP 以 Keystore 中的配对秘密恢复认证；端点来自本轮发现，独立 HTTP 目标另行保存。 */
     private fun resumeSelected() {
         val id = view.selectedId ?: return
-        if (!active || !intent.requested || id !in endpoints) return
+        if (!active || !intent.requested) return
+        if (id !in endpoints) { if (id in paired) scheduleRetry(); return }
         try {
             if (bridge == null) { sessionName = settings.name; bridge = NativeLinkBridge(settings.deviceId, sessionName) }
             val material = requireNotNull(requireNotNull(store).load(id))
@@ -338,7 +363,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private fun selectTimeoutMs(): Long {
         val now = now
         var next = now + 30_000
-        for (at in listOfNotNull(pairingDeadline, deadline, assetDeadline, retryAt,
+        for (at in listOfNotNull(pairingDeadline, deadline, assetDeadline, retryAt, discoveryRetryAt,
             lastInbound.takeIf { phase == Phase.STREAMING }?.plus(TerminalSessionTimingPolicy.INBOUND_IDLE_TIMEOUT_MS))) next = minOf(next, at)
         if (socket?.hasPendingWrites == true) next = minOf(next, now + 100)
         return (next - now).coerceIn(1, 30_000)
@@ -359,11 +384,19 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
             TerminalSessionTimeout.ASSET_TIMEOUT -> { fail(true, "图片响应超时，正在恢复连接…"); return }
         }
         try { socket?.tick(now) } catch (error: Exception) { socketFailed(error) }
-        if (retryAt?.let { now >= it } == true) { retryAt = null; if (active && intent.requested) { if (pairingDeadline != null) connect(true) else resumeSelected() } }
+        if (discoveryRetryAt?.let { now >= it } == true) { discoveryRetryAt = null; if (active) browser.start() }
+        if (retryAt?.let { now >= it } == true) {
+            retryAt = null
+            if (active && intent.requested) {
+                if (pairingDeadline != null) {
+                    if (view.selectedId in endpoints) connect(true) else scheduleRetry()
+                } else resumeSelected()
+            }
+        }
     }
-    /** 只用固定八次退避，不能通过socket错误重开Rust密码窗口。 */
+    /** 配对窗口只用八次退避；已信任桌面随后低频恢复，不能通过socket错误重开Rust密码窗口。 */
     private fun scheduleRetry() {
-        retryAt = if (active) intent.nextDelayMs()?.let { now + it } else null
+        retryAt = if (active) intent.nextDelayMs(paired = pairingDeadline == null && view.selectedId in paired)?.let { now + it } else null
         if (retryAt == null) view = view.copy(status = "暂未连接，请重新选择桌面重试")
         publish()
     }

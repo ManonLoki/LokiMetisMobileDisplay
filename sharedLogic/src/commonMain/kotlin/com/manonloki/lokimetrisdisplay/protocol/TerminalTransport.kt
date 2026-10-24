@@ -20,7 +20,7 @@ class TerminalFrames {
     }
 }
 
-/** 前台自动发现与有界传输重试，不拥有密码预算或首次配对动作。 */
+/** 前台自动发现、快速退避与已配对连接的低频恢复，不拥有密码预算或首次配对动作。 */
 class TerminalConnectionPolicy {
     var requested = false; private set
     var attempts = 0; private set
@@ -40,9 +40,12 @@ class TerminalConnectionPolicy {
         return if (selectedId != null) selectedId.takeIf { it in paired && it in available }
         else available.firstOrNull { it in paired }
     }
-    /** 最多八次新socket，之后等待真实新端点、前台恢复或用户重试。 */
-    fun nextDelayMs(): Long? {
-        if (!requested || attempts >= 8) return null
+    /** 首次配对最多八次传输重试；已保存信任在快速退避耗尽后每30秒恢复一次。
+     * 仅传输失败可预约；认证失败由宿主终止，不能重开密码窗口或返还Rust密码预算。
+     */
+    fun nextDelayMs(paired: Boolean = false): Long? {
+        if (!requested) return null
+        if (attempts >= 8) return if (paired) 30_000L else null
         return minOf(8_000L, 500L shl attempts++)
     }
 }

@@ -52,6 +52,10 @@ final class LanLinkEngine {
     var backgroundRun: BackgroundRun?
     var name = ""
     var browser: NWBrowser?
+    var pathMonitor: NWPathMonitor?
+    var lastPath: NWPath?
+    lazy var browserRetry = LanRetryScheduler(queue: queue)
+    var browserFailures = 0
     var endpoints: [String: NWEndpoint] = [:]
     var paired: Set<String> = []
     var bridge: NativeLinkBridge?
@@ -64,7 +68,7 @@ final class LanLinkEngine {
     var lastInbound: UInt64 = 0
     /// 前台发现与重试预算由共享规则维护，网络执行仍归当前串行队列。
     let intent = TerminalConnectionPolicy()
-    var retry: DispatchWorkItem?
+    lazy var retry = LanRetryScheduler(queue: queue)
     var timer: DispatchSourceTimer?
     /// 空闲（无连接且无期限）时挂起每秒检查；挂起与恢复必须成对。
     var timerSuspended = false
@@ -113,12 +117,12 @@ final class LanLinkEngine {
     func discover(name: String) {
         queue.async {
             self.name = name; self.intent.discover(); self.view.error = nil
-            self.startBrowser()
             if self.socket == nil, self.active {
-                self.retry?.cancel(); self.retry = nil
-                if self.pairingDeadline != nil { self.connect(pairing: true) }
-                else if let browser = self.browser { self.browsed(browser.browseResults) }
-            }
+                self.retry.cancel()
+                self.refreshBrowser()
+                if self.socket == nil, !self.retry.isScheduled, let id = self.view.selectedId,
+                   self.paired.contains(id) || self.pairingDeadline != nil { self.scheduleRetry() }
+            } else { self.startBrowser() }
             self.publish()
         }
     }
@@ -187,12 +191,13 @@ final class LanLinkEngine {
                 catch { self.view.backgroundRefreshError = "配对记录暂不可读取，请解锁设备后重新打开 App。" }
                 self.restoreCachedDisplay()
                 self.intent.enterForeground()
+                self.startPathMonitor()
                 self.startBrowser()
             } else {
                 self.clearLiveDisplay()
                 self.intent.leaveForeground()
                 self.watch.setParent(active: false, generation: self.generation)
-                self.browser?.cancel(); self.browser = nil; self.endpoints = [:]; self.view.hosts = []
+                self.stopDiscovery()
                 if self.phase == .streaming {
                     do {
                         let token = self.generation
@@ -247,8 +252,8 @@ final class LanLinkEngine {
     deinit {
         // 释放挂起中的 dispatch source 会崩溃，先恢复再取消。
         if timerSuspended { timer?.resume() }
-        retry?.cancel(); timer?.cancel()
-        let browser = browser, socket = socket, bridge = bridge, cache = cache
-        queue.async { browser?.cancel(); socket?.close(); bridge?.close(); cache?.cancel() }
+        retry.cancel(); browserRetry.cancel(); timer?.cancel()
+        let browser = browser, pathMonitor = pathMonitor, socket = socket, bridge = bridge, cache = cache
+        queue.async { browser?.cancel(); pathMonitor?.cancel(); socket?.close(); bridge?.close(); cache?.cancel() }
     }
 }

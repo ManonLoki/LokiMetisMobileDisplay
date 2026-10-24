@@ -4,6 +4,47 @@ import SharedLogic
 
 /// 发现、配对、认证与重试：所有方法都在引擎串行队列上执行。
 extension LanLinkEngine {
+    /// 切换网络后重新浏览服务地址；路径变化不代表现有已认证通道一定失效。
+    func startPathMonitor() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor(); pathMonitor = monitor; lastPath = nil
+        monitor.pathUpdateHandler = { [weak self, weak monitor] path in
+            guard let self, let monitor, self.pathMonitor === monitor, self.active else { return }
+            let previous = self.lastPath; self.lastPath = path
+            guard let previous, previous != path else { return }
+            if self.socket == nil {
+                self.retry.cancel(); self.intent.renewedEndpoint()
+            }
+            self.refreshBrowser()
+            if self.socket == nil, !self.retry.isScheduled, let id = self.view.selectedId,
+               self.paired.contains(id) || self.pairingDeadline != nil { self.scheduleRetry() }
+        }
+        monitor.start(queue: queue)
+    }
+
+    /// 系统路径变化和用户重试都换一份 Bonjour 浏览器，不继续依赖旧地址缓存。
+    func refreshBrowser() {
+        browserRetry.cancel(); browserFailures = 0
+        let previous = browser; browser = nil; previous?.cancel()
+        browsed([]); startBrowser()
+    }
+
+    /// 前后台切换同时撤销浏览器恢复任务与监视代次，旧回调不能重开后台发现。
+    func stopDiscovery() {
+        browserRetry.cancel(); browserFailures = 0
+        let previous = browser; browser = nil; previous?.cancel()
+        let monitor = pathMonitor; pathMonitor = nil; lastPath = nil; monitor?.cancel()
+        endpoints = [:]; view.hosts = []
+    }
+
+    /// failed 是浏览器终态，必须创建新实例；与连接重试分开退避，避免发现永久停止。
+    func retryBrowser() {
+        guard active, intent.requested else { return }
+        let delay = min(8.0, pow(2.0, Double(browserFailures)))
+        browserFailures = min(browserFailures + 1, 3)
+        browserRetry.schedule(after: delay) { [weak self] in self?.startBrowser() }
+    }
+
     /// 信任列表变化后就地刷新候选的配对标记，不重建发现结果。
     func refreshPairedHosts() {
         for index in view.hosts.indices { view.hosts[index].paired = paired.contains(view.hosts[index].id) }
@@ -12,27 +53,23 @@ extension LanLinkEngine {
     /// 只浏览局域网宿主服务，TXT没有授信作用，也不接受广告携带的URL或固定IP。
     func startBrowser() {
         guard active, intent.requested, browser == nil else { return }
+        browserRetry.cancel()
         let parameters = NWParameters.tcp; parameters.includePeerToPeer = false
         let source = NWBrowser(for: .bonjourWithTXTRecord(type: "_loki-host._tcp", domain: MdnsProtocol.shared.DOMAIN), using: parameters)
         browser = source
         if socket == nil { view.status = "正在发现桌面端…" }
         source.stateUpdateHandler = { [weak self, weak source] state in
             guard let self, let source, self.browser === source else { return }
-            if case .ready = state { self.view.error = nil; self.publish() }
-            if case .failed = state { self.browser = nil; self.view.error = "发现失败，请检查本地网络权限和 Wi-Fi 后重试。"; self.publish() }
+            if case .ready = state { self.browserFailures = 0; self.view.error = nil; self.publish() }
+            if case .failed = state {
+                self.browser = nil; source.cancel(); self.browsed([])
+                self.view.error = "发现暂不可用，正在重新发现桌面端。"
+                self.retryBrowser(); self.publish()
+            }
             if case .waiting = state { self.view.error = "本地网络暂不可用，请检查系统权限与 Wi-Fi。"; self.publish() }
         }
-        source.browseResultsChangedHandler = { [weak self, weak source] results, changes in
+        source.browseResultsChangedHandler = { [weak self, weak source] results, _ in
             guard let self, let source, self.browser === source else { return }
-            if let selected = self.view.selectedId, self.paired.contains(selected), self.socket == nil,
-               changes.contains(where: { change in
-                   switch change {
-                   case .added(let result), .changed(_, let result, _):
-                       if case .bonjour(let record) = result.metadata { return record["id"] == selected }
-                       return false
-                   default: return false
-                   }
-               }) { self.intent.renewedEndpoint() }
             self.browsed(results)
         }
         source.start(queue: queue)
@@ -47,21 +84,21 @@ extension LanLinkEngine {
 
     /// 重复声明同一UUID的广告拒绝自动选取，防止错误广告替换正在认证的对端。
     func browsed(_ results: Set<NWBrowser.Result>) {
-        var found: [String: (String, NWEndpoint)] = [:]; var duplicates: Set<String> = []
-        for result in results.prefix(128) {
-            guard case .bonjour(let record) = result.metadata, record["v"] == "1", let id = record["id"],
-                  SharedValidation.validId(id), id != deviceId, let name = record["name"],
-                  !name.isEmpty, name.utf8.count <= 160, !SharedValidation.containsControl(name) else { continue }
-            if found[id] != nil { duplicates.insert(id) }
-            found[id] = (name, result.endpoint)
+        let advertisements = results.prefix(128).compactMap { result -> LanDiscoveryUpdate.Advertisement? in
+            guard case .bonjour(let record) = result.metadata else { return nil }
+            return .init(id: record["id"], version: record["v"], name: record["name"], endpoint: result.endpoint)
         }
-        for id in duplicates { found.removeValue(forKey: id) }
-        endpoints = found.mapValues { $0.1 }
-        view.hosts = found.keys.sorted().prefix(64).map { LanHost(id: $0, name: found[$0]!.0, paired: paired.contains($0)) }
+        let found = LanDiscoveryUpdate.validated(advertisements, excluding: deviceId)
+        if let selected = view.selectedId, paired.contains(selected), socket == nil,
+           LanDiscoveryUpdate.renewed(previous: endpoints[selected], current: found[selected]?.endpoint) {
+            intent.renewedEndpoint(); retry.cancel()
+        }
+        endpoints = found.mapValues(\.endpoint)
+        view.hosts = found.keys.sorted().prefix(64).map { LanHost(id: $0, name: found[$0]!.name, paired: paired.contains($0)) }
         view.hosts += paired.subtracting(found.keys).sorted().map {
             LanHost(id: $0, name: "已配对桌面 · " + $0.prefix(8), paired: true, available: false)
         }
-        if socket == nil, retry == nil, active,
+        if socket == nil, !retry.isScheduled, active,
            let id = intent.automaticSelection(selectedId: view.selectedId, paired: paired, available: view.hosts.filter(\.available).map(\.id)) {
             if view.selectedId == id { resumeSelected() } else { selectNow(id) }
         }
@@ -253,24 +290,25 @@ extension LanLinkEngine {
         }
     }
 
-    /// 网络重试有限且不重开密码窗口，mDNS更新与前台恢复会重新获取最新地址。
+    /// 已配对设备持续低频恢复；密码窗口仍受共享期限限制，不会因重试重新开码。
     func scheduleRetry() {
-        guard active, let delayMs = intent.nextDelayMs() else { view.status = "暂未连接，请重新选择桌面重试"; publish(); return }
-        retry?.cancel()
-        let task = DispatchWorkItem { [weak self] in
-            guard let self else { return }; self.retry = nil
-            guard self.active, self.intent.requested else { return }
+        let trusted = pairingDeadline == nil && view.selectedId.map { paired.contains($0) } == true
+        guard active, let delayMs = intent.nextDelayMs(paired: trusted) else { view.status = "暂未连接，请重新选择桌面重试"; publish(); return }
+        retry.schedule(after: delayMs.doubleValue / 1000) { [weak self] in
+            guard let self, self.active, self.intent.requested, self.socket == nil else { return }
+            guard let id = self.view.selectedId, self.endpoints[id] != nil else {
+                self.startBrowser(); self.scheduleRetry(); return
+            }
             if self.pairingDeadline != nil { self.connect(pairing: true) }
             else { self.resumeSelected() }
         }
-        retry = task; queue.asyncAfter(deadline: .now() + delayMs.doubleValue / 1000, execute: task)
     }
 
     /// 协议/认证失败保留信任供用户显式处理，传输失败才在新socket进行恢复。
     func fail(retry shouldRetry: Bool, message: String) {
         if backgroundRun != nil { finishBackgroundRefresh(success: false); return }
         clearLiveDisplay()
-        retry?.cancel(); retry = nil
+        retry.cancel()
         resetWatchProjection()
         generation &+= 1; socket?.close(); socket = nil; dropCurrentAsset()
         _ = try? bridge?.call(["op": "disconnect"])
@@ -285,7 +323,7 @@ extension LanLinkEngine {
     func cancelSession() {
         clearLiveDisplay()
         resetWatchProjection()
-        generation &+= 1; retry?.cancel(); retry = nil
+        generation &+= 1; retry.cancel()
         socket?.close(); socket = nil; _ = try? bridge?.call(["op": "cancelPairing"]); bridge?.close(); bridge = nil
         dropCurrentAsset(); pairingDeadline = nil; deadline = nil; offer = nil
         failedAssets = []; phase = .idle; view.pairingCode = nil; view.connected = false

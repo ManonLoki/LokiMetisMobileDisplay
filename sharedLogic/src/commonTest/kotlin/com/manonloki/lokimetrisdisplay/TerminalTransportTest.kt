@@ -58,6 +58,19 @@ class TerminalTransportTest {
         policy.leaveForeground(); policy.renewedEndpoint(); assertNull(policy.nextDelayMs())
         policy.enterForeground(); assertEquals(500L, policy.nextDelayMs())
     }
+    /** 采集端较晚启动或网络长时间断开后，保存的配对仍能低频恢复，不要求重启App。 */
+    @Test fun saved_pairing_keeps_recovering_after_fast_retries_are_exhausted() {
+        val policy = TerminalConnectionPolicy(); policy.enterForeground()
+        assertEquals(listOf(500L,1000L,2000L,4000L,8000L,8000L,8000L,8000L),
+            List(8) { policy.nextDelayMs(paired = true) })
+        repeat(1_000) { assertEquals(30_000L, policy.nextDelayMs(paired = true)) }
+        assertEquals(8, policy.attempts)
+        // 重复广告不能触发额外快速连接，恢复仍由宿主的单个重试期限驱动。
+        assertNull(policy.automaticSelection("trusted", setOf("trusted"), listOf("trusted")))
+        assertNull(policy.nextDelayMs(), "Unpaired transport must remain bounded")
+        policy.connected(); assertEquals(500L, policy.nextDelayMs(paired = true))
+        policy.leaveForeground(); assertNull(policy.nextDelayMs(paired = true))
+    }
     /** 已认证快照成功后恢复传输预算，不允许成功事件在后台自行打开连接。 */
     @Test fun authenticated_snapshot_resets_budget_without_changing_foreground_intent() {
         val policy = TerminalConnectionPolicy(); policy.enterForeground()

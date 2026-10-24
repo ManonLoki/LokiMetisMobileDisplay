@@ -31,11 +31,15 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
     private val pending = ArrayDeque<Pair<String, NsdServiceInfo>>()
     // API31/32没有物理取消接口；旧回调终态前不释放唯一解析槽。
     private var physicalResolve: NsdManager.ResolveListener? = null
+    private var resolveWatchdog: Runnable? = null
     private var refresh: Runnable? = null
 
     /** 同一应用只建立一个浏览，失败统一收回前台多播锁。 */
-    fun start() { main.post {
-        if (discovery != null) return@post
+    fun start() { main.post { startNow() } }
+    /** 切网或用户重新发现必须重建注册；仅 start 会保留旧网络上的系统浏览与缓存。 */
+    fun restart() { main.post { stopNow(); startNow() } }
+    private fun startNow() {
+        if (discovery != null) return
         val token = ++generation
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(type: String) = Unit
@@ -62,9 +66,9 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
                 multicast = wifi.createMulticastLock("LokiMetris foreground discovery").apply { setReferenceCounted(false); acquire() }
             }
             nsd.discoverServices(MdnsProtocol.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
-            if (Build.VERSION.SDK_INT < 34) scheduleRefresh(token)
+            scheduleRefresh(token)
         } catch (_: Exception) { stopNow(); failed() }
-    } }
+    }
 
     /** 停止仅取消本应用精确注册，已经无法取消的旧解析结果按代次丢弃。 */
     fun stop() { main.post { stopNow() } }
@@ -75,6 +79,8 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
         if (Build.VERSION.SDK_INT >= 34) watchers.values.forEach { runCatching { nsd.unregisterServiceInfoCallback(it) } }
         watchers.clear(); services.clear(); resolved.clear(); pending.clear()
         refresh?.let(main::removeCallbacks); refresh = null
+        // 新系统精确取消；API31/32的系统槽无法取消，仍必须等待其终态，避免平行残留。
+        physicalResolve?.let(::cancelResolution)
         multicast?.let { if (it.isHeld) it.release() }; multicast = null
         publish()
     }
@@ -110,10 +116,12 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
         val listener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(value: NsdServiceInfo, code: Int) { main.post { finish(null) } }
             override fun onServiceResolved(value: NsdServiceInfo) { main.post { finish(value) } }
-            /** 只释放自身物理槽，不能误清新浏览代次的在途解析。 */
+            override fun onResolutionStopped(value: NsdServiceInfo) { main.post { finish(null) } }
+            /** 身份和浏览代次分别检查，迟到终态不能释放后继请求或发布旧地址。 */
             private fun finish(value: NsdServiceInfo?) {
                 if (physicalResolve !== this) return
                 physicalResolve = null
+                resolveWatchdog?.let(main::removeCallbacks); resolveWatchdog = null
                 if (generation == token && services[key] === info) {
                     resolved.remove(key); value?.let(::endpoint)?.let { resolved[key] = it }; publish()
                 }
@@ -121,13 +129,33 @@ class AndroidLanBrowser(context: Context, private val changed: (List<AndroidLanE
             }
         }
         physicalResolve = listener
-        try { nsd.resolveService(info, listener) } catch (_: Exception) { physicalResolve = null; resolveNext() }
+        if (canCancelResolution()) {
+            val watchdog = Runnable {
+                // 取消也必须等待终态释放槽，不能在系统仍有旧请求时提交下一项。
+                if (physicalResolve === listener) cancelResolution(listener)
+            }
+            resolveWatchdog = watchdog; main.postDelayed(watchdog, 15_000)
+        }
+        try { nsd.resolveService(info, listener) } catch (_: Exception) {
+            physicalResolve = null; resolveWatchdog?.let(main::removeCallbacks); resolveWatchdog = null; resolveNext()
+        }
     }
-    /** 旧系统的一次解析会过时；只在当前浏览前台周期内定期刷新现有候选。 */
+    private fun canCancelResolution(): Boolean = Build.VERSION.SDK_INT >= 34 ||
+        (Build.VERSION.SDK_INT >= 33 && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU) >= 7)
+
+    /** API31/32不释放仍被系统持有的请求，避免ALREADY_ACTIVE与无法回收的监听堆积。 */
+    private fun cancelResolution(listener: NsdManager.ResolveListener) {
+        if (canCancelResolution()) runCatching { nsd.stopServiceResolution(listener) }
+    }
+    /** 旧系统刷新一次性解析；新系统重试失败的持续监听，避免一次注册失败后永久缺席。 */
     private fun scheduleRefresh(token: Long) {
         val task = Runnable {
             if (generation == token && discovery != null) {
-                services.forEach { (key, info) -> if (pending.none { it.first == key }) pending.add(key to info) }
+                services.forEach { (key, info) ->
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        if (key !in watchers) watch(key, info, token)
+                    } else if (pending.none { it.first == key }) pending.add(key to info)
+                }
                 resolveNext(); scheduleRefresh(token)
             }
         }

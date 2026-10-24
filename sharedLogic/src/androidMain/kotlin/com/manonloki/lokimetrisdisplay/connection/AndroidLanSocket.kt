@@ -9,7 +9,7 @@ import java.util.ArrayDeque
 import java.net.InetSocketAddress
 
 /** 单一selector线程持有非阻塞TCP、帧和八项写队列；所有异常交owner关闭原连接。 */
-class AndroidLanSocket(endpoint: AndroidLanEndpoint, selector: Selector,
+class AndroidLanSocket(val endpoint: AndroidLanEndpoint, selector: Selector,
     private val limit: () -> Int, private val ready: () -> Unit,
     private val received: (JSONObject) -> Unit,
 ) : AutoCloseable {
