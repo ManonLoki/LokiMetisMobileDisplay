@@ -1,4 +1,6 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
+
+import com.manonloki.lokimetrisdisplay.rules.normalizeComparisonText
 
 /** 仅携带图片选择需要的事实，不包含 Hook 正文、图片字节或平台文件路径；-1 表示没有时间。 */
 data class HookImageFact(

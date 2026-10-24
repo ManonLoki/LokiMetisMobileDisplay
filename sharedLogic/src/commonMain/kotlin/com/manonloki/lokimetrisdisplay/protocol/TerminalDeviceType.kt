@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 系统报告的终端展示形态；名称、IP和页面宽度不参与选择。 */
 enum class TerminalDeviceType(val wireValue: String) {

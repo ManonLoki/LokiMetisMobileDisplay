@@ -1,7 +1,9 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 import android.content.Context
 import android.os.Build
+import com.manonloki.lokimetrisdisplay.domain.PanelConfiguration
+import com.manonloki.lokimetrisdisplay.protocol.MdnsProtocol
 import java.util.UUID
 
 /** 复用原广播应用的身份位置；损坏的既有UUID失败关闭，不能悄悄建立另一设备身份。 */

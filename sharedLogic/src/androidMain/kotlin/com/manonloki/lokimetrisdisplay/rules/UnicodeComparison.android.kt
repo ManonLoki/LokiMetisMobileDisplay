@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.rules
 
 import java.text.Normalizer
 

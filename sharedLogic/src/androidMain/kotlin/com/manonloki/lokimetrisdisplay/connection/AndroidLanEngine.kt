@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.connection
 
 import android.content.Context
 import android.graphics.drawable.AnimatedImageDrawable
@@ -6,13 +6,39 @@ import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.domain.TerminalHost
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.withoutLiveDisplay
+import com.manonloki.lokimetrisdisplay.json.AndroidDisplayJson
+import com.manonloki.lokimetrisdisplay.json.long
+import com.manonloki.lokimetrisdisplay.json.obj
+import com.manonloki.lokimetrisdisplay.json.string
+import com.manonloki.lokimetrisdisplay.nativebridge.NativeLinkBridge
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferDescriptor
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferManifest
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferRules
+import com.manonloki.lokimetrisdisplay.protocol.TerminalConnectionPolicy
+import com.manonloki.lokimetrisdisplay.protocol.TerminalDeviceType
+import com.manonloki.lokimetrisdisplay.protocol.TerminalDeviceTypeReport
+import com.manonloki.lokimetrisdisplay.protocol.TerminalPendingIntent
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionPhase
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionTimeout
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionTimingPolicy
+import com.manonloki.lokimetrisdisplay.protocol.TerminalUserIntent
+import com.manonloki.lokimetrisdisplay.storage.AndroidAssetCache
+import com.manonloki.lokimetrisdisplay.storage.AndroidDeviceSettings
+import com.manonloki.lokimetrisdisplay.storage.AndroidDisplayStore
+import com.manonloki.lokimetrisdisplay.storage.AndroidPairingStore
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetStore
+import java.io.IOException
 import java.nio.channels.Selector
 import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
-import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONException
+import org.json.JSONObject
 
 private typealias Phase = TerminalSessionPhase
 
@@ -27,7 +53,7 @@ data class AndroidLinkProjection(val view: TerminalLinkView, val images: Map<Str
 
 /** 应用级单线程网络owner；Activity旋转、菜单和权限弹窗都不重新创建密码窗口。 */
 class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSettings,
-    private val onSurfaceChanged: () -> Unit = {}) {
+    private val onSurfaceChanged: () -> Unit = {}) : TerminalLinkEngine<AndroidLinkProjection> {
     private val app = context.applicationContext
     // 应用级系统配置不使用Activity/Compose当前窗口宽度；本进程内保持同一分类。
     private val deviceType = TerminalDeviceTypeReport(TerminalDeviceType.fromSmallestWidthDp(app.resources.configuration.smallestScreenWidthDp))
@@ -44,7 +70,7 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
     private val projection = AtomicReference<AndroidLinkProjection?>(null)
     private var deliveryQueued = false
     private var listener: ((AndroidLinkProjection) -> Unit)? = null
-    var state = AndroidLinkProjection(TerminalLinkView(settings.deviceId, settings.name)); private set
+    override var state = AndroidLinkProjection(TerminalLinkView(settings.deviceId, settings.name)); private set
     private var view = state.view
     private var images = emptyMap<String, Map<Int, Drawable>>()
     private var active = false
@@ -77,15 +103,15 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         Thread({ run() }, "loki-lan-owner").apply { isDaemon = true }.start()
     }
     /** Application 在主线程订阅，再向 Activity 与 Service 分发最新投影。 */
-    fun setListener(value: (AndroidLinkProjection) -> Unit) { check(Looper.myLooper() == Looper.getMainLooper()); listener = value; value(state) }
+    override fun setListener(value: (AndroidLinkProjection) -> Unit) { check(Looper.myLooper() == Looper.getMainLooper()); listener = value; value(state) }
     /** 前后台和权限使用最新值槽位，队列满也不会丢弃真实后台变化。 */
-    fun setForeground(value: Boolean, permitted: Boolean) { foreground.set(value to permitted); selector.wakeup() }
+    override fun setForeground(value: Boolean, permitted: Boolean) { foreground.set(value to permitted); selector.wakeup() }
     /** 仅用户开启的connectedDevice前台服务可延长已配对连接，不允许后台开启配对窗口。 */
-    fun setBackgroundConnection(enabled: Boolean) { backgroundConnection.set(enabled); selector.wakeup() }
+    override fun setBackgroundConnection(enabled: Boolean) { backgroundConnection.set(enabled); selector.wakeup() }
     /** 发现失败后的重试入口；首次发现由前台生命周期自动开启。 */
-    fun discover() { requestIntent(TerminalUserIntent.Discover) }
+    override fun discover() { requestIntent(TerminalUserIntent.Discover) }
     /** 用户选择才开启首次密码窗口，已配对候选只做新会话认证。 */
-    fun select(id: String) { requestIntent(TerminalUserIntent.Select(id)) }
+    override fun select(id: String) { requestIntent(TerminalUserIntent.Select(id)) }
     /** 最新连接意图不经过可能已满的普通队列，同一轮按真实提交先后覆盖。 */
     private fun requestIntent(value: TerminalUserIntent) { synchronized(userIntent) { userIntent.submit(value) }; selector.wakeup() }
     /** worker消费当前最新意图后才改变发现和密码窗口。 */
@@ -102,9 +128,9 @@ class AndroidLanEngine(context: Context, private val settings: AndroidDeviceSett
         publish()
     }
     /** 设置保存不重启网络，也不修改密码窗口的身份快照。 */
-    fun nameChanged() { submit { view = view.copy(deviceName = settings.name); publish() } }
+    override fun nameChanged() { submit { view = view.copy(deviceName = settings.name); publish() } }
     /** 忘记精确桌面信任；系统存储失败时保持原信任列表。 */
-    fun forget(id: String) {
+    override fun forget(id: String) {
         synchronized(userIntent) { userIntent.forget(id) }
         submit {
         try {

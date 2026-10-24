@@ -1,5 +1,15 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.widget
 
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalAgent
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalDay
+import com.manonloki.lokimetrisdisplay.domain.TerminalHook
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.TerminalTokens
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream

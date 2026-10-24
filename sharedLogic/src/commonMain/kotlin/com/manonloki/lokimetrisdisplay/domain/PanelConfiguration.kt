@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.domain
 
 /** 本机面板布局独立于桌面快照和连接状态，隐藏卡片不会停止接收内容。 */
 data class PanelConfiguration(

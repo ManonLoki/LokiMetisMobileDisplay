@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpBinaryField
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpClientProfile
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpPolicy
 import kotlin.test.*
 
 /** 验证 HTTP 元信息、Base64 平台差异及请求 nonce 绑定规则，不发送真实网络请求。 */

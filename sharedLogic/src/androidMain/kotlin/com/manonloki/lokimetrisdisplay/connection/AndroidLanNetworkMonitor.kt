@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.connection
 
 import android.content.Context
 import android.net.ConnectivityManager

@@ -1,5 +1,9 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.storage.HookImageCachePolicy
+import com.manonloki.lokimetrisdisplay.storage.HookImageCacheState
+import com.manonloki.lokimetrisdisplay.storage.HookImageChoice
+import com.manonloki.lokimetrisdisplay.storage.HookImageFact
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

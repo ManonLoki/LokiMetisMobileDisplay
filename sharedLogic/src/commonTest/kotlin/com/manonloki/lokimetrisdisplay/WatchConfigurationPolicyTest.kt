@@ -1,5 +1,11 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.rules.TerminalValueRules
+import com.manonloki.lokimetrisdisplay.storage.RefreshConnection
+import com.manonloki.lokimetrisdisplay.storage.WatchConfigurationAcceptance
+import com.manonloki.lokimetrisdisplay.storage.WatchConfigurationPolicy
+import com.manonloki.lokimetrisdisplay.storage.WatchConfigurationState
+import com.manonloki.lokimetrisdisplay.storage.WatchConfigurationTarget
 import kotlin.test.*
 
 /** 以纯配置对象验证修订、防回退、撤销和来源绑定；地址解析及密钥存储由平台测试覆盖。 */

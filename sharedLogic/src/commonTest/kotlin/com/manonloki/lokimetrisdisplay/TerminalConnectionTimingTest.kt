@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionPhase
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionTimeout
+import com.manonloki.lokimetrisdisplay.protocol.TerminalSessionTimingPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

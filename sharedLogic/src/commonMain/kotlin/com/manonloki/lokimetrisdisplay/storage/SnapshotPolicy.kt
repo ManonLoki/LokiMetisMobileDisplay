@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 /** 只包含接纳决策需要的来源与接收时间，不携带网络凭据或文件对象。 */
 data class SnapshotStamp(val sourceId: String, val receivedAtMs: Long)

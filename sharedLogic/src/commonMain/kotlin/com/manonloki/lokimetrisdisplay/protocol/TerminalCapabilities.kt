@@ -1,4 +1,6 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
+
+import com.manonloki.lokimetrisdisplay.rules.normalizeComparisonText
 
 /** 当前认证快照的能力合同；JSON 字段缺失由平台映射为空表，坏类型映射为 null。 */
 object TerminalCapabilities {

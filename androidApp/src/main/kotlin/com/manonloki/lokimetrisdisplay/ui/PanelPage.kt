@@ -1,15 +1,15 @@
 package com.manonloki.lokimetrisdisplay
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.manonloki.lokimetrisdisplay.domain.HookLayout
+import com.manonloki.lokimetrisdisplay.domain.PanelConfiguration
+import com.manonloki.lokimetrisdisplay.domain.TerminalHook
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.presentation.UsageDisplayPolicy
+import com.manonloki.lokimetrisdisplay.presentation.label
 
 /** 两个模块同时启用时等分展示台；用量纵向滚动，Hooks 独立横向分页。 */
 @Composable

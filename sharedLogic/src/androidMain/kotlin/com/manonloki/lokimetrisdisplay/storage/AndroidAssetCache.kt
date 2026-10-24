@@ -1,14 +1,21 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 import android.content.Context
 import android.graphics.ImageDecoder
 import android.graphics.drawable.Drawable
 import android.util.AtomicFile
 import android.util.Base64
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.json.bool
+import com.manonloki.lokimetrisdisplay.json.long
+import com.manonloki.lokimetrisdisplay.json.string
+import com.manonloki.lokimetrisdisplay.nativebridge.NativeLinkBridge
+import com.manonloki.lokimetrisdisplay.presentation.ImageDecodePolicy
+import com.manonloki.lokimetrisdisplay.rules.validHash
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
+import org.json.JSONObject
 
 /** 应用私有内容缓存；核心验证块顺序、完整摘要和魔数，磁盘结果还需提交后复核。 */
 class AndroidAssetCache(context: Context) : AutoCloseable {

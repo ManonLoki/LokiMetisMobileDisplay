@@ -1,5 +1,12 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.presentation.displayUsageRows
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetCodec
 import kotlin.test.*
 
 /** 组件私有格式升级保留额度，兼容旧缓存，不把原始正文带进组件。 */

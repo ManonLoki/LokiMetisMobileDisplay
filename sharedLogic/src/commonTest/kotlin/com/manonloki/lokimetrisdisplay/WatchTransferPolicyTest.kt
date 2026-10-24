@@ -1,5 +1,18 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferDescriptor
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferManifest
+import com.manonloki.lokimetrisdisplay.protocol.WatchChunkDecision
+import com.manonloki.lokimetrisdisplay.protocol.WatchCommunicationPolicy
+import com.manonloki.lokimetrisdisplay.protocol.WatchCompanionState
+import com.manonloki.lokimetrisdisplay.protocol.WatchContactFact
+import com.manonloki.lokimetrisdisplay.protocol.WatchContactObservation
+import com.manonloki.lokimetrisdisplay.protocol.WatchMonotonicTime
+import com.manonloki.lokimetrisdisplay.protocol.WatchPayloadDecision
+import com.manonloki.lokimetrisdisplay.protocol.WatchPayloadKind
+import com.manonloki.lokimetrisdisplay.protocol.WatchProtocolRules
+import com.manonloki.lokimetrisdisplay.protocol.WatchTransferRules
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

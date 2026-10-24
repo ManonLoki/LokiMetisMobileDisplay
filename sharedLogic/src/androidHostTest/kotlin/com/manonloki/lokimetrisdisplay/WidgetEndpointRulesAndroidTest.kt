@@ -1,5 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetTarget
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

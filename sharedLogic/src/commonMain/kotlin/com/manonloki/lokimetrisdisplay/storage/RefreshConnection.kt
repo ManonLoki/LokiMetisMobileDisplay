@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 /** 配置身份只用于相等性决策；格式、系统解析和密钥存取由平台边界验证。 */
 class RefreshConnection(

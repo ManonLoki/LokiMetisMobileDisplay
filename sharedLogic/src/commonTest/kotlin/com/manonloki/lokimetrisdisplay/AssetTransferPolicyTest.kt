@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferDescriptor
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferManifest
+import com.manonloki.lokimetrisdisplay.protocol.AssetTransferRules
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

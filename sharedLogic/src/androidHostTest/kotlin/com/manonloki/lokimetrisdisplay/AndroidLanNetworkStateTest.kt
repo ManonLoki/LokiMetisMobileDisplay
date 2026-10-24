@@ -1,5 +1,7 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.connection.AndroidLanNetworkState
+import com.manonloki.lokimetrisdisplay.connection.AndroidLanRoute
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

@@ -1,4 +1,6 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
+
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
 
 /** Android 与 Apple 的请求容量、Base64 接纳规则不同，使用固定平台配置选择。 */
 enum class WidgetHttpClientProfile { ANDROID, APPLE }

@@ -9,6 +9,10 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.presentation.UsageDisplayPolicy
+import com.manonloki.lokimetrisdisplay.presentation.label
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.abs

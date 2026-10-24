@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 enum class ImageCacheProfile { ANDROID, IPHONE, WATCH }
 

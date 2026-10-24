@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.connection
 
 import android.content.Context
 import android.net.Network
@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ext.SdkExtensions
+import com.manonloki.lokimetrisdisplay.protocol.MdnsProtocol
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.util.concurrent.Executor

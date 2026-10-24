@@ -41,14 +41,15 @@ SharedLogic 的 Apple 目标：
 
 | 业务 | SharedLogic 中的实现 | 平台适配保留什么 |
 | --- | --- | --- |
-| 名称、UUID、内容摘要格式 | `MdnsProtocol`、`TerminalValueRules` | 系统设备信息、密码哈希计算 |
+| 名称、UUID、内容摘要格式 | `MdnsProtocol`、`TerminalValueRules`（`rules`） | 系统设备信息、密码哈希计算 |
 | 连接选择与重试预算 | `TerminalConnectionPolicy` | Bonjour/NSD、Socket、线程/队列、计时器执行 |
 | 连接阶段、预算、超时优先级 | `TerminalSessionPhase`、`TerminalSessionTimingPolicy` | 平台时钟精确到期比较、失败清理、首次快照起算事件与调度 |
 | 帧容量、阶段长度、写队列与写超时 | `TerminalFramePolicy`、`TerminalWritePolicy` | 原生 Data / ByteArray 缓冲、网络字节序和真实收发 |
 | 认证能力表 | `TerminalCapabilities` | JSON 字段映射；坏表不授予扩展或只读 HTTP 权限 |
 | 面板默认值、恢复、枚举键、列数与分页位置 | `PanelConfiguration`、`HookLayout` | SwiftUI / Compose 控件、标题、UserDefaults / SharedPreferences |
 | 每连接一次的设备形态报告 | `TerminalDeviceTypeReport` | UIKit / Android 系统类别观测、JSON 外壳 |
-| Agent 别名、启用过滤、排序、Token 与额度合并、Cursor 默认零行 | `UsageDisplayPolicy` | Swift 根据共享索引映射回原始 Codable 对象 |
+| Agent 别名匹配与启用过滤 | `AgentIdentity`（`domain`） | Swift 直接调用同一份判断 |
+| Agent 展示名、排序、Token 与额度合并、Cursor 默认零行 | `UsageDisplayPolicy` | Swift 根据共享索引映射回原始 Codable 对象 |
 | 数字精度、进位、质量文字、Hook 状态文字 | `TokenFormatting`、`UsageDisplayPolicy` | 原生字体、颜色、读屏及日期格式 |
 | 完整/摘要快照、Token、额度、图片描述的领域校验 | `TerminalSnapshot`、`TerminalTokens`、`TerminalAmount`、`ProviderQuota*`、`TerminalAsset` | 数据解码、Apple 图片历史时间外壳与主机/文件系统校验 |
 | 套餐标签、窗口顺序、剩余比例、百分比及语义档位 | `ProviderQuota*` | 具体颜色、布局与 Date 转换 |
@@ -90,17 +91,20 @@ Watch 纳秒单调时间用高、低 32 位传递，Kotlin 内部保持 ULong；
 ```text
 sharedLogic/src/
   commonMain/.../
-    domain/          快照、Token、额度、面板配置及语义校验
+    rules/           UUID、内容摘要、u64 十进制、Unicode 比较键（最底层）
+    domain/          快照、Token、额度、Agent 身份、面板配置及语义校验
+    connection/      TerminalLinkEngine 连接接口
+    storage/         小组件摘要、提交、身份恢复、租约、缓存接纳、图文历史、磁盘淘汰、Watch配置修订
     protocol/        发现、能力、阶段/超时、帧/写容量、Watch通信、Widget HTTP、JSON边界
-    presentation/    Agent/用量行投影、数字格式、摘要裁剪、图片解码预算
-    storage/         提交、身份恢复、租约、缓存接纳、图文历史、磁盘淘汰、Watch配置修订
+    presentation/    Agent/用量行投影与展示扩展属性、数字格式、图片解码预算
   androidMain/.../
     connection/      NSD、Socket、唯一网络引擎
-    storage/         系统偏好、Keystore、缓存、Android JSON 适配
+    storage/         系统偏好、Keystore、缓存
+    json/            严格 JSON 字段读取与快照线格式映射
     widget/          只读 HTTP、平台密码 API、文件编解码与提交
     nativebridge/    Rust JNI 包装
-    protocol/        Android 系统 Unicode NFC 规范化适配
-  appleMain/.../protocol/ Apple 系统 Unicode NFC 规范化适配
+    rules/           Android 系统 Unicode NFC 规范化适配
+  appleMain/.../rules/ Apple 系统 Unicode NFC 规范化适配
   commonTest/.../     同一业务用例在 JVM / iOS / watchOS 上验证
   androidHostTest/.../ Android/JVM 文件、HTTP、密码向量与存储验证
 

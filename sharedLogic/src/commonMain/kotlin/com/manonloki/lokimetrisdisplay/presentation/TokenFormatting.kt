@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.presentation
 
 /** 宿主无关的 Token 数字展示，Android 与 iOS 主界面使用同一套精度和进位规则。 */
 object TokenFormatting {

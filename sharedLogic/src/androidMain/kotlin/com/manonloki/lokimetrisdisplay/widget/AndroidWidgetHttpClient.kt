@@ -1,8 +1,21 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.widget
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.json.AndroidDisplayJson
+import com.manonloki.lokimetrisdisplay.json.array
+import com.manonloki.lokimetrisdisplay.json.bool
+import com.manonloki.lokimetrisdisplay.json.int
+import com.manonloki.lokimetrisdisplay.json.obj
+import com.manonloki.lokimetrisdisplay.json.optionalObject
+import com.manonloki.lokimetrisdisplay.json.optionalString
+import com.manonloki.lokimetrisdisplay.json.optionalStringArray
+import com.manonloki.lokimetrisdisplay.json.string
+import com.manonloki.lokimetrisdisplay.protocol.TerminalJsonBoundary
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpBinaryField
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpClientProfile
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpPolicy
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -20,6 +33,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** 短时只读 HTTP；JobService 的 worker 同步等待结果，取消或超时先结束等待，再异步断开连接。 */
 class AndroidWidgetHttpClient @JvmOverloads constructor(

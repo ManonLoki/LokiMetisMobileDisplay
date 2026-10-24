@@ -1,5 +1,9 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.presentation.ImageDecodePolicy
+import com.manonloki.lokimetrisdisplay.presentation.ImageDecodeProfile
+import com.manonloki.lokimetrisdisplay.presentation.ImageFrameBudget
+import com.manonloki.lokimetrisdisplay.presentation.ImageTargetSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

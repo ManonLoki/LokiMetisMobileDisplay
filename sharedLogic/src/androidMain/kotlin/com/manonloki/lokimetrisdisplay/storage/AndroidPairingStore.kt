@@ -1,15 +1,17 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.protocol.MdnsProtocol
+import com.manonloki.lokimetrisdisplay.protocol.TerminalJsonBoundary
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONObject
 
 /** 写入由网络 owner 串行执行，commit 成功后才通知共享核心生成 ACK；后台入口可另建实例只读配对索引。 */
 class AndroidPairingStore(context: Context, private val deviceId: String) {

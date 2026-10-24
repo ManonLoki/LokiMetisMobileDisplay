@@ -1,5 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.storage.RefreshConnection
 import kotlin.test.*
 
 class RefreshConnectionTest {

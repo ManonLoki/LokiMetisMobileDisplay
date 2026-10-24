@@ -1,5 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.presentation.TokenFormatting
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

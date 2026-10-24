@@ -1,5 +1,9 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.widget
 
+import com.manonloki.lokimetrisdisplay.protocol.MdnsProtocol
+import com.manonloki.lokimetrisdisplay.protocol.WidgetEndpointRules
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpBinaryField
+import com.manonloki.lokimetrisdisplay.storage.RefreshConnection
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress

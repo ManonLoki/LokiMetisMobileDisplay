@@ -1,12 +1,16 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.connection
 
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.protocol.TerminalFramePolicy
+import com.manonloki.lokimetrisdisplay.protocol.TerminalFrames
+import com.manonloki.lokimetrisdisplay.protocol.TerminalJsonBoundary
+import com.manonloki.lokimetrisdisplay.protocol.TerminalWritePolicy
+import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.SelectionKey
 import java.nio.channels.Selector
 import java.nio.channels.SocketChannel
 import java.util.ArrayDeque
-import java.net.InetSocketAddress
+import org.json.JSONObject
 
 /** 单一selector线程持有非阻塞TCP、帧和八项写队列；所有异常交owner关闭原连接。 */
 class AndroidLanSocket(val endpoint: AndroidLanEndpoint, selector: Selector,

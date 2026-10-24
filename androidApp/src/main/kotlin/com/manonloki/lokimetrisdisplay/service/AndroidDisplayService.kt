@@ -22,6 +22,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.Display
 import android.view.WindowManager
+import com.manonloki.lokimetrisdisplay.connection.AndroidLinkProjection
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
 import java.util.concurrent.CopyOnWriteArraySet
 
 /** 用户开启的常驻连接与悬浮窗状态；窗口隐藏不会关闭独立的后台连接。 */

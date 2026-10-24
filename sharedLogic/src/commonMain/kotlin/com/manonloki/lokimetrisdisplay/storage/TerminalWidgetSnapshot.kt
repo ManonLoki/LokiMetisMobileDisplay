@@ -1,4 +1,7 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
+
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.rules.TerminalValueRules
 
 /** 系统小组件的持久化摘要只保留用量和 Hook 四态；正文、图片及长期配对秘密不进入此模型。 */
 data class TerminalWidgetSnapshot(val sourceId: String, val receivedAtMs: Long, val snapshot: TerminalSnapshot) {
@@ -6,7 +9,7 @@ data class TerminalWidgetSnapshot(val sourceId: String, val receivedAtMs: Long, 
 
     /** 校验摘要已裁剪：不含正文、图片或资源目录。 */
     fun validate() {
-        require(MdnsProtocol.isCanonicalDeviceId(sourceId) && receivedAtMs >= 0)
+        require(TerminalValueRules.validDeviceId(sourceId) && receivedAtMs >= 0)
         snapshot.validate()
         require(snapshot.assets.isEmpty() && snapshot.catalogError == null)
         require(snapshot.hooks.all { it.content.isEmpty() && !it.contentTruncated && it.image == null })

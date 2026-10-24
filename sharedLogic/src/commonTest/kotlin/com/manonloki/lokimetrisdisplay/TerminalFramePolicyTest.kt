@@ -1,5 +1,7 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.TerminalFramePolicy
+import com.manonloki.lokimetrisdisplay.protocol.TerminalWritePolicy
 import kotlin.test.*
 
 /** 只检验帧容量、平台在途写计数与计时边界，不模拟操作系统 socket 调度。 */

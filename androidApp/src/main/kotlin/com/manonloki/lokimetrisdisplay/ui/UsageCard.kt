@@ -1,8 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +30,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.manonloki.lokimetrisdisplay.domain.PanelConfiguration
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.UsageDetail
+import com.manonloki.lokimetrisdisplay.presentation.TerminalUsageRow
+import com.manonloki.lokimetrisdisplay.presentation.TokenFormatting
+import com.manonloki.lokimetrisdisplay.presentation.displayName
+import com.manonloki.lokimetrisdisplay.presentation.displayUsageRows
+import com.manonloki.lokimetrisdisplay.presentation.quality
 
 private val UsageBackground = Color(0xFF101E33)
 private val UsageForeground = Color(0xFFE9F2FF)

@@ -1,5 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 

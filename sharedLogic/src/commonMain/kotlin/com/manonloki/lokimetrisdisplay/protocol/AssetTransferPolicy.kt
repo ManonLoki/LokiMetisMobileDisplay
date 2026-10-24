@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 只比较完整元信息；宿主以规范 u64 十进制传递长度，不经有符号或浮点数截断。 */
 data class AssetTransferDescriptor(val hash: String, val mime: String, val byteLength: String)

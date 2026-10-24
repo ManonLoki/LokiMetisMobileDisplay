@@ -8,6 +8,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetHttpClient
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetStore
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 

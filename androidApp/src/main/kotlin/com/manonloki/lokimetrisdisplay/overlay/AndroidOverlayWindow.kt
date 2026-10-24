@@ -16,6 +16,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
 import kotlin.math.abs
 import kotlin.math.roundToInt
 

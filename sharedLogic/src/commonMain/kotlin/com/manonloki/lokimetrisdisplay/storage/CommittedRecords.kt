@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
 
 /** 仅成功提交的记录才成为当前进程权威状态；系统偏好写失败后的内存变化不能冒充落盘。 */
 class CommittedRecords(initial: Map<String, String>) {

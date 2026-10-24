@@ -7,12 +7,18 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import com.manonloki.lokimetrisdisplay.connection.AndroidLanEngine
+import com.manonloki.lokimetrisdisplay.connection.AndroidLinkProjection
+import com.manonloki.lokimetrisdisplay.connection.TerminalLinkEngine
+import com.manonloki.lokimetrisdisplay.storage.AndroidDeviceSettings
+import com.manonloki.lokimetrisdisplay.storage.AndroidPairingStore
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetTarget
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** 应用持有连接；Activity 旋转不重开配对窗口，退入后台后由用户启动的前台服务决定是否续连。 */
 class DisplayApplication : Application(), Application.ActivityLifecycleCallbacks {
     @Volatile var settings: AndroidDeviceSettings? = null; private set
-    var link: AndroidLanEngine? = null; private set
+    var link: TerminalLinkEngine<AndroidLinkProjection>? = null; private set
     private val main = Handler(Looper.getMainLooper())
     private var started = 0
     private var delayedStop: Runnable? = null

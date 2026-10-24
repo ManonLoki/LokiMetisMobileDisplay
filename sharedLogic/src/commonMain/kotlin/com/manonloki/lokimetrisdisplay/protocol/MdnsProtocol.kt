@@ -1,4 +1,6 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
+
+import com.manonloki.lokimetrisdisplay.rules.TerminalValueRules
 
 /** 桌面宿主发现与终端身份合同；DNS-SD广告不授信，移动端主动连接桌面。 */
 object MdnsProtocol {
@@ -7,13 +9,8 @@ object MdnsProtocol {
     const val DEFAULT_NAME = "LokiMetris Display"
     const val MAX_NAME_BYTES = 160
 
-    /** UUID与既有安装身份保持一致，拒绝零值、大写和非规范分隔。 */
-    fun isCanonicalDeviceId(id: String): Boolean =
-        id.length == 36 && id != "00000000-0000-0000-0000-000000000000" &&
-            id.withIndex().all { (index, char) ->
-                if (index == 8 || index == 13 || index == 18 || index == 23) char == '-'
-                else char in '0'..'9' || char in 'a'..'f'
-            }
+    /** 设备身份格式归属基础规则，发现层只转发。 */
+    fun isCanonicalDeviceId(id: String): Boolean = TerminalValueRules.validDeviceId(id)
 
     /** 名称按UTF-8字节限制，错误可直接显示在本机设置中。 */
     fun nameError(name: String): String? = when {

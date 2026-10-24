@@ -1,5 +1,13 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.AgentIdentity
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.withoutLiveDisplay
+import com.manonloki.lokimetrisdisplay.presentation.UsageDisplayPolicy
 import kotlin.test.*
 
 /** 桌面额度与Token无关，窗口独立缺省，严格拒绝坏值和无序/重复提供商。 */
@@ -29,8 +37,8 @@ class ProviderQuotaTest {
         assertEquals("Claude", claude.label)
         assertEquals(listOf("每周", "5h"), claude.windows.map { it.kindLabel })
         assertEquals(listOf("每月 75%"), cursor.windows.map { "${it.kindLabel} ${it.percentText}" })
-        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("claude-code"))
-        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("Claude Code"))
+        assertEquals("claude", AgentIdentity.providerQuotaKey("claude-code"))
+        assertEquals("claude", AgentIdentity.providerQuotaKey("Claude Code"))
     }
     @Test fun remaining_color_thresholds_and_disconnect_clear_quota() {
         for ((remaining, level) in listOf(0 to 0, 200 to 0, 201 to 1, 500 to 1, 501 to 2, 1000 to 2)) {

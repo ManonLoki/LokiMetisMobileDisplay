@@ -1,9 +1,17 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.widget
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import org.json.JSONObject
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.json.AndroidDisplayJson
+import com.manonloki.lokimetrisdisplay.json.int
+import com.manonloki.lokimetrisdisplay.json.obj
+import com.manonloki.lokimetrisdisplay.json.string
+import com.manonloki.lokimetrisdisplay.protocol.MdnsProtocol
+import com.manonloki.lokimetrisdisplay.protocol.TerminalCapabilities
+import com.manonloki.lokimetrisdisplay.storage.SnapshotAcceptancePolicy
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
@@ -15,6 +23,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONObject
 
 /** 同一进程所有实例共用一把锁；摘要和加密读取配置在同一个 noBackup 文件中原子换代。 */
 class AndroidWidgetStore internal constructor(

@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.TerminalDeviceType
+import com.manonloki.lokimetrisdisplay.protocol.TerminalDeviceTypeDecision
+import com.manonloki.lokimetrisdisplay.protocol.TerminalDeviceTypeReport
 import kotlin.test.*
 
 /** 系统分类和实时协商共同决定上报，旧主机与坏能力表均不能开启新消息。 */

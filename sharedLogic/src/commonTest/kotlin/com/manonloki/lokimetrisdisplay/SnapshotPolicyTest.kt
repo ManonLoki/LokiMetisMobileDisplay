@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.storage.SnapshotAcceptancePolicy
+import com.manonloki.lokimetrisdisplay.storage.SnapshotFreshnessPolicy
+import com.manonloki.lokimetrisdisplay.storage.SnapshotStamp
 import kotlin.test.*
 
 /** 时间和来源接纳规则使用固定时刻，分别验证认证推送、迟到 HTTP 和租约过期。 */

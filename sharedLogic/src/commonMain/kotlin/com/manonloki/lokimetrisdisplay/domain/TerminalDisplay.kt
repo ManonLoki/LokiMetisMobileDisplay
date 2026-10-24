@@ -1,4 +1,8 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.domain
+
+import com.manonloki.lokimetrisdisplay.rules.canonicalUnsigned
+import com.manonloki.lokimetrisdisplay.rules.normalizeComparisonText
+import com.manonloki.lokimetrisdisplay.rules.validHash
 
 /** 已认证完整快照的宿主无关投影；数字保留十进制u64，不重新统计桌面用量。 */
 data class TerminalSnapshot(
@@ -10,21 +14,11 @@ data class TerminalSnapshot(
 ) {
     /** 名单缺省时兼容旧桌面；只筛选明细，保留桌面总量、统计质量和原始快照。 */
     val displayTokens: TerminalTokens? get() = tokens?.let { value ->
-        if (enabledAgents == null) value else value.copy(agents = value.agents.filter { UsageDisplayPolicy.isEnabled(it.agent, enabledAgents) })
+        if (enabledAgents == null) value else value.copy(agents = value.agents.filter { AgentIdentity.isEnabled(it.agent, enabledAgents) })
     }
     /** 独立额度与Token明细使用相同启用集合，空名单明确撤下所有提供商。 */
     val displayProviderQuota: ProviderQuotaSnapshot? get() = providerQuota?.let { value ->
-        if (enabledAgents == null) value else value.copy(providers = value.providers.filter { UsageDisplayPolicy.isEnabled(it.provider, enabledAgents) })
-    }
-
-    /** 行位置由跨平台展示策略计算，宿主只映射回原始领域对象。 */
-    val displayUsageRows: List<TerminalUsageRow> get() {
-        val agents = tokens?.agents.orEmpty()
-        val quotas = providerQuota?.providers.orEmpty()
-        return UsageDisplayPolicy.projectRows(tokens != null, agents.map { it.agent },
-            quotas.map { it.provider }, enabledAgents).map {
-            TerminalUsageRow(agents.getOrNull(it.tokenIndex), quotas.getOrNull(it.quotaIndex))
-        }
+        if (enabledAgents == null) value else value.copy(providers = value.providers.filter { AgentIdentity.isEnabled(it.provider, enabledAgents) })
     }
 
     /** 网络消息共用语义校验，未来版本、重复槽位或缺值不能冒充有效数据。 */
@@ -36,7 +30,7 @@ data class TerminalSnapshot(
         require(tokenError == null || tokens == null)
         require(tokenError == null || tokenError.encodeToByteArray().size <= 512)
         require(catalogError == null || catalogError.encodeToByteArray().size <= 512)
-        require(UsageDisplayPolicy.validEnabledAgents(enabledAgents))
+        require(AgentIdentity.validEnabledAgents(enabledAgents))
         providerQuota?.validate(); tokens?.validate(); hooks.forEach { it.validate() }; assets.forEach { it.validate() }
     }
     /** Swift 在解码与缓存入口使用显式结果，不传播 Kotlin 异常。 */
@@ -55,8 +49,6 @@ data class TerminalAmount(val total: String?, val availability: String, val comp
     /** 领域值保留精确十进制；K/M/B 缩写与分组符由展示层另行处理。 */
     val text: String get() = when (availability) { "available" -> total ?: "—"; "noRecords" -> "无记录"; else -> "不可用" }
     val hasNumericValue: Boolean get() = availability == "available" && total != null
-    /** 保留部分或推算质量供宿主展示；界面可通过辅助功能描述提供这些信息。 */
-    val quality: String get() = UsageDisplayPolicy.amountQuality(completeness, confidence, " · ")
     fun isValid(): Boolean = runCatching { validate() }.isSuccess
 }
 
@@ -66,18 +58,7 @@ private val DAY_PATTERN = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 /** 桌面同轮统计日界；毫秒不替换为手机时区。 */
 data class TerminalDay(val date: String, val zone: String, val startMs: Long, val endMs: Long)
 /** 单个Agent组件与总量保留同一观测时刻。 */
-data class TerminalAgent(val agent: String, val amount: TerminalAmount) {
-    val displayName: String get() = UsageDisplayPolicy.agentDisplayName(agent)
-}
-
-/** 非序列化UI投影；两者皆空即缺失Cursor的默认零行，不参与统计或额度。 */
-data class TerminalUsageRow(val tokenAgent: TerminalAgent?, val quota: ProviderQuotaEntry?) {
-    internal val sourceName: String get() = tokenAgent?.agent ?: quota?.provider ?: UsageDisplayPolicy.ZERO_DEFAULT_PROVIDER
-    val displayName: String get() = tokenAgent?.displayName ?: quota?.label ?: UsageDisplayPolicy.agentDisplayName(sourceName)
-    /** 与Swift `WidgetUsageRow.presentation` 同一规则：默认零提供方缺数字时显示0。 */
-    val tokenText: String? get() = UsageDisplayPolicy.tokenText(sourceName,
-        tokenAgent?.amount?.text, tokenAgent?.amount?.hasNumericValue == true)
-}
+data class TerminalAgent(val agent: String, val amount: TerminalAmount)
 
 /** 完整Token总量及分Agent投影。 */
 data class TerminalTokens(val day: TerminalDay, val observedMs: Long, val all: TerminalAmount, val agents: List<TerminalAgent>) {
@@ -98,8 +79,6 @@ data class TerminalHook(val agent: String, val slot: Int, val behavior: String, 
         require(validAgent(agent) && slot in 1..12 && behavior in listOf("idle", "running", "asking", "error"))
         require(content.encodeToByteArray().size <= 512 && (image == null || validHash(image)))
     }
-    /** 只表达已接收的桌面状态，离线时由展示页整体标记缓存。 */
-    val label: String get() = UsageDisplayPolicy.hookLabel(behavior)
 }
 
 /** 资源只以摘要寻址，禁止远端路径或URL。 */
@@ -116,11 +95,6 @@ data class TerminalAsset(val hash: String, val mime: String, val length: Long) {
     }
 }
 
-/** 规范u64十进制贯穿展示和缓存，不允许前导零、符号或超界。 */
-internal fun canonicalUnsigned(value: String): Boolean = value.isNotEmpty() && value.length <= 20 &&
-    value.all { it in '0'..'9' } && (value == "0" || value[0] != '0') && value.toULongOrNull() != null
-/** 内容摘要同时作为私有目录内的固定单层文件名。 */
-internal fun validHash(value: String): Boolean = value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
 /** 有界非空Agent名只作为已认证展示文本。 */
 private fun validAgent(value: String): Boolean = value.isNotEmpty() && value.encodeToByteArray().size <= 64
 

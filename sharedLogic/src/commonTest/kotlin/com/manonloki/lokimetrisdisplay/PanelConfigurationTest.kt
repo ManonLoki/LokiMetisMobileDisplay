@@ -1,5 +1,8 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.HookLayout
+import com.manonloki.lokimetrisdisplay.domain.PanelConfiguration
+import com.manonloki.lokimetrisdisplay.domain.UsageDetail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

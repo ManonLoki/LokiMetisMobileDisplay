@@ -1,11 +1,11 @@
 package com.manonloki.lokimetrisdisplay
 
-import android.os.Bundle
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.manonloki.lokimetrisdisplay.connection.AndroidLinkProjection
+import com.manonloki.lokimetrisdisplay.domain.PanelConfiguration
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
 
 /** Activity只映射应用投影、系统权限与Compose，不拥有密码窗口或socket。 */
 class MainActivity : ComponentActivity() {

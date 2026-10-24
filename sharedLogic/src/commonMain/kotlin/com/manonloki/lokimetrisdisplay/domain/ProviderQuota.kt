@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.domain
 
 /** 桌面已读取的额度快照；终端不持有提供商凭据，也不根据Token推算额度。 */
 data class ProviderQuotaSnapshot(val observedAtUnix: Long, val providers: List<ProviderQuotaEntry>) {

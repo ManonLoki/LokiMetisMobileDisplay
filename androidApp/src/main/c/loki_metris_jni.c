@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "loki_metris_mobile.h"
 
-JNIEXPORT jlong JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBridge_create(JNIEnv *env, jobject owner, jbyteArray input) {
+JNIEXPORT jlong JNICALL Java_com_manonloki_lokimetrisdisplay_nativebridge_NativeLinkBridge_create(JNIEnv *env, jobject owner, jbyteArray input) {
     (void)owner;
     if (!input) return 0;
     jsize length = (*env)->GetArrayLength(env, input);
@@ -15,7 +15,7 @@ JNIEXPORT jlong JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBridge_cr
     return (jlong)handle;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBridge_invoke(JNIEnv *env, jobject owner, jlong handle, jbyteArray input) {
+JNIEXPORT jbyteArray JNICALL Java_com_manonloki_lokimetrisdisplay_nativebridge_NativeLinkBridge_invoke(JNIEnv *env, jobject owner, jlong handle, jbyteArray input) {
     (void)owner;
     if (!input) return NULL;
     jsize length = (*env)->GetArrayLength(env, input);
@@ -39,11 +39,11 @@ JNIEXPORT jbyteArray JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBrid
     return result;
 }
 
-JNIEXPORT void JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBridge_destroy(JNIEnv *env, jobject owner, jlong handle) {
+JNIEXPORT void JNICALL Java_com_manonloki_lokimetrisdisplay_nativebridge_NativeLinkBridge_destroy(JNIEnv *env, jobject owner, jlong handle) {
     (void)env; (void)owner; loki_mobile_destroy((uint64_t)handle);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_manonloki_lokimetrisdisplay_NativeLinkBridge_validateAsset(JNIEnv *env, jobject owner, jbyteArray descriptor, jbyteArray body) {
+JNIEXPORT jboolean JNICALL Java_com_manonloki_lokimetrisdisplay_nativebridge_NativeLinkBridge_validateAsset(JNIEnv *env, jobject owner, jbyteArray descriptor, jbyteArray body) {
     (void)owner;
     if (!descriptor || !body) return JNI_FALSE;
     jsize a = (*env)->GetArrayLength(env, descriptor), b = (*env)->GetArrayLength(env, body);

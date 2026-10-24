@@ -1,5 +1,14 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.domain.TerminalDay
+import com.manonloki.lokimetrisdisplay.domain.TerminalHook
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.TerminalTokens
+import com.manonloki.lokimetrisdisplay.presentation.displayUsageRows
+import com.manonloki.lokimetrisdisplay.presentation.quality
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails

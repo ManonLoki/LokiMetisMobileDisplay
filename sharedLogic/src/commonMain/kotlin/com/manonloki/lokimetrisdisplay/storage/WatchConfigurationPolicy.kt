@@ -1,4 +1,7 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.storage
+
+import com.manonloki.lokimetrisdisplay.rules.TerminalValueRules
+import com.manonloki.lokimetrisdisplay.rules.canonicalUnsigned
 
 /** 只承载授权相等性及来源绑定；地址、密钥编码与系统 URL 校验由连接适配层完成。 */
 class WatchConfigurationTarget(

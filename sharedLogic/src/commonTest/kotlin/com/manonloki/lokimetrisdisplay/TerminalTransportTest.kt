@@ -1,5 +1,20 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.TerminalAgent
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalDay
+import com.manonloki.lokimetrisdisplay.domain.TerminalHook
+import com.manonloki.lokimetrisdisplay.domain.TerminalHost
+import com.manonloki.lokimetrisdisplay.domain.TerminalLinkView
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.TerminalTokens
+import com.manonloki.lokimetrisdisplay.domain.withoutLiveDisplay
+import com.manonloki.lokimetrisdisplay.protocol.TerminalConnectionPolicy
+import com.manonloki.lokimetrisdisplay.protocol.TerminalFrames
+import com.manonloki.lokimetrisdisplay.protocol.TerminalJsonBoundary
+import com.manonloki.lokimetrisdisplay.protocol.TerminalPendingIntent
+import com.manonloki.lokimetrisdisplay.protocol.TerminalUserIntent
+import com.manonloki.lokimetrisdisplay.storage.CommittedRecords
 import kotlin.test.*
 
 /** 验证半帧累积、阶段切换和自动连接的纯策略；不建立真实 socket 或执行密码握手。 */

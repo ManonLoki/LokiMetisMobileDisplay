@@ -1,5 +1,8 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.widget
 
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpBinaryField
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpClientProfile
+import com.manonloki.lokimetrisdisplay.protocol.WidgetHttpPolicy
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher

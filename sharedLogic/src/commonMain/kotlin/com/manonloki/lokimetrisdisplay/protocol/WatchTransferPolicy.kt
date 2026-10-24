@@ -1,4 +1,7 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
+
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.rules.TerminalValueRules
 
 /** 无符号纳秒时钟的完整 64 位表示；跨 Swift 时只搬运位，不经有符号 Long 或毫秒转换。 */
 data class WatchMonotonicTime(val highBits: Int, val lowBits: Int) {

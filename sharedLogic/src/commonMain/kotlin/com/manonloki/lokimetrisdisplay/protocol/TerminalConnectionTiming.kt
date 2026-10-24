@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 宿主连接所处的阶段；密码预算、认证序号与消息验证仍由 Rust 管理。 */
 enum class TerminalSessionPhase {

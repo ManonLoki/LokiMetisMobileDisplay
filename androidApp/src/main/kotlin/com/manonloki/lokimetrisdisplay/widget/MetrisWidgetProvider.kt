@@ -17,6 +17,12 @@ import android.util.SizeF
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.presentation.TokenFormatting
+import com.manonloki.lokimetrisdisplay.presentation.quality
+import com.manonloki.lokimetrisdisplay.storage.TerminalWidgetSnapshot
+import com.manonloki.lokimetrisdisplay.widget.AndroidWidgetStore
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date

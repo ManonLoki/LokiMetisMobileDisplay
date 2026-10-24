@@ -1,5 +1,6 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.protocol.TerminalCapabilities
 import kotlin.test.*
 
 class TerminalCapabilitiesTest {

@@ -1,5 +1,5 @@
 import Foundation
-import class SharedLogic.UsageDisplayPolicy
+import class SharedLogic.AgentIdentity
 import XCTest
 @testable import AppleDisplay
 
@@ -36,7 +36,7 @@ final class ProviderQuotaTests: XCTestCase {
         XCTAssertEqual(providers[1].windows.map(\.label), ["每周", "5h"])
         XCTAssertEqual(providers[2].windows.map { "\($0.label) \($0.percentText)" }, ["每月 75%"])
         XCTAssertNil(providers[0].monthly)
-        XCTAssertEqual(UsageDisplayPolicy.shared.providerQuotaKey(agent: "claude-code"), "claude")
+        XCTAssertEqual(AgentIdentity.shared.providerQuotaKey(agent: "claude-code"), "claude")
         let roundtrip = try SharedJSON.decoder.decode(ProviderQuotaSnapshot.self, from: SharedJSON.encoder.encode(full.providerQuota))
         XCTAssertEqual(roundtrip, full.providerQuota)
         XCTAssertThrowsError(try LanDisplaySnapshot.decode(message([cursor, claude])))

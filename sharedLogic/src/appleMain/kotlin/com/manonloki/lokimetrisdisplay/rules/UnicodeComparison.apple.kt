@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.rules
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSString

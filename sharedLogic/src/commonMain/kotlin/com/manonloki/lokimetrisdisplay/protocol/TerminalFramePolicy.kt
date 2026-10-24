@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 只共享容量与长度规则，平台保留原生字节缓冲，避免跨语言复制大块网络数据。 */
 object TerminalFramePolicy {

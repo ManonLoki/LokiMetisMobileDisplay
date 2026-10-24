@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 在平台递归解析器之前检查严格JSON语法和有限深度，防止坏线帧终止应用worker。 */
 object TerminalJsonBoundary {

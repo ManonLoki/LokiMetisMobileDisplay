@@ -1,4 +1,4 @@
-package com.manonloki.lokimetrisdisplay
+package com.manonloki.lokimetrisdisplay.protocol
 
 /** 有界半帧累积器；阶段上限每次读帧重新取值，拒绝超大头后无需分配正文。 */
 class TerminalFrames {

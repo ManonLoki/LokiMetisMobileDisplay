@@ -1,5 +1,19 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.AgentIdentity
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalAgent
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalDay
+import com.manonloki.lokimetrisdisplay.domain.TerminalSnapshot
+import com.manonloki.lokimetrisdisplay.domain.TerminalTokens
+import com.manonloki.lokimetrisdisplay.presentation.TerminalUsageRow
+import com.manonloki.lokimetrisdisplay.presentation.UsageDisplayPolicy
+import com.manonloki.lokimetrisdisplay.presentation.displayName
+import com.manonloki.lokimetrisdisplay.presentation.displayUsageRows
+import com.manonloki.lokimetrisdisplay.presentation.quality
 import kotlin.test.*
 
 /** 面板排序同时覆盖Token与独立额度，保持统计值和线协议次序不变。 */
@@ -155,8 +169,8 @@ class TerminalUsageDisplayTest {
         assertEquals(14, selected.displayUsageRows.size)
         assertEquals(listOf("codex", "claude", "cursor", "grok"), selected.displayProviderQuota?.providers?.map { it.provider })
         assertEquals("GitHub Copilot", UsageDisplayPolicy.agentDisplayName("gitHubCopilot"))
-        assertEquals("claude", UsageDisplayPolicy.providerQuotaKey("claudeCode"))
-        assertEquals("grok", UsageDisplayPolicy.providerQuotaKey("grok-build"))
+        assertEquals("claude", AgentIdentity.providerQuotaKey("claudeCode"))
+        assertEquals("grok", AgentIdentity.providerQuotaKey("grok-build"))
     }
 
     @Test fun changing_enabled_list_immediately_changes_projection_and_null_keeps_legacy_behavior() {

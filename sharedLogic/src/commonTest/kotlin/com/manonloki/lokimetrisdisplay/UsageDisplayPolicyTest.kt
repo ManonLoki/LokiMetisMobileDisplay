@@ -1,5 +1,14 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.domain.AgentIdentity
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaEntry
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaSnapshot
+import com.manonloki.lokimetrisdisplay.domain.ProviderQuotaWindow
+import com.manonloki.lokimetrisdisplay.domain.TerminalAmount
+import com.manonloki.lokimetrisdisplay.domain.TerminalAsset
+import com.manonloki.lokimetrisdisplay.domain.TerminalHook
+import com.manonloki.lokimetrisdisplay.presentation.UsageDisplayPolicy
+import com.manonloki.lokimetrisdisplay.presentation.UsageRowReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
@@ -33,22 +42,22 @@ class UsageDisplayPolicyTest {
         val aliases = listOf("claudeCode", "Claude Code", "claude-code", "CLAUDE")
         aliases.forEach {
             assertEquals("Claude Code", UsageDisplayPolicy.agentDisplayName(it))
-            assertEquals("claude", UsageDisplayPolicy.providerQuotaKey(it))
-            assertTrue(UsageDisplayPolicy.isEnabled(it, listOf("claudeCode")))
+            assertEquals("claude", AgentIdentity.providerQuotaKey(it))
+            assertTrue(AgentIdentity.isEnabled(it, listOf("claudeCode")))
         }
-        assertFalse(UsageDisplayPolicy.validEnabledAgents(listOf("claudeCode", "Claude Code")))
-        assertFalse(UsageDisplayPolicy.validEnabledAgents(listOf("--_")))
-        assertFalse(UsageDisplayPolicy.validEnabledAgents(listOf("界".repeat(22))))
-        assertTrue(UsageDisplayPolicy.validEnabledAgents(listOf("界".repeat(21))))
+        assertFalse(AgentIdentity.validEnabledAgents(listOf("claudeCode", "Claude Code")))
+        assertFalse(AgentIdentity.validEnabledAgents(listOf("--_")))
+        assertFalse(AgentIdentity.validEnabledAgents(listOf("界".repeat(22))))
+        assertTrue(AgentIdentity.validEnabledAgents(listOf("界".repeat(21))))
         assertEquals("Custom Name", UsageDisplayPolicy.agentDisplayName("Custom Name"))
     }
 
     @Test fun canonicalUnicodeNamesMatchEnablementAndRejectEquivalentDuplicatesWithoutChangingSourceText() {
         val composed = "Caf\u00e9"
         val decomposed = "Cafe\u0301"
-        assertTrue(UsageDisplayPolicy.isEnabled(composed, listOf(decomposed)))
-        assertTrue(UsageDisplayPolicy.isEnabled(decomposed, listOf(composed)))
-        assertFalse(UsageDisplayPolicy.validEnabledAgents(listOf(composed, decomposed)))
+        assertTrue(AgentIdentity.isEnabled(composed, listOf(decomposed)))
+        assertTrue(AgentIdentity.isEnabled(decomposed, listOf(composed)))
+        assertFalse(AgentIdentity.validEnabledAgents(listOf(composed, decomposed)))
         assertEquals(listOf(0), UsageDisplayPolicy.visibleIndices(listOf(decomposed, "Other"), listOf(composed)))
         assertEquals(listOf(UsageRowReference(0, -1)),
             UsageDisplayPolicy.projectRows(true, listOf(decomposed), emptyList(), listOf(composed)))

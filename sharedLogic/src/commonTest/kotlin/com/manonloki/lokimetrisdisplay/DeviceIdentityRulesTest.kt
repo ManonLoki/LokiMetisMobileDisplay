@@ -1,5 +1,7 @@
 package com.manonloki.lokimetrisdisplay
 
+import com.manonloki.lokimetrisdisplay.storage.DeviceIdentityRules
+import com.manonloki.lokimetrisdisplay.storage.IdentityRecoveryStatus
 import kotlin.test.*
 
 class DeviceIdentityRulesTest {
